@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Eye, Edit, Trash2, Plus, Search, Filter } from 'lucide-react';
+import { Eye, Edit, Trash2, Plus, Search, Filter, CheckSquare, Square } from 'lucide-react';
 import occupationApi from '../services/occupationApi';
 import Button from '@shared/components/Button';
 import Card from '@shared/components/Card';
@@ -12,6 +12,7 @@ const OccupationList = () => {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [sectorFilter, setSectorFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [selectedOccupations, setSelectedOccupations] = useState([]);
   const pageSize = 20;
 
   // Fetch occupations
@@ -34,7 +35,8 @@ const OccupationList = () => {
   });
 
   const occupations = data?.data?.results || [];
-  const totalPages = data?.data?.count ? Math.ceil(data.data.count / pageSize) : 1;
+  const totalCount = data?.data?.count || 0;
+  const totalPages = totalCount ? Math.ceil(totalCount / pageSize) : 1;
   const sectors = sectorsData?.data?.results || [];
 
   const handleSearch = (e) => {
@@ -46,6 +48,24 @@ const OccupationList = () => {
     navigate(`/occupations/${id}`);
   };
 
+  const handleSelectAll = () => {
+    if (selectedOccupations.length === occupations.length) {
+      setSelectedOccupations([]);
+    } else {
+      setSelectedOccupations(occupations.map(occ => occ.id));
+    }
+  };
+
+  const handleSelectOccupation = (id) => {
+    setSelectedOccupations(prev => 
+      prev.includes(id) 
+        ? prev.filter(occId => occId !== id)
+        : [...prev, id]
+    );
+  };
+
+  const isAllSelected = occupations.length > 0 && selectedOccupations.length === occupations.length;
+
   return (
     <div className="p-6">
       {/* Header */}
@@ -53,16 +73,29 @@ const OccupationList = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Occupations</h1>
-            <p className="text-gray-600 mt-1">Manage occupations and trades</p>
+            <p className="text-gray-600 mt-1">
+              Manage occupations • {totalCount} Total Occupations
+            </p>
           </div>
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => navigate('/occupations/new')}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Occupation
-          </Button>
+          <div className="flex items-center space-x-2">
+            {selectedOccupations.length > 0 && (
+              <Button
+                variant="outline"
+                size="md"
+                onClick={() => setSelectedOccupations([])}
+              >
+                Clear Selection ({selectedOccupations.length})
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => navigate('/occupations/new')}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Occupation
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -130,6 +163,18 @@ const OccupationList = () => {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="px-6 py-3 text-left">
+                  <button
+                    onClick={handleSelectAll}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    {isAllSelected ? (
+                      <CheckSquare className="w-5 h-5" />
+                    ) : (
+                      <Square className="w-5 h-5" />
+                    )}
+                  </button>
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Occ Code
                 </th>
@@ -156,19 +201,19 @@ const OccupationList = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan="8" className="px-6 py-4 text-center text-gray-500">
                     Loading occupations...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-4 text-center text-red-500">
+                  <td colSpan="8" className="px-6 py-4 text-center text-red-500">
                     Error loading occupations: {error.message}
                   </td>
                 </tr>
               ) : occupations.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan="8" className="px-6 py-4 text-center text-gray-500">
                     No occupations found
                   </td>
                 </tr>
@@ -176,9 +221,23 @@ const OccupationList = () => {
                 occupations.map((occupation) => (
                   <tr
                     key={occupation.id}
-                    className="hover:bg-gray-50 cursor-pointer"
+                    className={`hover:bg-gray-50 cursor-pointer ${
+                      selectedOccupations.includes(occupation.id) ? 'bg-primary-50' : ''
+                    }`}
                     onClick={() => handleViewOccupation(occupation.id)}
                   >
+                    <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => handleSelectOccupation(occupation.id)}
+                        className="text-gray-500 hover:text-gray-700"
+                      >
+                        {selectedOccupations.includes(occupation.id) ? (
+                          <CheckSquare className="w-5 h-5 text-primary-600" />
+                        ) : (
+                          <Square className="w-5 h-5" />
+                        )}
+                      </button>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm font-medium text-gray-900">
                         {occupation.occ_code}
@@ -253,27 +312,29 @@ const OccupationList = () => {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="px-6 py-4 border-t border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-700">
-                Page {page} of {totalPages}
-              </div>
-              <div className="flex space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
+            <div className="flex items-center justify-end space-x-4">
+              <span className="text-sm text-gray-700">
+                {((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, totalCount)} / {totalCount}
+              </span>
+              <div className="flex items-center space-x-1">
+                <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
+                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
+                  <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
+                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Next
-                </Button>
+                  <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
               </div>
             </div>
           </div>

@@ -269,10 +269,6 @@ const CandidateView = () => {
         </div>
 
         <div className="flex items-center space-x-2">
-          <Button variant="outline" size="md">
-            <Mail className="w-4 h-4 mr-2" />
-            Send Message
-          </Button>
           <Button 
             variant="outline" 
             size="md"
@@ -280,10 +276,6 @@ const CandidateView = () => {
           >
             <Download className="w-4 h-4 mr-2" />
             Verified Results
-          </Button>
-          <Button variant="outline" size="md">
-            <Download className="w-4 h-4 mr-2" />
-            Export
           </Button>
           <Button
             variant="primary"

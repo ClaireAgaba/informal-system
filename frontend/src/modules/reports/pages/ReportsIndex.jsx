@@ -28,27 +28,27 @@ const ReportsIndex = () => {
         <p className="text-gray-600 mt-2">Select a report type to generate</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
         {reportTypes.map((report) => {
           const Icon = report.icon;
           return (
             <button
               key={report.name}
               onClick={() => navigate(report.path)}
-              className="group relative bg-white hover:bg-gray-50 rounded-xl p-8 transition-all duration-200 hover:scale-105 hover:shadow-xl border-2 border-gray-200 hover:border-gray-300"
+              className="group relative bg-white hover:bg-gray-50 rounded-lg p-6 transition-all duration-200 hover:shadow-lg border border-gray-200 hover:border-gray-300"
             >
-              <div className="flex flex-col items-center space-y-4">
+              <div className="flex flex-col items-center space-y-3">
                 <div
-                  className={`${report.color} w-20 h-20 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow`}
+                  className={`${report.color} w-16 h-16 rounded-lg flex items-center justify-center shadow group-hover:shadow-md transition-shadow`}
                 >
-                  <Icon className="w-10 h-10 text-white" />
+                  <Icon className="w-8 h-8 text-white" />
                 </div>
                 
                 <div className="text-center">
-                  <h3 className="text-gray-900 font-semibold text-lg">
+                  <h3 className="text-gray-900 font-semibold text-base">
                     {report.name}
                   </h3>
-                  <p className="text-gray-500 text-sm mt-1">
+                  <p className="text-gray-500 text-xs mt-1">
                     {report.description}
                   </p>
                 </div>
