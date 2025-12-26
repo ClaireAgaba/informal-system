@@ -1,0 +1,182 @@
+import apiClient from '@services/apiClient';
+
+const CANDIDATES_BASE = '/candidates';
+
+export const candidateApi = {
+  // Get all candidates with optional filters
+  getAll: (params = {}) => {
+    return apiClient.get(CANDIDATES_BASE, { params });
+  },
+
+  // Get single candidate by ID
+  getById: (id) => {
+    return apiClient.get(`${CANDIDATES_BASE}/${id}/`);
+  },
+
+  // Create new candidate
+  create: (data) => {
+    return apiClient.post(`${CANDIDATES_BASE}/`, data);
+  },
+
+  // Update candidate
+  update: (id, data) => {
+    return apiClient.put(`${CANDIDATES_BASE}/${id}/`, data);
+  },
+
+  // Partial update candidate
+  patch: (id, data) => {
+    return apiClient.patch(`${CANDIDATES_BASE}/${id}/`, data);
+  },
+
+  // Delete candidate
+  delete: (id) => {
+    return apiClient.delete(`${CANDIDATES_BASE}/${id}/`);
+  },
+
+  // Upload candidate photo
+  uploadPhoto: (id, file) => {
+    const formData = new FormData();
+    formData.append('passport_photo', file);
+    return apiClient.post(`${CANDIDATES_BASE}/${id}/upload-photo/`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  // Upload identification document
+  uploadDocument: (id, file, documentType) => {
+    const formData = new FormData();
+    formData.append(documentType, file);
+    return apiClient.post(`${CANDIDATES_BASE}/${id}/upload-document/`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  // Verify candidate
+  verify: (id) => {
+    return apiClient.post(`${CANDIDATES_BASE}/${id}/verify/`);
+  },
+
+  // Decline candidate
+  decline: (id, reason) => {
+    return apiClient.post(`${CANDIDATES_BASE}/${id}/decline/`, { reason });
+  },
+
+  // Mark payment as cleared
+  clearPayment: (id, paymentData) => {
+    return apiClient.post(`${CANDIDATES_BASE}/${id}/clear-payment/`, paymentData);
+  },
+
+  // Get candidates by assessment center
+  getByCenter: (centerId) => {
+    return apiClient.get(`${CANDIDATES_BASE}`, { params: { assessment_center: centerId } });
+  },
+
+  // Get candidates by occupation
+  getByOccupation: (occupationId) => {
+    return apiClient.get(`${CANDIDATES_BASE}`, { params: { occupation: occupationId } });
+  },
+
+  // Get candidates by registration category
+  getByCategory: (category) => {
+    return apiClient.get(`${CANDIDATES_BASE}`, { params: { registration_category: category } });
+  },
+
+  // Search candidates
+  search: (query) => {
+    return apiClient.get(`${CANDIDATES_BASE}`, { params: { search: query } });
+  },
+
+  // Enrollment endpoints
+  getEnrollmentOptions: (id) => {
+    return apiClient.get(`${CANDIDATES_BASE}/${id}/enrollment-options/`);
+  },
+
+  getEnrollments: (id) => {
+    return apiClient.get(`${CANDIDATES_BASE}/${id}/enrollments/`);
+  },
+
+  enroll: (id, data) => {
+    return apiClient.post(`${CANDIDATES_BASE}/${id}/enroll/`, data);
+  },
+
+  // De-enroll from an enrollment
+  deEnroll: (enrollmentId) => apiClient.delete(`${CANDIDATES_BASE}/enrollments/${enrollmentId}/`),
+
+  // Submit a draft candidate
+  submit: (id) => apiClient.post(`${CANDIDATES_BASE}/${id}/submit/`),
+  
+  // Upload passport photo
+  uploadPhoto: (id, photoFile) => {
+    const formData = new FormData();
+    formData.append('photo', photoFile);
+    return apiClient.post(`${CANDIDATES_BASE}/${id}/upload_photo/`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+  
+  // Upload document (identification or qualification)
+  uploadDocument: (id, documentFile, documentType) => {
+    const formData = new FormData();
+    formData.append('document', documentFile);
+    formData.append('document_type', documentType);
+    return apiClient.post(`${CANDIDATES_BASE}/${id}/upload_document/`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+  
+  // Generate payment code
+  generatePaymentCode: (id) => apiClient.post(`${CANDIDATES_BASE}/${id}/generate_payment_code/`),
+  
+  // Mark payment as cleared
+  markPaymentCleared: (id) => apiClient.post(`${CANDIDATES_BASE}/${id}/mark_payment_cleared/`),
+  
+  // Get candidate results
+  getResults: (id) => apiClient.get(`${CANDIDATES_BASE}/${id}/results/`),
+  
+  // Add modular results (moved to results app)
+  addResults: (candidateId, data) => apiClient.post(`/results/modular/add/`, { 
+    candidate_id: candidateId, 
+    ...data 
+  }),
+  
+  // Get enrollment modules for a candidate and series (moved to results app)
+  getEnrollmentModules: (candidateId, seriesId) => apiClient.get(`/results/modular/enrollment-modules/?candidate_id=${candidateId}&series_id=${seriesId}`),
+  
+  // Update modular results (moved to results app)
+  updateResults: (candidateId, data) => apiClient.put(`/results/modular/update/`, { 
+    candidate_id: candidateId, 
+    ...data 
+  }),
+  
+  // Get verified results PDF (moved to results app)
+  getVerifiedResultsPDF: (candidateId, registrationCategory = 'modular') => {
+    if (registrationCategory === 'workers_pas') {
+      return `/api/results/workers-pas/verified-pdf/?candidate_id=${candidateId}`;
+    }
+    // Both modular and formal use the same endpoint
+    return `/api/results/modular/verified-pdf/?candidate_id=${candidateId}`;
+  },
+  
+  // Formal results endpoints
+  addFormalResults: (candidateId, data) => apiClient.post(`/results/formal/add/`, {
+    candidate_id: candidateId,
+    ...data
+  }),
+  
+  updateFormalResults: (candidateId, data) => apiClient.put(`/results/formal/update/`, {
+    candidate_id: candidateId,
+    ...data
+  }),
+  
+  listFormalResults: (candidateId, seriesId) => {
+    const params = new URLSearchParams({ candidate_id: candidateId });
+    if (seriesId) params.append('series_id', seriesId);
+    return apiClient.get(`/results/formal/list/?${params.toString()}`);
+  },
+};
+
+export default candidateApi;
