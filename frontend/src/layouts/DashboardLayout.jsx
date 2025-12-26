@@ -6,7 +6,8 @@ import {
   Building2, 
   FileText, 
   Menu,
-  X
+  X,
+  Banknote
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -17,6 +18,7 @@ const navigation = [
   { name: 'Assessment Centers', href: '/assessment-centers', icon: Building2 },
   { name: 'Assessment Series', href: '/assessment-series', icon: FileText },
   { name: 'Reports', href: '/reports', icon: FileText },
+  { name: 'UVTAB Fees', href: '/fees', icon: Banknote },
   { name: 'Users', href: '/users', icon: Users },
 ];
 

@@ -9,6 +9,7 @@ import {
   Calendar,
   Search,
   FileText,
+  Banknote,
 } from 'lucide-react';
 
 const modules = [
@@ -53,6 +54,13 @@ const modules = [
     path: '/reports',
     color: 'bg-teal-500',
     description: 'Generate Reports',
+  },
+  {
+    name: 'UVTAB Fees',
+    icon: Banknote,
+    path: '/fees',
+    color: 'bg-rose-500',
+    description: 'Candidate & Center Fees',
   },
 ];
 

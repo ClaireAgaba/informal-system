@@ -31,6 +31,7 @@ import SupportStaffEdit from '@modules/users/support-staff/pages/SupportStaffEdi
 import ReportsIndex from '@modules/reports/pages/ReportsIndex';
 import Albums from '@modules/reports/pages/Albums';
 import ResultLists from '@modules/reports/pages/ResultLists';
+import FeesModule from '@modules/fees';
 
 function App() {
   return (
@@ -87,6 +88,9 @@ function App() {
         <Route path="reports" element={<ReportsIndex />} />
         <Route path="reports/albums" element={<Albums />} />
         <Route path="reports/result-lists" element={<ResultLists />} />
+        
+        {/* Fees routes */}
+        <Route path="fees/*" element={<FeesModule />} />
         
         <Route path="*" element={<div className="p-6"><h1 className="text-2xl">404 - Page Not Found</h1></div>} />
       </Route>
