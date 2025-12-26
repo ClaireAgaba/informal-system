@@ -15,6 +15,7 @@ export const occupationApi = {
   update: (id, data) => apiClient.put(`${OCCUPATIONS_BASE}/occupations/${id}/`, data),
   delete: (id) => apiClient.delete(`${OCCUPATIONS_BASE}/occupations/${id}/`),
   getBySector: (sectorId) => apiClient.get(`${OCCUPATIONS_BASE}/occupations/`, { params: { sector: sectorId } }),
+  getLevels: (occupationId) => apiClient.get(`${OCCUPATIONS_BASE}/occupations/${occupationId}/levels/`),
 
   // Sectors
   sectors: {

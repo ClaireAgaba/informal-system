@@ -145,8 +145,7 @@ This document outlines the integration between UVTAB Informal System and SchoolP
 4. **School Name** - Candidate's assessment center name (e.g., "UVTAB Institution")
 5. **Outstanding Balance** - Amount owed in UGX
 6. **Total Billed** - Total amount billed across all enrollments
-7. **Amount Paid** - Amount already paid
-8. **Payment Status** - Whether payment is cleared
+
 
 ### What SchoolPay Provides to UVTAB:
 
@@ -160,14 +159,6 @@ This document outlines the integration between UVTAB Informal System and SchoolP
 
 ## Payment Logic
 
-### Outstanding Balance Calculation:
-```
-Outstanding Balance = Total Billed - Amount Already Paid
-```
-
-Where:
-- **Total Billed** = Sum of all enrollment `total_amount` values
-- **Amount Already Paid** = `payment_amount_cleared` field
 
 ### Payment Clearing Logic:
 1. When payment callback is received with `attempt_status = "Successful"`
