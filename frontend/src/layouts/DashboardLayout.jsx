@@ -7,7 +7,8 @@ import {
   FileText, 
   Menu,
   X,
-  Banknote
+  Banknote,
+  FileSpreadsheet
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -19,6 +20,7 @@ const navigation = [
   { name: 'Assessment Series', href: '/assessment-series', icon: FileText },
   { name: 'Reports', href: '/reports', icon: FileText },
   { name: 'UVTAB Fees', href: '/fees', icon: Banknote },
+  { name: 'Marksheets', href: '/marksheets', icon: FileSpreadsheet },
   { name: 'Users', href: '/users', icon: Users },
 ];
 

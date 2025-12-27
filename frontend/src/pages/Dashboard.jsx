@@ -10,6 +10,7 @@ import {
   Search,
   FileText,
   Banknote,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 const modules = [
@@ -61,6 +62,13 @@ const modules = [
     path: '/fees',
     color: 'bg-rose-500',
     description: 'Candidate & Center Fees',
+  },
+  {
+    name: 'Marksheets',
+    icon: FileSpreadsheet,
+    path: '/marksheets',
+    color: 'bg-indigo-500',
+    description: 'Generate & Manage Marksheets',
   },
 ];
 

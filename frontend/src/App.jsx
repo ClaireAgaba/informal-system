@@ -32,6 +32,7 @@ import ReportsIndex from '@modules/reports/pages/ReportsIndex';
 import Albums from '@modules/reports/pages/Albums';
 import ResultLists from '@modules/reports/pages/ResultLists';
 import FeesModule from '@modules/fees';
+import MarksheetsModule from '@modules/marksheets';
 
 function App() {
   return (
@@ -91,6 +92,9 @@ function App() {
         
         {/* Fees routes */}
         <Route path="fees/*" element={<FeesModule />} />
+        
+        {/* Marksheets routes */}
+        <Route path="marksheets/*" element={<MarksheetsModule />} />
         
         <Route path="*" element={<div className="p-6"><h1 className="text-2xl">404 - Page Not Found</h1></div>} />
       </Route>

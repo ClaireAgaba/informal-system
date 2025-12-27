@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'stats.apps.StatsConfig',
     'configurations.apps.ConfigurationsConfig',
     'dit_migration.apps.DitMigrationConfig',
+    'fees.apps.FeesConfig',
 ]
 
 MIDDLEWARE = [
