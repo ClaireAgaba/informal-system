@@ -8,5 +8,9 @@ router.register(r'staff', views.StaffViewSet, basename='staff')
 router.register(r'support-staff', views.SupportStaffViewSet, basename='support-staff')
 
 urlpatterns = [
+    # Auth endpoints
+    path('login/', views.login_view, name='login'),
+    path('logout/', views.logout_view, name='logout'),
+    
     path('', include(router.urls)),
 ]

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -11,6 +11,8 @@ import {
   FileText,
   Banknote,
   FileSpreadsheet,
+  LogOut,
+  ChevronDown,
 } from 'lucide-react';
 
 const modules = [
@@ -75,6 +77,39 @@ const modules = [
 const Dashboard = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      // Call logout API if token exists
+      const token = localStorage.getItem('token');
+      if (token) {
+        // Optional: Call logout endpoint to invalidate token on server
+        // await apiClient.post('/users/logout/');
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Clear local storage
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      // Navigate to login
+      navigate('/login');
+    }
+  };
 
   const filteredModules = modules.filter((module) =>
     module.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -90,16 +125,37 @@ const Dashboard = () => {
               <div className="w-8 h-8 bg-white rounded flex items-center justify-center">
                 <LayoutDashboard className="w-5 h-5 text-blue-600" />
               </div>
-              <h1 className="text-white text-xl font-semibold">EMIS Portal</h1>
+              <h1 className="text-white text-xl font-semibold">Informal Portal</h1>
             </div>
             
             <div className="flex items-center space-x-4">
               <span className="text-white/90 text-sm">11:59 AM</span>
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                  <UserCircle className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-white text-sm">Admin User</span>
+              
+              {/* User Dropdown */}
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                  className="flex items-center space-x-2 hover:bg-white/10 rounded-lg px-3 py-2 transition-colors"
+                >
+                  <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                    <UserCircle className="w-5 h-5 text-white" />
+                  </div>
+                  <span className="text-white text-sm">Admin User</span>
+                  <ChevronDown className={`w-4 h-4 text-white transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Dropdown Menu */}
+                {dropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-50">
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -1,6 +1,8 @@
 from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework.authtoken.models import Token
+from django.contrib.auth import authenticate
 from .models import User, Staff, SupportStaff
 from .serializers import (
     UserSerializer, StaffSerializer, StaffCreateSerializer,
@@ -121,3 +123,85 @@ class SupportStaffViewSet(viewsets.ModelViewSet):
         active_support_staff = self.queryset.filter(account_status='active')
         serializer = self.get_serializer(active_support_staff, many=True)
         return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def login_view(request):
+    """
+    Login endpoint - authenticates user and returns token
+    """
+    email = request.data.get('email')
+    password = request.data.get('password')
+    
+    if not email or not password:
+        return Response(
+            {'error': 'Please provide both email and password'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Try to find user by email
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return Response(
+            {'error': 'Invalid email or password'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+    
+    # Authenticate using username (since Django auth uses username)
+    user_auth = authenticate(username=user.username, password=password)
+    
+    if user_auth is None:
+        return Response(
+            {'error': 'Invalid email or password'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+    
+    # Check if user is active
+    if not user.is_active:
+        return Response(
+            {'error': 'Account is inactive. Please contact administrator.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Get or create token
+    token, created = Token.objects.get_or_create(user=user)
+    
+    # Get user details
+    user_data = {
+        'id': user.id,
+        'username': user.username,
+        'email': user.email,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'user_type': user.user_type,
+        'is_staff': user.is_staff,
+        'is_superuser': user.is_superuser,
+    }
+    
+    return Response({
+        'token': token.key,
+        'user': user_data,
+        'message': 'Login successful'
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def logout_view(request):
+    """
+    Logout endpoint - deletes user token
+    """
+    try:
+        # Delete the user's token
+        request.user.auth_token.delete()
+        return Response(
+            {'message': 'Logout successful'},
+            status=status.HTTP_200_OK
+        )
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

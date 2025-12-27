@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import DashboardLayout from '@layouts/DashboardLayout';
 import Dashboard from './pages/Dashboard';
+import Login from './pages/Login';
 import CandidateList from '@modules/candidates/pages/CandidateList';
 import CandidateView from '@modules/candidates/pages/CandidateView';
 import CandidateEdit from '@modules/candidates/pages/CandidateEdit';
@@ -38,7 +39,7 @@ function App() {
   return (
     <Routes>
       {/* Public routes */}
-      <Route path="/login" element={<div>Login Page</div>} />
+      <Route path="/login" element={<Login />} />
       
       {/* Dashboard - Full screen without sidebar */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
