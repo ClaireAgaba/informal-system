@@ -233,11 +233,39 @@ class EnrollmentPaperSerializer(serializers.ModelSerializer):
 
 class CandidateEnrollmentSerializer(serializers.ModelSerializer):
     assessment_series_name = serializers.CharField(source='assessment_series.name', read_only=True)
-    level_name = serializers.CharField(source='occupation_level.level_name', read_only=True)
-    occupation_name = serializers.CharField(source='occupation_level.occupation.occ_name', read_only=True)
+    level_name = serializers.SerializerMethodField()
+    occupation_name = serializers.SerializerMethodField()
     structure_type = serializers.CharField(source='occupation_level.structure_type', read_only=True)
     modules = EnrollmentModuleSerializer(many=True, read_only=True)
     papers = EnrollmentPaperSerializer(many=True, read_only=True)
+    
+    def get_level_name(self, obj):
+        """Get level name - for Worker's PAS, get from enrolled papers"""
+        if obj.occupation_level:
+            return obj.occupation_level.level_name
+        
+        # For Worker's PAS, get unique levels from enrolled papers
+        if obj.papers.exists():
+            levels = set()
+            for enrollment_paper in obj.papers.all():
+                if enrollment_paper.paper and enrollment_paper.paper.level:
+                    levels.add(enrollment_paper.paper.level.level_name)
+            return ', '.join(sorted(levels)) if levels else None
+        
+        return None
+    
+    def get_occupation_name(self, obj):
+        """Get occupation name"""
+        if obj.occupation_level:
+            return obj.occupation_level.occupation.occ_name
+        
+        # For Worker's PAS, get from first enrolled paper
+        if obj.papers.exists():
+            first_paper = obj.papers.first()
+            if first_paper and first_paper.paper:
+                return first_paper.paper.occupation.occ_name
+        
+        return None
     
     class Meta:
         model = CandidateEnrollment

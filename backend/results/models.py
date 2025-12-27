@@ -130,7 +130,8 @@ class ModularResult(models.Model):
         if self.mark is None or self.mark == -1:
             return False
         
-        pass_mark = 55 if self.type == 'practical' else 50
+        # Pass mark: 65% for practical, 50% for theory (as per UVTAB grading system)
+        pass_mark = 65 if self.type == 'practical' else 50
         return self.mark >= pass_mark
     
     @property
