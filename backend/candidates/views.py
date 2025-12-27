@@ -1,7 +1,7 @@
 from rest_framework import viewsets, filters, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
@@ -404,23 +404,6 @@ class CandidateViewSet(viewsets.ModelViewSet):
         
         return Response(response_data)
     
-    @action(detail=False, methods=['delete'], url_path='enrollments/(?P<enrollment_id>[^/.]+)')
-    def delete_enrollment(self, request, enrollment_id=None):
-        """De-enroll a candidate by deleting their enrollment"""
-        try:
-            enrollment = CandidateEnrollment.objects.get(id=enrollment_id)
-            candidate_id = enrollment.candidate.id
-            enrollment.delete()
-            
-            return Response(
-                {'message': 'Enrollment deleted successfully'},
-                status=status.HTTP_200_OK
-            )
-        except CandidateEnrollment.DoesNotExist:
-            return Response(
-                {'error': 'Enrollment not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
     
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
@@ -797,3 +780,52 @@ class CandidateViewSet(viewsets.ModelViewSet):
     # - enrollment_modules -> /api/results/modular/enrollment-modules/
     # - update_results -> /api/results/modular/update/
     # - verified_results_pdf -> /api/results/modular/verified-pdf/
+
+
+# Standalone view for de-enrollment
+from django.views.decorators.csrf import csrf_exempt
+
+@csrf_exempt
+@api_view(['DELETE'])
+@permission_classes([AllowAny])
+def delete_enrollment_view(request, enrollment_id):
+    """De-enroll a candidate by deleting their enrollment"""
+    try:
+        enrollment = CandidateEnrollment.objects.get(id=enrollment_id)
+        candidate = enrollment.candidate
+        
+        # Check if candidate has any results
+        from results.models import ModularResult, FormalResult, WorkersPasResult
+        
+        has_modular_results = ModularResult.objects.filter(
+            candidate=candidate,
+            assessment_series=enrollment.assessment_series
+        ).exists()
+        
+        has_formal_results = FormalResult.objects.filter(
+            candidate=candidate,
+            assessment_series=enrollment.assessment_series
+        ).exists()
+        
+        has_workers_pas_results = WorkersPasResult.objects.filter(
+            candidate=candidate,
+            assessment_series=enrollment.assessment_series
+        ).exists()
+        
+        if has_modular_results or has_formal_results or has_workers_pas_results:
+            return Response(
+                {'error': 'Can\'t de-enroll, candidate already has marks'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        enrollment.delete()
+        
+        return Response(
+            {'message': 'Enrollment deleted successfully'},
+            status=status.HTTP_200_OK
+        )
+    except CandidateEnrollment.DoesNotExist:
+        return Response(
+            {'error': 'Enrollment not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )

@@ -154,6 +154,7 @@ const CandidateCreate = () => {
       }
     },
     onSuccess: (response) => {
+      console.log('Save draft response:', response);
       const candidateId = response?.data?.id || response?.id;
       if (!savedDraftId && candidateId) {
         setSavedDraftId(candidateId);
@@ -163,7 +164,9 @@ const CandidateCreate = () => {
     },
     onError: (error) => {
       console.error('Save draft error:', error);
-      const errorMsg = error.response?.data?.detail || 
+      console.error('Error response:', error.response);
+      const errorMsg = error.response?.data?.error ||
+                       error.response?.data?.detail || 
                        JSON.stringify(error.response?.data) || 
                        error.message;
       toast.error(`Failed to save draft: ${errorMsg}`);
@@ -173,27 +176,37 @@ const CandidateCreate = () => {
   // Submit mutation
   const submitMutation = useMutation({
     mutationFn: async (data) => {
+      console.log('Starting submit process...');
       // First save as draft if not already saved
       let candidateId = savedDraftId;
       
       if (!candidateId) {
+        console.log('Creating new candidate...');
         const saveResponse = await candidateApi.create(data);
+        console.log('Create response:', saveResponse);
         candidateId = saveResponse?.data?.id || saveResponse?.id;
         setSavedDraftId(candidateId);
       } else {
+        console.log('Updating existing candidate:', candidateId);
         await candidateApi.update(candidateId, data);
       }
       
       // Then submit
-      return candidateApi.submit(candidateId);
+      console.log('Submitting candidate:', candidateId);
+      const submitResponse = await candidateApi.submit(candidateId);
+      console.log('Submit response:', submitResponse);
+      return submitResponse;
     },
     onSuccess: (response) => {
+      console.log('Submit success response:', response);
       queryClient.invalidateQueries(['candidates']);
-      toast.success(`Candidate submitted successfully! Registration Number: ${response.data.registration_number}`);
+      const regNumber = response?.data?.registration_number || response?.registration_number || 'N/A';
+      toast.success(`Candidate submitted successfully! Registration Number: ${regNumber}`);
       navigate('/candidates');
     },
     onError: (error) => {
       console.error('Submit error:', error);
+      console.error('Error response:', error.response);
       const errorMsg = error.response?.data?.error || 
                        error.response?.data?.detail || 
                        JSON.stringify(error.response?.data) || 

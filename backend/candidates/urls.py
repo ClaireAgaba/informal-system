@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import CandidateViewSet
+from .views import CandidateViewSet, delete_enrollment_view
 from .views_payment import (
     schoolpay_check_balance,
     schoolpay_payment_callback,
@@ -11,6 +11,9 @@ router = DefaultRouter()
 router.register(r'', CandidateViewSet, basename='candidate')
 
 urlpatterns = [
+    # De-enrollment endpoint (must come before router.urls)
+    path('enrollments/<int:enrollment_id>/', delete_enrollment_view, name='delete-enrollment'),
+    
     path('', include(router.urls)),
     
     # SchoolPay Integration Endpoints

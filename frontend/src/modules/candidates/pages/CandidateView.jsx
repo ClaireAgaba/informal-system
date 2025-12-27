@@ -64,7 +64,8 @@ const CandidateView = () => {
       toast.success('Candidate de-enrolled successfully!');
     },
     onError: (error) => {
-      toast.error(`Failed to de-enroll: ${error.message}`);
+      const errorMsg = error.response?.data?.error || error.response?.data?.detail || error.message;
+      toast.error(errorMsg);
     },
   });
 

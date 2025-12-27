@@ -29,9 +29,9 @@ export const PRACTICAL_GRADES = [
   { grade: 'E', min: 0, max: 29 },
 ];
 
-// Pass marks
+// Pass marks (as per UVTAB grading system)
 export const THEORY_PASS_MARK = 50;
-export const PRACTICAL_PASS_MARK = 55;
+export const PRACTICAL_PASS_MARK = 65;
 
 /**
  * Get grade for a given mark and type
