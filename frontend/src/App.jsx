@@ -37,6 +37,8 @@ import MarksheetsModule from '@modules/marksheets';
 import ComplaintsList from '@modules/complaints/pages/ComplaintsList';
 import ComplaintDetail from '@modules/complaints/pages/ComplaintDetail';
 import CreateComplaint from '@modules/complaints/pages/CreateComplaint';
+import StatisticsDashboard from '@modules/statistics/pages/StatisticsDashboard';
+import SeriesStatistics from '@modules/statistics/pages/SeriesStatistics';
 
 function App() {
   return (
@@ -104,6 +106,10 @@ function App() {
         <Route path="complaints" element={<ComplaintsList />} />
         <Route path="complaints/create" element={<CreateComplaint />} />
         <Route path="complaints/:id" element={<ComplaintDetail />} />
+        
+        {/* Statistics routes */}
+        <Route path="statistics" element={<StatisticsDashboard />} />
+        <Route path="statistics/series/:id" element={<SeriesStatistics />} />
         
         <Route path="*" element={<div className="p-6"><h1 className="text-2xl">404 - Page Not Found</h1></div>} />
       </Route>

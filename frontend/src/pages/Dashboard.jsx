@@ -14,6 +14,7 @@ import {
   LogOut,
   ChevronDown,
   MessageSquare,
+  BarChart3,
 } from 'lucide-react';
 
 const modules = [
@@ -79,6 +80,13 @@ const modules = [
     path: '/complaints',
     color: 'bg-orange-500',
     description: 'Manage Complaints',
+  },
+  {
+    name: 'Statistics',
+    icon: BarChart3,
+    path: '/statistics',
+    color: 'bg-blue-600',
+    description: 'System Analytics & Reports',
   },
 ];
 

@@ -9,7 +9,8 @@ import {
   X,
   Banknote,
   FileSpreadsheet,
-  MessageSquare
+  MessageSquare,
+  BarChart3
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -23,6 +24,7 @@ const navigation = [
   { name: 'UVTAB Fees', href: '/fees', icon: Banknote },
   { name: 'Marksheets', href: '/marksheets', icon: FileSpreadsheet },
   { name: 'Complaints', href: '/complaints', icon: MessageSquare },
+  { name: 'Statistics', href: '/statistics', icon: BarChart3 },
   { name: 'Users', href: '/users', icon: Users },
 ];
 

@@ -14,15 +14,17 @@ class CandidateListSerializer(serializers.ModelSerializer):
     sector = serializers.SerializerMethodField()
     district_name = serializers.CharField(source='district.name', read_only=True)
     village_name = serializers.CharField(source='village.name', read_only=True)
+    enrollments = serializers.SerializerMethodField()
+    has_special_needs = serializers.SerializerMethodField()
     
     class Meta:
         model = Candidate
         fields = [
             'id', 'registration_number', 'payment_code', 'is_submitted', 'full_name', 'date_of_birth', 'gender',
             'nationality', 'is_refugee', 'refugee_number', 'contact',
-            'district_name', 'village_name', 'has_disability',
+            'district_name', 'village_name', 'has_disability', 'has_special_needs',
             'assessment_center', 'registration_category', 'occupation', 'sector',
-            'verification_status', 'status', 'passport_photo',
+            'verification_status', 'status', 'passport_photo', 'enrollments',
             'created_at', 'updated_at'
         ]
     
@@ -51,6 +53,19 @@ class CandidateListSerializer(serializers.ModelSerializer):
                 'name': obj.occupation.sector.name,
             }
         return None
+    
+    def get_enrollments(self, obj):
+        """Get list of enrollment data for statistics"""
+        enrollments = obj.enrollments.filter(is_active=True)
+        return [{
+            'id': e.id,
+            'assessment_series': e.assessment_series.id,
+            'occupation': e.occupation_level.occupation.id if e.occupation_level else None
+        } for e in enrollments]
+    
+    def get_has_special_needs(self, obj):
+        """Check if candidate has special needs (disability)"""
+        return obj.has_disability
 
 
 class CandidateDetailSerializer(serializers.ModelSerializer):
