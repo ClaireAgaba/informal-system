@@ -8,7 +8,8 @@ import {
   Menu,
   X,
   Banknote,
-  FileSpreadsheet
+  FileSpreadsheet,
+  MessageSquare
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -21,6 +22,7 @@ const navigation = [
   { name: 'Reports', href: '/reports', icon: FileText },
   { name: 'UVTAB Fees', href: '/fees', icon: Banknote },
   { name: 'Marksheets', href: '/marksheets', icon: FileSpreadsheet },
+  { name: 'Complaints', href: '/complaints', icon: MessageSquare },
   { name: 'Users', href: '/users', icon: Users },
 ];
 

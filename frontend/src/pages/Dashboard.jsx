@@ -13,6 +13,7 @@ import {
   FileSpreadsheet,
   LogOut,
   ChevronDown,
+  MessageSquare,
 } from 'lucide-react';
 
 const modules = [
@@ -71,6 +72,13 @@ const modules = [
     path: '/marksheets',
     color: 'bg-indigo-500',
     description: 'Generate & Manage Marksheets',
+  },
+  {
+    name: 'Complaints',
+    icon: MessageSquare,
+    path: '/complaints',
+    color: 'bg-orange-500',
+    description: 'Manage Complaints',
   },
 ];
 

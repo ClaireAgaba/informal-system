@@ -34,6 +34,9 @@ import Albums from '@modules/reports/pages/Albums';
 import ResultLists from '@modules/reports/pages/ResultLists';
 import FeesModule from '@modules/fees';
 import MarksheetsModule from '@modules/marksheets';
+import ComplaintsList from '@modules/complaints/pages/ComplaintsList';
+import ComplaintDetail from '@modules/complaints/pages/ComplaintDetail';
+import CreateComplaint from '@modules/complaints/pages/CreateComplaint';
 
 function App() {
   return (
@@ -96,6 +99,11 @@ function App() {
         
         {/* Marksheets routes */}
         <Route path="marksheets/*" element={<MarksheetsModule />} />
+        
+        {/* Complaints routes */}
+        <Route path="complaints" element={<ComplaintsList />} />
+        <Route path="complaints/create" element={<CreateComplaint />} />
+        <Route path="complaints/:id" element={<ComplaintDetail />} />
         
         <Route path="*" element={<div className="p-6"><h1 className="text-2xl">404 - Page Not Found</h1></div>} />
       </Route>
