@@ -22,9 +22,6 @@ from .serializers import CandidateFeeSerializer, CenterFeeSerializer
 
 class CandidateFeeViewSet(viewsets.ModelViewSet):
     """ViewSet for managing candidate fees"""
-    queryset = CandidateFee.objects.select_related(
-        'candidate', 'candidate__occupation', 'assessment_series'
-    ).all()
     serializer_class = CandidateFeeSerializer
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -32,6 +29,22 @@ class CandidateFeeViewSet(viewsets.ModelViewSet):
     search_fields = ['payment_code', 'candidate__registration_number', 'candidate__first_name', 'candidate__last_name']
     ordering_fields = ['created_at', 'total_amount', 'payment_date']
     ordering = ['-created_at']
+    
+    def get_queryset(self):
+        """Filter fees by center for center representatives"""
+        queryset = CandidateFee.objects.select_related(
+            'candidate', 'candidate__occupation', 'assessment_series'
+        ).all()
+        
+        # Filter by center for center representatives
+        if self.request.user.is_authenticated and self.request.user.user_type == 'center_representative':
+            if hasattr(self.request.user, 'center_rep_profile'):
+                center_rep = self.request.user.center_rep_profile
+                queryset = queryset.filter(candidate__assessment_center=center_rep.assessment_center)
+                if center_rep.assessment_center_branch:
+                    queryset = queryset.filter(candidate__assessment_center_branch=center_rep.assessment_center_branch)
+        
+        return queryset
     
     @action(detail=False, methods=['post'])
     def populate_from_candidates(self, request):
@@ -104,9 +117,6 @@ class CandidateFeeViewSet(viewsets.ModelViewSet):
 
 class CenterFeeViewSet(viewsets.ModelViewSet):
     """ViewSet for managing center fees"""
-    queryset = CenterFee.objects.select_related(
-        'assessment_series', 'assessment_center'
-    ).all()
     serializer_class = CenterFeeSerializer
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -114,6 +124,20 @@ class CenterFeeViewSet(viewsets.ModelViewSet):
     search_fields = ['assessment_center__center_name']
     ordering_fields = ['created_at', 'total_amount', 'total_candidates']
     ordering = ['-created_at']
+    
+    def get_queryset(self):
+        """Filter center fees by center for center representatives"""
+        queryset = CenterFee.objects.select_related(
+            'assessment_series', 'assessment_center'
+        ).all()
+        
+        # Filter by center for center representatives
+        if self.request.user.is_authenticated and self.request.user.user_type == 'center_representative':
+            if hasattr(self.request.user, 'center_rep_profile'):
+                center_rep = self.request.user.center_rep_profile
+                queryset = queryset.filter(assessment_center=center_rep.assessment_center)
+        
+        return queryset
     
     @action(detail=True, methods=['get'])
     def center_invoice(self, request, pk=None):

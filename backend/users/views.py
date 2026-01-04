@@ -3,10 +3,11 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
-from .models import User, Staff, SupportStaff
+from .models import User, Staff, SupportStaff, CenterRepresentative
 from .serializers import (
     UserSerializer, StaffSerializer, StaffCreateSerializer,
-    SupportStaffSerializer, SupportStaffCreateSerializer
+    SupportStaffSerializer, SupportStaffCreateSerializer,
+    CenterRepresentativeSerializer, CenterRepresentativeCreateSerializer
 )
 
 
@@ -180,11 +181,84 @@ def login_view(request):
         'is_superuser': user.is_superuser,
     }
     
+    # Add center representative specific information
+    if user.user_type == 'center_representative' and hasattr(user, 'center_rep_profile'):
+        center_rep = user.center_rep_profile
+        user_data['center_representative'] = {
+            'id': center_rep.id,
+            'fullname': center_rep.fullname,
+            'assessment_center': {
+                'id': center_rep.assessment_center.id,
+                'center_name': center_rep.assessment_center.center_name,
+                'center_number': center_rep.assessment_center.center_number,
+            } if center_rep.assessment_center else None,
+            'assessment_center_branch': {
+                'id': center_rep.assessment_center_branch.id,
+                'branch_name': center_rep.assessment_center_branch.branch_name,
+            } if center_rep.assessment_center_branch else None,
+        }
+    
     return Response({
         'token': token.key,
         'user': user_data,
         'message': 'Login successful'
     }, status=status.HTTP_200_OK)
+
+
+class CenterRepresentativeViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for CenterRepresentative model
+    """
+    queryset = CenterRepresentative.objects.select_related('assessment_center', 'assessment_center_branch', 'user').all()
+    serializer_class = CenterRepresentativeSerializer
+    permission_classes = [permissions.AllowAny]
+    filterset_fields = ['account_status', 'assessment_center', 'assessment_center_branch']
+    search_fields = ['fullname', 'email', 'contact', 'assessment_center__center_name']
+    
+    def get_serializer_class(self):
+        """Use different serializer for create action"""
+        if self.action == 'create':
+            return CenterRepresentativeCreateSerializer
+        return CenterRepresentativeSerializer
+    
+    @action(detail=True, methods=['post'])
+    def reset_password(self, request, pk=None):
+        """Reset center representative password to default"""
+        rep = self.get_object()
+        if rep.user:
+            rep.user.set_password('uvtab@2025')
+            rep.user.save()
+            return Response({'status': 'Password reset to default (uvtab@2025)'})
+        return Response({'error': 'No user account found'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def activate(self, request, pk=None):
+        """Activate a center representative's account"""
+        rep = self.get_object()
+        rep.account_status = 'active'
+        rep.save()
+        if rep.user:
+            rep.user.is_active = True
+            rep.user.save()
+        return Response({'status': 'Account activated'})
+    
+    @action(detail=True, methods=['post'])
+    def deactivate(self, request, pk=None):
+        """Deactivate a center representative's account"""
+        rep = self.get_object()
+        rep.account_status = 'inactive'
+        rep.save()
+        if rep.user:
+            rep.user.is_active = False
+            rep.user.save()
+        return Response({'status': 'Account deactivated'})
+    
+    @action(detail=False, methods=['get'])
+    def active(self, request):
+        """Get all active center representatives"""
+        active_reps = self.queryset.filter(account_status='active')
+        serializer = self.get_serializer(active_reps, many=True)
+        return Response(serializer.data)
 
 
 @api_view(['POST'])

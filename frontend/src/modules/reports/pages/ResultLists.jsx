@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ClipboardList, Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -9,6 +9,7 @@ import apiClient from '@/services/apiClient';
 
 const ResultLists = () => {
   const [loading, setLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const [filters, setFilters] = useState({
     assessmentSeries: '',
     registrationCategory: '',
@@ -16,6 +17,27 @@ const ResultLists = () => {
     level: '',
     assessmentCenter: '', // Optional
   });
+
+  // Load user from localStorage
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setCurrentUser(user);
+        
+        // Auto-select center for center representatives
+        if (user.user_type === 'center_representative' && user.center_representative?.assessment_center) {
+          setFilters(prev => ({
+            ...prev,
+            assessmentCenter: user.center_representative.assessment_center.id.toString()
+          }));
+        }
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+  }, []);
 
   // Fetch assessment series
   const { data: seriesData } = useQuery({
@@ -267,7 +289,8 @@ const ResultLists = () => {
             <select
               value={filters.assessmentCenter}
               onChange={(e) => setFilters({ ...filters, assessmentCenter: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+              disabled={currentUser?.user_type === 'center_representative'}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               <option value="">All Centers</option>
               {assessmentCenters.map((center) => (

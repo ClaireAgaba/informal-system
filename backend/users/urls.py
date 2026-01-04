@@ -6,6 +6,7 @@ router = DefaultRouter()
 router.register(r'users', views.UserViewSet, basename='user')
 router.register(r'staff', views.StaffViewSet, basename='staff')
 router.register(r'support-staff', views.SupportStaffViewSet, basename='support-staff')
+router.register(r'center-representatives', views.CenterRepresentativeViewSet, basename='center-representative')
 
 urlpatterns = [
     # Auth endpoints

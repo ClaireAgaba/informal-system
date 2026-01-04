@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Staff, SupportStaff
+from .models import User, Staff, SupportStaff, CenterRepresentative
 from configurations.serializers import DepartmentSerializer
 
 
@@ -84,3 +84,57 @@ class SupportStaffCreateSerializer(serializers.ModelSerializer):
         if SupportStaff.objects.filter(email=value).exists():
             raise serializers.ValidationError("A support staff member with this email already exists.")
         return value
+
+
+class CenterRepresentativeSerializer(serializers.ModelSerializer):
+    """Serializer for Center Representatives"""
+    center_name = serializers.CharField(source='assessment_center.center_name', read_only=True)
+    center_number = serializers.CharField(source='assessment_center.center_number', read_only=True)
+    branch_name = serializers.CharField(source='assessment_center_branch.branch_name', read_only=True)
+    account_status_display = serializers.CharField(source='get_account_status_display', read_only=True)
+    is_account_active = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = CenterRepresentative
+        fields = [
+            'id', 'fullname', 'contact', 'email', 'assessment_center', 'center_name', 
+            'center_number', 'assessment_center_branch', 'branch_name', 'account_status',
+            'account_status_display', 'is_account_active', 'date_joined', 'last_login',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['email', 'date_joined', 'last_login', 'created_at', 'updated_at']
+    
+    def get_is_account_active(self, obj):
+        """Return if account is active"""
+        return obj.is_active()
+
+
+class CenterRepresentativeCreateSerializer(serializers.ModelSerializer):
+    """Simplified serializer for creating center representatives"""
+    
+    class Meta:
+        model = CenterRepresentative
+        fields = ['fullname', 'contact', 'assessment_center', 'assessment_center_branch', 'account_status']
+    
+    def validate(self, data):
+        """Validate center representative data"""
+        # Check if a representative already exists for this center (if no branch specified)
+        if not data.get('assessment_center_branch'):
+            existing = CenterRepresentative.objects.filter(
+                assessment_center=data['assessment_center'],
+                assessment_center_branch__isnull=True
+            ).exists()
+            if existing:
+                raise serializers.ValidationError(
+                    "A representative for this center already exists. Please specify a branch or update the existing representative."
+                )
+        return data
+    
+    def create(self, validated_data):
+        """Create center representative with auto-generated email"""
+        # Set created_by from request user
+        request = self.context.get('request')
+        if request and request.user:
+            validated_data['created_by'] = request.user
+        
+        return super().create(validated_data)

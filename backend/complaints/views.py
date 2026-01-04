@@ -52,9 +52,14 @@ class ComplaintViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         # Filter by user role
-        if user.is_authenticated and not user.is_staff:
+        if user.is_authenticated:
+            # Center representatives can only see complaints from their center
+            if user.user_type == 'center_representative' and hasattr(user, 'center_rep_profile'):
+                center_rep = user.center_rep_profile
+                queryset = queryset.filter(exam_center=center_rep.assessment_center)
             # Regular users can only see their own complaints
-            queryset = queryset.filter(created_by=user)
+            elif not user.is_staff:
+                queryset = queryset.filter(created_by=user)
         
         return queryset
 

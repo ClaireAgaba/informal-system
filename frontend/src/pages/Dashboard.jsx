@@ -94,7 +94,21 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const dropdownRef = useRef(null);
+
+  // Load user from localStorage
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setCurrentUser(user);
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -107,6 +121,30 @@ const Dashboard = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Get user display name
+  const getUserDisplayName = () => {
+    if (!currentUser) return 'User';
+    
+    if (currentUser.user_type === 'center_representative') {
+      if (currentUser.center_representative?.fullname) {
+        return currentUser.center_representative.fullname;
+      }
+      return currentUser.first_name && currentUser.last_name 
+        ? `${currentUser.first_name} ${currentUser.last_name}`
+        : currentUser.username;
+    } else if (currentUser.user_type === 'staff') {
+      return currentUser.first_name && currentUser.last_name
+        ? `${currentUser.first_name} ${currentUser.last_name}`
+        : 'Staff User';
+    } else if (currentUser.user_type === 'support_staff') {
+      return currentUser.first_name && currentUser.last_name
+        ? `${currentUser.first_name} ${currentUser.last_name}`
+        : 'Support Staff';
+    }
+    
+    return currentUser.username || 'User';
+  };
 
   const handleLogout = async () => {
     try {
@@ -127,9 +165,24 @@ const Dashboard = () => {
     }
   };
 
-  const filteredModules = modules.filter((module) =>
-    module.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter modules based on user type and search query
+  const getAccessibleModules = () => {
+    let accessibleModules = modules;
+    
+    // Filter by user type
+    if (currentUser?.user_type === 'center_representative') {
+      // Center reps only see: Candidates, Reports, UVTAB Fees, Complaints
+      const allowedModules = ['Candidates', 'Reports', 'UVTAB Fees', 'Complaints'];
+      accessibleModules = modules.filter(module => allowedModules.includes(module.name));
+    }
+    
+    // Apply search filter
+    return accessibleModules.filter((module) =>
+      module.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  };
+
+  const filteredModules = getAccessibleModules();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900">
@@ -156,7 +209,7 @@ const Dashboard = () => {
                   <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
                     <UserCircle className="w-5 h-5 text-white" />
                   </div>
-                  <span className="text-white text-sm">Admin User</span>
+                  <span className="text-white text-sm">{getUserDisplayName()}</span>
                   <ChevronDown className={`w-4 h-4 text-white transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 

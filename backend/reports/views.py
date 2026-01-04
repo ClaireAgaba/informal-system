@@ -27,6 +27,13 @@ class ReportViewSet(viewsets.ViewSet):
     """
     permission_classes = [permissions.AllowAny]  # Allow unauthenticated access
 
+    def _get_center_for_rep(self, request):
+        """Helper method to get assessment center for center representative"""
+        if request.user.is_authenticated and request.user.user_type == 'center_representative':
+            if hasattr(request.user, 'center_rep_profile'):
+                return request.user.center_rep_profile.assessment_center
+        return None
+
     @action(detail=False, methods=['get'], url_path='candidate-album')
     def candidate_album(self, request):
         """
@@ -39,6 +46,11 @@ class ReportViewSet(viewsets.ViewSet):
         registration_category = request.query_params.get('registration_category')
         occupation_id = request.query_params.get('occupation')
         level_id = request.query_params.get('level')  # Optional, required for formal/workers_pas
+
+        # Check if user is center representative and restrict to their center
+        rep_center = self._get_center_for_rep(request)
+        if rep_center:
+            assessment_center_id = str(rep_center.id)
 
         # Validate required parameters
         if not all([assessment_center_id, assessment_series_id, registration_category, occupation_id]):
@@ -88,7 +100,8 @@ class ReportViewSet(viewsets.ViewSet):
             if registration_category == 'workers_pas':
                 # Workers PAS: filter by level OR null level (they can select papers from any level)
                 enrollments = CandidateEnrollment.objects.filter(
-                    assessment_series=assessment_series
+                    assessment_series=assessment_series,
+                    candidate__occupation=occupation  # Filter by occupation
                 ).filter(
                     Q(occupation_level=level) | Q(occupation_level__isnull=True)
                 )
@@ -96,7 +109,8 @@ class ReportViewSet(viewsets.ViewSet):
                 # Formal: strict level matching
                 enrollments = CandidateEnrollment.objects.filter(
                     assessment_series=assessment_series,
-                    occupation_level=level
+                    occupation_level=level,
+                    candidate__occupation=occupation  # Filter by occupation
                 )
             
             enrolled_candidate_ids = list(enrollments.values_list('candidate_id', flat=True))
@@ -112,10 +126,11 @@ class ReportViewSet(viewsets.ViewSet):
                 # No enrollments found, return empty queryset
                 filter_params['id__in'] = []
         elif registration_category == 'workers_pas':
-            # Workers PAS without level filter - get all enrolled in this series
+            # Workers PAS without level filter - get all enrolled in this series for this occupation
             from candidates.models import CandidateEnrollment
             enrollments = CandidateEnrollment.objects.filter(
-                assessment_series=assessment_series
+                assessment_series=assessment_series,
+                candidate__occupation=occupation  # Filter by occupation
             )
             enrolled_candidate_ids = list(enrollments.values_list('candidate_id', flat=True))
             
@@ -445,6 +460,11 @@ class ReportViewSet(viewsets.ViewSet):
         registration_category = request.query_params.get('registration_category')
         occupation_id = request.query_params.get('occupation')
         assessment_center_id = request.query_params.get('assessment_center')  # Optional
+        
+        # Check if user is center representative and restrict to their center
+        rep_center = self._get_center_for_rep(request)
+        if rep_center:
+            assessment_center_id = str(rep_center.id)
         
         # Validate required parameters
         if not all([assessment_series_id, registration_category, occupation_id]):

@@ -31,9 +31,13 @@ const Login = () => {
         password: formData.password,
       });
 
+      console.log('Login response:', response.data);
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
-      navigate('/dashboard');
+      console.log('Stored user:', JSON.parse(localStorage.getItem('user')));
+      
+      // Force page reload to ensure fresh data
+      window.location.href = '/dashboard';
     } catch (err) {
       const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Login failed. Please try again.';
       setError(errorMsg);

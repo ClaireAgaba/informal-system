@@ -44,7 +44,7 @@ class CandidateViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Optimize queryset with select_related and prefetch_related"""
-        return Candidate.objects.select_related(
+        queryset = Candidate.objects.select_related(
             'district',
             'village',
             'nature_of_disability',
@@ -56,6 +56,17 @@ class CandidateViewSet(viewsets.ModelViewSet):
             'updated_by',
             'verified_by'
         ).all()
+        
+        # Filter by center for center representatives
+        if self.request.user.is_authenticated and self.request.user.user_type == 'center_representative':
+            if hasattr(self.request.user, 'center_rep_profile'):
+                center_rep = self.request.user.center_rep_profile
+                queryset = queryset.filter(assessment_center=center_rep.assessment_center)
+                # If center rep is assigned to a specific branch, filter by that branch too
+                if center_rep.assessment_center_branch:
+                    queryset = queryset.filter(assessment_center_branch=center_rep.assessment_center_branch)
+        
+        return queryset
     
     def get_serializer_class(self):
         """Return appropriate serializer based on action"""

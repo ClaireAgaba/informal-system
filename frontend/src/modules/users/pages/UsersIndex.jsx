@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Users, UserPlus } from 'lucide-react';
+import { Users, UserPlus, Building2 } from 'lucide-react';
 import Card from '@shared/components/Card';
 
 const UsersIndex = () => {
@@ -19,6 +19,13 @@ const UsersIndex = () => {
       icon: UserPlus,
       path: '/users/support-staff',
       color: 'blue',
+    },
+    {
+      title: 'Center Representatives',
+      description: 'Assessment center representatives with center-specific access',
+      icon: Building2,
+      path: '/users/center-representatives',
+      color: 'green',
     },
   ];
 
