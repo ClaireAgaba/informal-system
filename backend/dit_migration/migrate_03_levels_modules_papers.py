@@ -28,7 +28,8 @@ def show_old_structure():
     """Show structure of old tables"""
     print("\n=== Old Table Structure ===")
     
-    for table in ['eims_occupationlevel', 'eims_module', 'eims_paper']:
+    # Note: eims_level is the main level table (not eims_occupationlevel)
+    for table in ['eims_level', 'eims_module', 'eims_paper']:
         print(f"\n{table} columns:")
         for col in describe_old_table(table):
             print(f"  {col['column_name']}: {col['data_type']}")
@@ -36,29 +37,30 @@ def show_old_structure():
 def count_records():
     """Count records in old tables"""
     print("\n=== Record Counts ===")
-    print(f"  eims_occupationlevel: {get_old_table_count('eims_occupationlevel')}")
+    print(f"  eims_level: {get_old_table_count('eims_level')}")
     print(f"  eims_module: {get_old_table_count('eims_module')}")
     print(f"  eims_paper: {get_old_table_count('eims_paper')}")
 
 def migrate_levels(dry_run=False):
-    """Migrate occupation levels"""
+    """Migrate occupation levels from eims_level table"""
     from occupations.models import OccupationLevel, Occupation
     
     mapping = load_occupation_mapping()
     
     conn = get_old_connection()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM eims_occupationlevel ORDER BY id")
+    # Use eims_level table (the main level table with fees)
+    cur.execute("SELECT * FROM eims_level ORDER BY id")
     rows = cur.fetchall()
     cur.close()
     conn.close()
     
-    log(f"Found {len(rows)} occupation levels in old database")
+    log(f"Found {len(rows)} levels in old database (eims_level)")
     
     if dry_run:
         print("\nSample data (first 5):")
         for row in rows[:5]:
-            print(f"  ID: {row['id']}, Occ ID: {row.get('occupation_id')}, Level: {row.get('level_name')}")
+            print(f"  ID: {row['id']}, Occ ID: {row.get('occupation_id')}, Name: {row.get('name')}, Formal Fee: {row.get('formal_fee')}")
         return
     
     migrated = 0
@@ -79,17 +81,20 @@ def migrate_levels(dry_run=False):
             skipped += 1
             continue
         
+        # Old DB uses 'name' field for level name
+        level_name = row.get('name', '')
+        
         OccupationLevel.objects.update_or_create(
             id=row['id'],
             defaults={
                 'occupation': occupation,
-                'level_name': row.get('level_name', ''),
-                'structure_type': row.get('structure_type', 'modules'),
+                'level_name': level_name,
+                'structure_type': 'modules',  # Default, can be updated later
                 'formal_fee': row.get('formal_fee', 0) or 0,
-                'workers_pas_base_fee': row.get('workers_pas_base_fee', 0) or 0,
-                'workers_pas_per_module_fee': row.get('workers_pas_per_module_fee', 0) or 0,
-                'modular_fee_single_module': row.get('modular_fee_single_module', 0) or 0,
-                'modular_fee_double_module': row.get('modular_fee_double_module', 0) or 0,
+                'workers_pas_base_fee': row.get('workers_pas_fee', 0) or 0,
+                'workers_pas_per_module_fee': row.get('workers_pas_module_fee', 0) or 0,
+                'modular_fee_single_module': row.get('modular_fee_single', 0) or 0,
+                'modular_fee_double_module': row.get('modular_fee_double', 0) or 0,
                 'is_active': True,
             }
         )
@@ -115,7 +120,8 @@ def migrate_modules(dry_run=False):
     if dry_run:
         print("\nSample data (first 5):")
         for row in rows[:5]:
-            print(f"  ID: {row['id']}, Code: {row.get('module_code')}, Name: {row.get('module_name')}")
+            # Old DB uses 'code' and 'name' fields
+            print(f"  ID: {row['id']}, Code: {row.get('code')}, Name: {row.get('name')}, Level ID: {row.get('level_id')}")
         return
     
     migrated = 0
@@ -154,8 +160,8 @@ def migrate_modules(dry_run=False):
         OccupationModule.objects.update_or_create(
             id=row['id'],
             defaults={
-                'module_code': row.get('module_code', ''),
-                'module_name': row.get('module_name', ''),
+                'module_code': row.get('code') or '',
+                'module_name': row.get('name') or '',
                 'occupation': occupation,
                 'level': level,
                 'is_active': True,
@@ -183,7 +189,8 @@ def migrate_papers(dry_run=False):
     if dry_run:
         print("\nSample data (first 5):")
         for row in rows[:5]:
-            print(f"  ID: {row['id']}, Code: {row.get('paper_code')}, Name: {row.get('paper_name')}")
+            # Old DB uses 'code', 'name', 'grade_type' fields
+            print(f"  ID: {row['id']}, Code: {row.get('code')}, Name: {row.get('name')}, Type: {row.get('grade_type')}")
         return
     
     migrated = 0
@@ -225,15 +232,16 @@ def migrate_papers(dry_run=False):
             except OccupationModule.DoesNotExist:
                 pass
         
-        paper_type = row.get('paper_type', 'theory')
+        # Old DB uses 'grade_type' for paper type
+        paper_type = row.get('grade_type', 'theory')
         if paper_type not in ['theory', 'practical']:
             paper_type = 'theory'
         
         OccupationPaper.objects.update_or_create(
             id=row['id'],
             defaults={
-                'paper_code': row.get('paper_code', ''),
-                'paper_name': row.get('paper_name', ''),
+                'paper_code': row.get('code') or '',
+                'paper_name': row.get('name') or '',
                 'occupation': occupation,
                 'level': level,
                 'module': module,
