@@ -161,13 +161,12 @@ def migrate_occupations(dry_run=False):
             except Sector.DoesNotExist:
                 pass
         
-        # Determine category - old DB has category_id, default to formal
-        # You may need to map category_id to category name if needed
-        category = 'formal'
-        if row.get('category_id'):
-            # Map category_id to category name if you have the mapping
-            # For now, default to formal
-            pass
+        # Map category_id: 1 = Formal, 2 = Worker's PAS
+        category_id = row.get('category_id')
+        if category_id == 2:
+            category = 'workers_pas'
+        else:
+            category = 'formal'
         
         Occupation.objects.update_or_create(
             id=row['id'],
