@@ -1,8 +1,9 @@
 from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
+from django.views.decorators.csrf import csrf_exempt
 from .models import User, Staff, SupportStaff, CenterRepresentative
 from .serializers import (
     UserSerializer, StaffSerializer, StaffCreateSerializer,
@@ -126,8 +127,10 @@ class SupportStaffViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+@csrf_exempt
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
+@authentication_classes([])
 def login_view(request):
     """
     Login endpoint - authenticates user and returns token
