@@ -42,11 +42,13 @@ def analyze_occupations():
     non_old_codes = []
     
     for row in rows:
-        code = row.get('occupation_code') or row.get('occ_code') or ''
+        # Old DB uses 'code' and 'name' fields
+        code = row.get('code') or ''
+        name = row.get('name') or ''
         if '-old' in code.lower():
-            old_codes.append({'id': row['id'], 'code': code, 'name': row.get('occupation_name') or row.get('occ_name')})
+            old_codes.append({'id': row['id'], 'code': code, 'name': name})
         else:
-            non_old_codes.append({'id': row['id'], 'code': code, 'name': row.get('occupation_name') or row.get('occ_name')})
+            non_old_codes.append({'id': row['id'], 'code': code, 'name': name})
     
     print(f"\n=== Occupation Analysis ===")
     print(f"  Non-old occupations: {len(non_old_codes)} (will migrate)")
@@ -128,7 +130,8 @@ def migrate_occupations(dry_run=False):
     non_old_occs = []
     
     for row in rows:
-        code = row.get('occupation_code') or row.get('occ_code') or ''
+        # Old DB uses 'code' and 'name' fields
+        code = row.get('code') or ''
         if '-old' in code.lower():
             old_occs.append(row)
         else:
@@ -139,16 +142,17 @@ def migrate_occupations(dry_run=False):
     if dry_run:
         print("\nSample non-old occupations (first 5):")
         for row in non_old_occs[:5]:
-            code = row.get('occupation_code') or row.get('occ_code')
-            name = row.get('occupation_name') or row.get('occ_name')
+            code = row.get('code') or ''
+            name = row.get('name') or ''
             print(f"  ID: {row['id']}, Code: {code}, Name: {name}")
         return
     
     # Migrate non-old occupations
     migrated = 0
     for row in non_old_occs:
-        code = row.get('occupation_code') or row.get('occ_code') or ''
-        name = row.get('occupation_name') or row.get('occ_name') or ''
+        # Old DB uses 'code' and 'name' fields
+        code = row.get('code') or ''
+        name = row.get('name') or ''
         
         sector = None
         if row.get('sector_id'):
@@ -157,10 +161,13 @@ def migrate_occupations(dry_run=False):
             except Sector.DoesNotExist:
                 pass
         
-        # Determine category based on code patterns or existing field
-        category = row.get('occ_category', 'formal')
-        if not category:
-            category = 'formal'
+        # Determine category - old DB has category_id, default to formal
+        # You may need to map category_id to category name if needed
+        category = 'formal'
+        if row.get('category_id'):
+            # Map category_id to category name if you have the mapping
+            # For now, default to formal
+            pass
         
         Occupation.objects.update_or_create(
             id=row['id'],
@@ -180,12 +187,12 @@ def migrate_occupations(dry_run=False):
     # Create mapping for -old occupations
     mapping = {}
     for old_row in old_occs:
-        old_code = old_row.get('occupation_code') or old_row.get('occ_code') or ''
+        old_code = old_row.get('code') or ''
         clean_code = old_code.replace('-Old', '').replace('-old', '')
         
         # Find matching non-old occupation
         for non_old_row in non_old_occs:
-            non_old_code = non_old_row.get('occupation_code') or non_old_row.get('occ_code') or ''
+            non_old_code = non_old_row.get('code') or ''
             if non_old_code == clean_code:
                 mapping[str(old_row['id'])] = non_old_row['id']
                 break
