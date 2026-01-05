@@ -50,35 +50,26 @@ const DashboardLayout = () => {
 
   // Get user display name based on user type
   const getUserDisplayName = () => {
-    console.log('getUserDisplayName called, currentUser:', currentUser);
-    if (!currentUser) {
-      console.log('No current user, returning "User"');
-      return 'User';
-    }
+    if (!currentUser) return 'User';
     
-    console.log('User type:', currentUser.user_type);
+    // For center representatives, use their profile fullname
     if (currentUser.user_type === 'center_representative') {
-      // For center reps, show their full name from the profile
-      console.log('Center rep data:', currentUser.center_representative);
       if (currentUser.center_representative?.fullname) {
-        console.log('Returning fullname:', currentUser.center_representative.fullname);
         return currentUser.center_representative.fullname;
       }
-      const name = currentUser.first_name && currentUser.last_name 
-        ? `${currentUser.first_name} ${currentUser.last_name}`
-        : currentUser.username;
-      console.log('Returning name:', name);
-      return name;
-    } else if (currentUser.user_type === 'staff') {
-      return currentUser.first_name && currentUser.last_name
-        ? `${currentUser.first_name} ${currentUser.last_name}`
-        : 'Staff User';
-    } else if (currentUser.user_type === 'support_staff') {
-      return currentUser.first_name && currentUser.last_name
-        ? `${currentUser.first_name} ${currentUser.last_name}`
-        : 'Support Staff';
     }
     
+    // For all other users (staff, support_staff, superuser), try first_name + last_name
+    if (currentUser.first_name && currentUser.last_name) {
+      return `${currentUser.first_name} ${currentUser.last_name}`;
+    }
+    
+    // If only first_name exists
+    if (currentUser.first_name) {
+      return currentUser.first_name;
+    }
+    
+    // Fall back to username
     return currentUser.username || 'User';
   };
 

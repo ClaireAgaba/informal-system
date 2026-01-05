@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FileText, AlertCircle, Plus, Edit } from 'lucide-react';
 import candidateApi from '../services/candidateApi';
@@ -19,6 +19,20 @@ import {
 const CandidateResults = ({ candidateId, registrationCategory, hasEnrollments, enrollments }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Load current user from localStorage
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setCurrentUser(user);
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+  }, []);
   // Fetch results based on registration category
   const { data: resultsData, isLoading, error } = useQuery({
     queryKey: ['candidate-results', candidateId, registrationCategory],
@@ -74,6 +88,7 @@ const CandidateResults = ({ candidateId, registrationCategory, hasEnrollments, e
           results={results} 
           onAddResults={() => setShowAddModal(true)}
           onEditResults={() => setShowEditModal(true)}
+          isCenterRep={currentUser?.user_type === 'center_representative'}
         />
         <AddResultsModal
           isOpen={showAddModal}
@@ -98,6 +113,7 @@ const CandidateResults = ({ candidateId, registrationCategory, hasEnrollments, e
         <FormalResults 
           results={results} 
           onAddResults={() => setShowAddModal(true)}
+          isCenterRep={currentUser?.user_type === 'center_representative'}
           onEditResults={() => setShowEditModal(true)}
         />
         <FormalAddResultsModal
@@ -123,6 +139,7 @@ const CandidateResults = ({ candidateId, registrationCategory, hasEnrollments, e
         <WorkersPasResults 
           results={results} 
           onAddResults={() => setShowAddModal(true)}
+          isCenterRep={currentUser?.user_type === 'center_representative'}
         />
         <WorkersPasAddResultsModal
           isOpen={showAddModal}
@@ -146,7 +163,7 @@ const CandidateResults = ({ candidateId, registrationCategory, hasEnrollments, e
 };
 
 // Modular Results Component
-const ModularResults = ({ results, onAddResults, onEditResults }) => {
+const ModularResults = ({ results, onAddResults, onEditResults, isCenterRep }) => {
   const hasResults = results && results.length > 0;
 
   return (
@@ -161,24 +178,27 @@ const ModularResults = ({ results, onAddResults, onEditResults }) => {
               Total Modules: {results.length}
             </div>
           )}
-          {hasResults ? (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={onEditResults}
-            >
-              <Edit className="w-4 h-4 mr-2" />
-              Edit Results
-            </Button>
-          ) : (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={onAddResults}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Results
-            </Button>
+          {/* Hide Add/Edit buttons for center representatives */}
+          {!isCenterRep && (
+            hasResults ? (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={onEditResults}
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Edit Results
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={onAddResults}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Results
+              </Button>
+            )
           )}
         </div>
       </div>
@@ -244,7 +264,10 @@ const ModularResults = ({ results, onAddResults, onEditResults }) => {
                     <span className="capitalize">{result.type || 'Practical'}</span>
                   </td>
                   <td className="px-4 py-3 text-sm text-center font-semibold text-gray-900">
-                    {result.mark !== null && result.mark !== undefined ? result.mark : '-'}
+                    {isCenterRep 
+                      ? (result.mark !== null && result.mark !== undefined ? 'Uploaded' : '-')
+                      : (result.mark !== null && result.mark !== undefined ? result.mark : '-')
+                    }
                   </td>
                   <td className={`px-4 py-3 text-sm text-center ${getGradeColor(grade)}`}>
                     {grade}
@@ -272,7 +295,7 @@ const ModularResults = ({ results, onAddResults, onEditResults }) => {
 };
 
 // Formal Results Component
-const FormalResults = ({ results, onAddResults, onEditResults }) => {
+const FormalResults = ({ results, onAddResults, onEditResults, isCenterRep }) => {
   const hasResults = results && results.length > 0;
 
   // Group results by level and exam/paper
@@ -313,23 +336,28 @@ const FormalResults = ({ results, onAddResults, onEditResults }) => {
               Total Results: {results.length}
             </div>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onAddResults}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Results
-          </Button>
-          {hasResults && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={onEditResults}
-            >
-              <Edit className="w-4 h-4 mr-2" />
-              Edit Results
-            </Button>
+          {/* Hide Add/Edit buttons for center representatives */}
+          {!isCenterRep && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onAddResults}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Results
+              </Button>
+              {hasResults && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={onEditResults}
+                >
+                  <Edit className="w-4 h-4 mr-2" />
+                  Edit Results
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -407,7 +435,10 @@ const FormalResults = ({ results, onAddResults, onEditResults }) => {
                               <span className="capitalize">{result.type || 'Practical'}</span>
                             </td>
                             <td className="px-4 py-3 text-sm text-center font-semibold text-gray-900">
-                              {result.mark !== null && result.mark !== undefined ? result.mark : '-'}
+                              {isCenterRep 
+                                ? (result.mark !== null && result.mark !== undefined ? 'Uploaded' : '-')
+                                : (result.mark !== null && result.mark !== undefined ? result.mark : '-')
+                              }
                             </td>
                             <td className={`px-4 py-3 text-sm text-center font-semibold ${getGradeColor(grade)}`}>
                               {grade}
@@ -439,7 +470,7 @@ const FormalResults = ({ results, onAddResults, onEditResults }) => {
 };
 
 // Workers PAS Results Component
-const WorkersPasResults = ({ results, onAddResults }) => {
+const WorkersPasResults = ({ results, onAddResults, isCenterRep }) => {
   const hasResults = results && results.length > 0;
 
   return (
@@ -454,14 +485,17 @@ const WorkersPasResults = ({ results, onAddResults }) => {
               Total Papers: {results.length}
             </div>
           )}
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={onAddResults}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            {hasResults ? 'Add More Results' : 'Add Results'}
-          </Button>
+          {/* Hide Add Results button for center representatives */}
+          {!isCenterRep && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={onAddResults}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              {hasResults ? 'Add More Results' : 'Add Results'}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -469,10 +503,12 @@ const WorkersPasResults = ({ results, onAddResults }) => {
         <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
           <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-600 mb-4">No results recorded yet</p>
-          <Button variant="primary" size="sm" onClick={onAddResults}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Results
-          </Button>
+          {!isCenterRep && (
+            <Button variant="primary" size="sm" onClick={onAddResults}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Results
+            </Button>
+          )}
         </div>
       ) : (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -543,7 +579,10 @@ const WorkersPasResults = ({ results, onAddResults }) => {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-center font-semibold text-gray-900">
-                        {result.mark !== null && result.mark !== undefined ? result.mark : '-'}
+                        {isCenterRep 
+                          ? (result.mark !== null && result.mark !== undefined ? 'Uploaded' : '-')
+                          : (result.mark !== null && result.mark !== undefined ? result.mark : '-')
+                        }
                       </td>
                       <td className={`px-4 py-3 text-sm text-center font-semibold ${getGradeColor(grade)}`}>
                         {grade}

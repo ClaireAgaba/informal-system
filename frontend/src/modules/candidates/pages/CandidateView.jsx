@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -37,6 +37,20 @@ const CandidateView = () => {
   const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
   const [showEnrollmentModal, setShowEnrollmentModal] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Load current user from localStorage
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setCurrentUser(user);
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+  }, []);
 
   // Fetch candidate details
   const { data, isLoading, error } = useQuery({
@@ -407,8 +421,8 @@ const CandidateView = () => {
                   </Button>
                 )}
 
-                {/* Verify button - only for submitted candidates */}
-                {candidate.is_submitted && (
+                {/* Verify button - only for submitted candidates and NOT for center representatives */}
+                {candidate.is_submitted && currentUser?.user_type !== 'center_representative' && (
                   <Button 
                     variant="success" 
                     size="md" 
@@ -422,19 +436,22 @@ const CandidateView = () => {
                   </Button>
                 )}
                 
-                {/* Decline button - always available to allow correction of verification errors */}
-                <Button 
-                  variant="danger" 
-                  size="md" 
-                  className="w-full"
-                  onClick={() => setShowDeclineModal(true)}
-                  disabled={declineMutation.isPending}
-                >
-                  <XCircle className="w-4 h-4 mr-2" />
-                  {candidate.verification_status === 'declined' ? 'Update Decline Reason' : 'Decline Candidate'}
-                </Button>
+                {/* Decline button - NOT available for center representatives */}
+                {currentUser?.user_type !== 'center_representative' && (
+                  <Button 
+                    variant="danger" 
+                    size="md" 
+                    className="w-full"
+                    onClick={() => setShowDeclineModal(true)}
+                    disabled={declineMutation.isPending}
+                  >
+                    <XCircle className="w-4 h-4 mr-2" />
+                    {candidate.verification_status === 'declined' ? 'Update Decline Reason' : 'Decline Candidate'}
+                  </Button>
+                )}
 
-                {!candidate.payment_cleared && (
+                {/* Clear Payment button - NOT available for center representatives */}
+                {!candidate.payment_cleared && currentUser?.user_type !== 'center_representative' && (
                   <Button variant="primary" size="md" className="w-full">
                     <CreditCard className="w-4 h-4 mr-2" />
                     Clear Payment

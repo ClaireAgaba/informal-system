@@ -126,23 +126,24 @@ const Dashboard = () => {
   const getUserDisplayName = () => {
     if (!currentUser) return 'User';
     
+    // For center representatives, use their profile fullname
     if (currentUser.user_type === 'center_representative') {
       if (currentUser.center_representative?.fullname) {
         return currentUser.center_representative.fullname;
       }
-      return currentUser.first_name && currentUser.last_name 
-        ? `${currentUser.first_name} ${currentUser.last_name}`
-        : currentUser.username;
-    } else if (currentUser.user_type === 'staff') {
-      return currentUser.first_name && currentUser.last_name
-        ? `${currentUser.first_name} ${currentUser.last_name}`
-        : 'Staff User';
-    } else if (currentUser.user_type === 'support_staff') {
-      return currentUser.first_name && currentUser.last_name
-        ? `${currentUser.first_name} ${currentUser.last_name}`
-        : 'Support Staff';
     }
     
+    // For all other users (staff, support_staff, superuser), try first_name + last_name
+    if (currentUser.first_name && currentUser.last_name) {
+      return `${currentUser.first_name} ${currentUser.last_name}`;
+    }
+    
+    // If only first_name exists
+    if (currentUser.first_name) {
+      return currentUser.first_name;
+    }
+    
+    // Fall back to username
     return currentUser.username || 'User';
   };
 
