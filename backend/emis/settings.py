@@ -181,11 +181,16 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
-    'https://deveims.uvtab.go.ug',
-    'http://deveims.uvtab.go.ug',
+    
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://deveims.uvtab.go.ug',
+    'http://deveims.uvtab.go.ug',
+    'https://emis.uvtab.go.ug',
+]
 
 # Email configuration
 EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
