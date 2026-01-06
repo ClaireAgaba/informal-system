@@ -61,7 +61,7 @@ class Complaint(models.Model):
     )
     
     # Additional details
-    phone = models.CharField(max_length=20, blank=True)
+    phone = models.CharField(max_length=50, blank=True)
     
     # Issue details
     issue_description = models.TextField()
