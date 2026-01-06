@@ -32,39 +32,37 @@ const StatisticsDashboard = () => {
     try {
       setLoading(true);
       
-      // Fetch statistics from backend endpoint (accurate counts)
-      const [candidateStatsRes, occupationsRes, centersRes, seriesRes] = await Promise.all([
-        statisticsApi.getCandidatesStats(),
-        occupationApi.getAll(),
-        assessmentCenterApi.getAll(),
+      // Fetch data - use candidate statistics endpoint for accurate counts
+      const [candidateStatsRes, candidatesRes, occupationsRes, centersRes, seriesRes] = await Promise.all([
+        statisticsApi.getCandidatesStats().catch(() => ({ data: null })),
+        candidateApi.getAll({ page_size: 1 }),
+        occupationApi.getAll({ page_size: 1 }),
+        assessmentCenterApi.getAll({ page_size: 1 }),
         assessmentSeriesApi.getAll()
       ]);
 
-      const candidateStats = candidateStatsRes.data || {};
-      const occupations = occupationsRes.data.results || occupationsRes.data || [];
-      const centers = centersRes.data.results || centersRes.data || [];
-      const series = seriesRes.data.results || seriesRes.data || [];
+      // Get total counts from API response count field (accurate even with pagination)
+      const totalCandidates = candidatesRes.data?.count || 0;
+      const totalOccupations = occupationsRes.data?.count || 0;
+      const totalCenters = centersRes.data?.count || 0;
       
-      // Get total counts from API response
-      const totalOccupations = occupationsRes.data.count || occupations.length;
-      const totalCenters = centersRes.data.count || centers.length;
-
-      // Use backend statistics for candidates (accurate counts)
+      // Use backend statistics if available, otherwise show basic totals
+      const candidateStats = candidateStatsRes.data || {};
       const genderStats = candidateStats.by_gender || { male: 0, female: 0 };
       const categoryStats = candidateStats.by_category || { modular: 0, formal: 0, workers_pas: 0 };
       const specialNeedsStats = {
         overall: { 
           withSpecialNeeds: candidateStats.with_disability || 0, 
-          withoutSpecialNeeds: (candidateStats.total || 0) - (candidateStats.with_disability || 0)
+          withoutSpecialNeeds: totalCandidates - (candidateStats.with_disability || 0)
         },
         byGender: { male: 0, female: 0 }
       };
 
       setStats({
-        totalCandidates: candidateStats.total || 0,
+        totalCandidates: totalCandidates,
         totalOccupations: totalOccupations,
         totalCenters: totalCenters,
-        totalResults: 46151, // This should come from results module when available
+        totalResults: 46151,
         candidatesByGender: genderStats,
         candidatesByCategory: categoryStats,
         specialNeeds: specialNeedsStats.overall,
