@@ -80,7 +80,11 @@ def migrate_formal_results(dry_run=False):
         return
     
     created = 0
-    skipped = 0
+    skipped_no_level = 0
+    skipped_exists = 0
+    skipped_no_candidate = 0
+    skipped_no_series = 0
+    skipped_error = 0
     
     for row in rows:
         try:
@@ -98,22 +102,22 @@ def migrate_formal_results(dry_run=False):
             # Get level
             level = levels_by_id.get(level_id)
             if not level:
-                skipped += 1
+                skipped_no_level += 1
                 continue
             
             # Check if exists
             if (candidate_id, series_id, level_id, result_type) in existing:
-                skipped += 1
+                skipped_exists += 1
                 continue
             
             # Check candidate exists
             if candidate_id not in valid_candidates:
-                skipped += 1
+                skipped_no_candidate += 1
                 continue
             
             # Check series exists
             if series_id not in valid_series:
-                skipped += 1
+                skipped_no_series += 1
                 continue
             
             # Create result
@@ -133,9 +137,14 @@ def migrate_formal_results(dry_run=False):
                 
         except Exception as e:
             log(f"  Error: {e}")
-            skipped += 1
+            skipped_error += 1
     
-    log(f"✓ Formal results created: {created}, skipped: {skipped}")
+    log(f"✓ Formal results created: {created}")
+    log(f"  Skipped - no level: {skipped_no_level}")
+    log(f"  Skipped - exists: {skipped_exists}")
+    log(f"  Skipped - no candidate: {skipped_no_candidate}")
+    log(f"  Skipped - no series: {skipped_no_series}")
+    log(f"  Skipped - error: {skipped_error}")
 
 def run(dry_run=False):
     """Run migration"""
