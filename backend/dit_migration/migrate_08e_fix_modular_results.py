@@ -114,6 +114,28 @@ def fix_modular_results(dry_run=False):
     log(f"Skipped - no candidate: {skipped_no_candidate}")
     log(f"Skipped - no series: {skipped_no_series}")
     
+    # Show unmatched module names
+    if dry_run and skipped_no_module > 0:
+        conn2 = get_old_connection()
+        cur2 = conn2.cursor()
+        cur2.execute("""
+            SELECT DISTINCT m.name as module_name, COUNT(*) as cnt
+            FROM eims_result r
+            JOIN eims_module m ON r.module_id = m.id
+            WHERE r.result_type = 'modular' AND r.mark IS NOT NULL
+            GROUP BY m.name
+            ORDER BY cnt DESC
+            LIMIT 30
+        """)
+        print("\nTop 30 old module names with result counts:")
+        for row in cur2.fetchall():
+            name = row['module_name']
+            clean = name.strip().lower() if name else ''
+            matched = '✓' if clean in new_modules_by_name else '✗'
+            print(f"  {matched} {row['module_name']} ({row['cnt']} results)")
+        cur2.close()
+        conn2.close()
+    
     if dry_run:
         print("\nSample to add (first 10):")
         for item in to_add[:10]:
