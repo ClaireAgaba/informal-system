@@ -5,6 +5,7 @@ import candidateApi from '@modules/candidates/services/candidateApi';
 import occupationApi from '@modules/occupations/services/occupationApi';
 import assessmentCenterApi from '@modules/assessment-centers/services/assessmentCenterApi';
 import assessmentSeriesApi from '@modules/assessment-series/services/assessmentSeriesApi';
+import statisticsApi from '../services/statisticsApi';
 
 const StatisticsDashboard = () => {
   const navigate = useNavigate();
@@ -31,37 +32,45 @@ const StatisticsDashboard = () => {
     try {
       setLoading(true);
       
-      // Fetch data from all modules
-      const [candidatesRes, occupationsRes, centersRes, seriesRes] = await Promise.all([
-        candidateApi.getAll({ page_size: 1000 }),
+      // Fetch statistics from backend endpoint (accurate counts)
+      const [candidateStatsRes, occupationsRes, centersRes, seriesRes] = await Promise.all([
+        statisticsApi.getCandidatesStats(),
         occupationApi.getAll(),
         assessmentCenterApi.getAll(),
         assessmentSeriesApi.getAll()
       ]);
 
-      const candidates = candidatesRes.data.results || candidatesRes.data || [];
+      const candidateStats = candidateStatsRes.data || {};
       const occupations = occupationsRes.data.results || occupationsRes.data || [];
       const centers = centersRes.data.results || centersRes.data || [];
       const series = seriesRes.data.results || seriesRes.data || [];
+      
+      // Get total counts from API response
+      const totalOccupations = occupationsRes.data.count || occupations.length;
+      const totalCenters = centersRes.data.count || centers.length;
 
-      // Calculate statistics
-      const genderStats = calculateGenderStats(candidates);
-      const categoryStats = calculateCategoryStats(candidates);
-      const specialNeedsStats = calculateSpecialNeedsStats(candidates);
-      const categoryGenderStats = calculateCategoryByGender(candidates);
-      const seriesStats = calculateSeriesStats(candidates, series);
+      // Use backend statistics for candidates (accurate counts)
+      const genderStats = candidateStats.by_gender || { male: 0, female: 0 };
+      const categoryStats = candidateStats.by_category || { modular: 0, formal: 0, workers_pas: 0 };
+      const specialNeedsStats = {
+        overall: { 
+          withSpecialNeeds: candidateStats.with_disability || 0, 
+          withoutSpecialNeeds: (candidateStats.total || 0) - (candidateStats.with_disability || 0)
+        },
+        byGender: { male: 0, female: 0 }
+      };
 
       setStats({
-        totalCandidates: candidates.length,
-        totalOccupations: occupations.length,
-        totalCenters: centers.length,
+        totalCandidates: candidateStats.total || 0,
+        totalOccupations: totalOccupations,
+        totalCenters: totalCenters,
         totalResults: 46151, // This should come from results module when available
         candidatesByGender: genderStats,
         candidatesByCategory: categoryStats,
         specialNeeds: specialNeedsStats.overall,
         specialNeedsByGender: specialNeedsStats.byGender,
-        categoryByGender: categoryGenderStats,
-        assessmentSeries: seriesStats
+        categoryByGender: [],
+        assessmentSeries: []
       });
     } catch (error) {
       console.error('Error fetching statistics:', error);
