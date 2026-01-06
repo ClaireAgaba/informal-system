@@ -48,8 +48,8 @@ const CenterRepresentativeEdit = () => {
 
   const fetchBranches = async (centerId) => {
     try {
-      const response = await assessmentCenterApi.getBranches(centerId);
-      setBranches(response.data || []);
+      const response = await assessmentCenterApi.branches.getByCenter(centerId);
+      setBranches(response.data?.results || response.data || []);
     } catch (error) {
       console.error('Error fetching branches:', error);
       setBranches([]);
@@ -142,8 +142,11 @@ const CenterRepresentativeEdit = () => {
   };
 
   const selectedCenter = centers.find(c => c.id === parseInt(formData.assessment_center));
+  const selectedBranch = branches.find(b => b.id === parseInt(formData.assessment_center_branch));
   const generatedEmail = selectedCenter 
-    ? `${selectedCenter.center_number.toLowerCase()}@uvtab.go.ug`
+    ? selectedBranch
+      ? `${selectedCenter.center_number.toLowerCase()}-${selectedBranch.branch_code?.split('-').pop() || selectedBranch.branch_code}@uvtab.go.ug`
+      : `${selectedCenter.center_number.toLowerCase()}@uvtab.go.ug`
     : '';
 
   return (
