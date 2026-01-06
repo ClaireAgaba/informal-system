@@ -16,17 +16,44 @@ from django.db import transaction
 OLD_MEDIA_PATH = '/home/deploy/uvtab_emis/media'
 NEW_MEDIA_PATH = '/home/deploy/informal-system/backend/media'
 
+def show_photo_columns():
+    """Show what photo-related columns exist"""
+    from db_connection import describe_old_table
+    print("\n=== Photo-related columns in eims_candidate ===")
+    for col in describe_old_table('eims_candidate'):
+        col_name = col['column_name'].lower()
+        if 'photo' in col_name or 'image' in col_name or 'pic' in col_name or 'passport' in col_name:
+            print(f"  {col['column_name']}: {col['data_type']}")
+
 def migrate_photos(dry_run=False):
     """Migrate candidate photos"""
     from candidates.models import Candidate
     
     conn = get_old_connection()
     cur = conn.cursor()
-    # Get candidates with photos
+    
+    # First find the correct column name
     cur.execute("""
-        SELECT id, photo, passport_photo, image 
+        SELECT column_name FROM information_schema.columns 
+        WHERE table_name = 'eims_candidate' 
+        AND (column_name LIKE '%photo%' OR column_name LIKE '%image%' OR column_name LIKE '%pic%')
+    """)
+    photo_cols = [row['column_name'] for row in cur.fetchall()]
+    
+    if not photo_cols:
+        log("No photo columns found in eims_candidate table")
+        cur.close()
+        conn.close()
+        return
+    
+    photo_col = photo_cols[0]  # Use first found photo column
+    log(f"Using photo column: {photo_col}")
+    
+    # Get candidates with photos
+    cur.execute(f"""
+        SELECT id, {photo_col} as photo_path
         FROM eims_candidate 
-        WHERE photo IS NOT NULL OR passport_photo IS NOT NULL OR image IS NOT NULL
+        WHERE {photo_col} IS NOT NULL AND {photo_col} != ''
         ORDER BY id
     """)
     rows = cur.fetchall()
@@ -38,8 +65,7 @@ def migrate_photos(dry_run=False):
     if dry_run:
         print("\nSample photos (first 10):")
         for row in rows[:10]:
-            photo_path = row.get('photo') or row.get('passport_photo') or row.get('image')
-            print(f"  Candidate {row['id']}: {photo_path}")
+            print(f"  Candidate {row['id']}: {row['photo_path']}")
         return
     
     # Ensure destination directory exists
@@ -53,8 +79,7 @@ def migrate_photos(dry_run=False):
     for row in rows:
         try:
             candidate_id = row['id']
-            # Get photo path from any of the possible fields
-            old_photo_rel_path = row.get('photo') or row.get('passport_photo') or row.get('image')
+            old_photo_rel_path = row['photo_path']
             
             if not old_photo_rel_path:
                 skipped += 1
