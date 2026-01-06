@@ -1,0 +1,128 @@
+#!/usr/bin/env python
+"""
+Migration Script 8a-photos: Candidate Photos
+Run: python dit_migration/migrate_08a_photos.py [--dry-run]
+
+This copies candidate photos from the old system to the new system.
+Old system media path: /home/deploy/uvtab_emis/media/
+New system media path: /home/deploy/informal-system/backend/media/
+"""
+import os
+import shutil
+from db_connection import get_old_connection, log
+from django.db import transaction
+
+# Paths - adjust these based on your server setup
+OLD_MEDIA_PATH = '/home/deploy/uvtab_emis/media'
+NEW_MEDIA_PATH = '/home/deploy/informal-system/backend/media'
+
+def migrate_photos(dry_run=False):
+    """Migrate candidate photos"""
+    from candidates.models import Candidate
+    
+    conn = get_old_connection()
+    cur = conn.cursor()
+    # Get candidates with photos
+    cur.execute("""
+        SELECT id, photo, passport_photo, image 
+        FROM eims_candidate 
+        WHERE photo IS NOT NULL OR passport_photo IS NOT NULL OR image IS NOT NULL
+        ORDER BY id
+    """)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    
+    log(f"Found {len(rows)} candidates with photos in old database")
+    
+    if dry_run:
+        print("\nSample photos (first 10):")
+        for row in rows[:10]:
+            photo_path = row.get('photo') or row.get('passport_photo') or row.get('image')
+            print(f"  Candidate {row['id']}: {photo_path}")
+        return
+    
+    # Ensure destination directory exists
+    dest_photo_dir = os.path.join(NEW_MEDIA_PATH, 'candidates', 'photos')
+    os.makedirs(dest_photo_dir, exist_ok=True)
+    
+    copied = 0
+    skipped = 0
+    errors = []
+    
+    for row in rows:
+        try:
+            candidate_id = row['id']
+            # Get photo path from any of the possible fields
+            old_photo_rel_path = row.get('photo') or row.get('passport_photo') or row.get('image')
+            
+            if not old_photo_rel_path:
+                skipped += 1
+                continue
+            
+            # Build full old path
+            old_photo_full_path = os.path.join(OLD_MEDIA_PATH, old_photo_rel_path)
+            
+            if not os.path.exists(old_photo_full_path):
+                # Try without media prefix if path already includes it
+                if old_photo_rel_path.startswith('media/'):
+                    old_photo_full_path = os.path.join(OLD_MEDIA_PATH, old_photo_rel_path.replace('media/', '', 1))
+                
+                if not os.path.exists(old_photo_full_path):
+                    skipped += 1
+                    continue
+            
+            # Get filename and create new path
+            filename = os.path.basename(old_photo_full_path)
+            # Rename to include candidate ID to avoid conflicts
+            new_filename = f"candidate_{candidate_id}_{filename}"
+            new_photo_rel_path = f"candidates/photos/{new_filename}"
+            new_photo_full_path = os.path.join(NEW_MEDIA_PATH, new_photo_rel_path)
+            
+            # Copy the file
+            shutil.copy2(old_photo_full_path, new_photo_full_path)
+            
+            # Update candidate record
+            try:
+                candidate = Candidate.objects.get(id=candidate_id)
+                candidate.passport_photo = new_photo_rel_path
+                candidate.save(update_fields=['passport_photo'])
+                copied += 1
+            except Candidate.DoesNotExist:
+                # Candidate not migrated yet
+                skipped += 1
+            
+            if copied % 500 == 0:
+                log(f"  Progress: {copied} photos copied...")
+                
+        except Exception as e:
+            errors.append(f"Candidate {row['id']}: {e}")
+            skipped += 1
+            if len(errors) <= 10:
+                log(f"  Error copying photo for candidate {row['id']}: {e}")
+    
+    log(f"✓ Photos copied: {copied}, skipped: {skipped}")
+    if errors:
+        log(f"  Errors: {len(errors)}")
+
+def run(dry_run=False):
+    """Run migration"""
+    log("=" * 50)
+    log("MIGRATION 8a-photos: Candidate Photos")
+    log("=" * 50)
+    
+    if dry_run:
+        log("DRY RUN MODE - No changes will be made")
+        migrate_photos(dry_run=True)
+    else:
+        migrate_photos()
+        log("=" * 50)
+        log("PHOTO MIGRATION COMPLETED!")
+        log("=" * 50)
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dry-run', action='store_true', help='Preview without making changes')
+    args = parser.parse_args()
+    run(dry_run=args.dry_run)
