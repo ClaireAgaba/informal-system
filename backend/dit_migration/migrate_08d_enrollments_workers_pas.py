@@ -62,12 +62,13 @@ def count_records():
         except:
             print(f"  {table}: (table not found)")
     
-    # Count unique candidate-series-level combinations
+    # Count unique candidate-series-level combinations (join with candidate for series)
     try:
         cur.execute("""
-            SELECT COUNT(DISTINCT (candidate_id, assessment_series_id, level_id)) as cnt 
-            FROM eims_candidatepaper
-            WHERE assessment_series_id IS NOT NULL
+            SELECT COUNT(DISTINCT (cp.candidate_id, c.assessment_series_id, cp.level_id)) as cnt 
+            FROM eims_candidatepaper cp
+            JOIN eims_candidate c ON cp.candidate_id = c.id
+            WHERE c.assessment_series_id IS NOT NULL
         """)
         result = cur.fetchone()
         print(f"  Unique enrollments (candidate+series+level): {result['cnt'] if result else 0}")
@@ -158,18 +159,19 @@ def migrate_workers_pas_enrollments(dry_run=False, skip_existing=True):
         )
         log(f"Found {len(existing_pairs)} existing enrollments (will skip)")
     
-    # Get workers PAS data grouped by candidate-series-level
+    # Get workers PAS data grouped by candidate-series-level (join with candidate for series)
     cur.execute("""
         SELECT 
-            candidate_id,
-            assessment_series_id,
-            level_id,
-            module_id,
-            array_agg(paper_id) as paper_ids
-        FROM eims_candidatepaper
-        WHERE assessment_series_id IS NOT NULL
-        GROUP BY candidate_id, assessment_series_id, level_id, module_id
-        ORDER BY candidate_id
+            cp.candidate_id,
+            c.assessment_series_id,
+            cp.level_id,
+            cp.module_id,
+            array_agg(cp.paper_id) as paper_ids
+        FROM eims_candidatepaper cp
+        JOIN eims_candidate c ON cp.candidate_id = c.id
+        WHERE c.assessment_series_id IS NOT NULL
+        GROUP BY cp.candidate_id, c.assessment_series_id, cp.level_id, cp.module_id
+        ORDER BY cp.candidate_id
     """)
     rows = cur.fetchall()
     cur.close()
