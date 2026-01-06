@@ -44,7 +44,7 @@ class OccupationViewSet(viewsets.ModelViewSet):
     queryset = Occupation.objects.select_related('sector').prefetch_related('levels').all()
     serializer_class = OccupationSerializer
     permission_classes = [permissions.AllowAny]  # Temporarily allow unauthenticated access
-    pagination_class = None  # Disable pagination - only ~160 occupations
+    # Using FlexiblePagination - allows page_size up to 1000
     filterset_fields = ['occ_category', 'has_modular', 'is_active', 'sector']
     search_fields = ['occ_code', 'occ_name', 'sector__name']
     
