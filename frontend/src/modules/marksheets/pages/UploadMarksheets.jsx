@@ -18,6 +18,7 @@ export default function UploadMarksheets() {
   const [uploadResult, setUploadResult] = useState(null);
   const [error, setError] = useState('');
   const [moduleSearch, setModuleSearch] = useState('');
+  const [occupationSearch, setOccupationSearch] = useState('');
 
   // Fetch assessment series
   const { data: seriesData } = useQuery({
@@ -262,22 +263,45 @@ export default function UploadMarksheets() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Occupation <span className="text-red-500">*</span>
             </label>
-            <select
-              name="occupation"
-              value={formData.occupation}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              disabled={!formData.registration_category}
-            >
-              <option value="">
-                {formData.registration_category ? 'Select Occupation' : 'Select Category First'}
-              </option>
-              {occupations.map(occ => (
-                <option key={occ.id} value={occ.id}>
-                  {occ.occ_name} ({occ.occ_code})
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder={formData.registration_category ? 'Type to search occupation...' : 'Select Category First'}
+                value={occupationSearch}
+                onChange={(e) => setOccupationSearch(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                disabled={!formData.registration_category}
+              />
+              <Search className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" />
+            </div>
+            {formData.registration_category && occupationSearch && !formData.occupation && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                {occupations
+                  .filter(occ => 
+                    occ.occ_name?.toLowerCase().includes(occupationSearch.toLowerCase()) ||
+                    occ.occ_code?.toLowerCase().includes(occupationSearch.toLowerCase())
+                  )
+                  .slice(0, 20)
+                  .map(occ => (
+                    <div
+                      key={occ.id}
+                      onClick={() => {
+                        setFormData(prev => ({ ...prev, occupation: occ.id }));
+                        setOccupationSearch(`${occ.occ_name} (${occ.occ_code})`);
+                      }}
+                      className="px-3 py-2 hover:bg-blue-50 cursor-pointer"
+                    >
+                      {occ.occ_name} ({occ.occ_code})
+                    </div>
+                  ))}
+                {occupations.filter(occ => 
+                  occ.occ_name?.toLowerCase().includes(occupationSearch.toLowerCase()) ||
+                  occ.occ_code?.toLowerCase().includes(occupationSearch.toLowerCase())
+                ).length === 0 && (
+                  <div className="px-3 py-2 text-gray-500">No occupations found</div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
