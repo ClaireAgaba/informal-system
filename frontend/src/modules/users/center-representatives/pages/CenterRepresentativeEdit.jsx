@@ -324,6 +324,17 @@ const CenterRepresentativeEdit = () => {
             </div>
           )}
 
+          {/* Validation Errors */}
+          {(errors.non_field_errors || errors.detail) && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-sm text-red-700">
+                {Array.isArray(errors.non_field_errors) 
+                  ? errors.non_field_errors.join(', ') 
+                  : errors.non_field_errors || errors.detail}
+              </p>
+            </div>
+          )}
+
           {/* Form Actions */}
           <div className="flex items-center justify-end gap-4 pt-4">
             <button
