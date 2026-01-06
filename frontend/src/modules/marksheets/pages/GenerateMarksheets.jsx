@@ -32,14 +32,14 @@ export default function GenerateMarksheets() {
     },
   });
 
-  // Fetch occupations (all - no pagination)
+  // Fetch occupations (all - no pagination on backend)
   const { data: occupationsData } = useQuery({
     queryKey: ['occupations-all'],
     queryFn: async () => {
-      const response = await apiClient.get('/occupations/occupations/', { params: { page_size: 500 } });
+      const response = await apiClient.get('/occupations/occupations/');
+      // Handle both paginated and non-paginated responses
       return response.data.results || response.data;
     },
-    staleTime: 0,
   });
 
   // Fetch levels for selected occupation (for formal and workers_pas)
