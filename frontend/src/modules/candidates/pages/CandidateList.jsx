@@ -287,7 +287,7 @@ const CandidateList = () => {
                   >
                     <option value="">Select</option>
                     {centers.map((c) => (
-                      <option key={c.id} value={c.id}>{c.center_code} - {c.center_name}</option>
+                      <option key={c.id} value={c.id}>{c.center_number} - {c.center_name}</option>
                     ))}
                   </select>
                 </th>
