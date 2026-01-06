@@ -46,18 +46,24 @@ class Complaint(models.Model):
     exam_center = models.ForeignKey(
         AssessmentCenter,
         on_delete=models.CASCADE,
-        related_name='complaints'
+        related_name='complaints',
+        null=True,
+        blank=True
     )
     exam_series = models.ForeignKey(
         AssessmentSeries,
         on_delete=models.PROTECT,
-        related_name='complaints'
+        related_name='complaints',
+        null=True,
+        blank=True
     )
     program = models.ForeignKey(
         Occupation,
         on_delete=models.PROTECT,
         related_name='complaints',
-        verbose_name='Program/Occupation'
+        verbose_name='Program/Occupation',
+        null=True,
+        blank=True
     )
     
     # Additional details

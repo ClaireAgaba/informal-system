@@ -201,15 +201,13 @@ def migrate_complaints(dry_run=False):
             helpdesk = users_by_id.get(old.get('helpdesk_team_id'))
             category = categories_map.get(old.get('category_id')) or default_category
             
+            # Log missing but don't skip - move all complaints
             if not center:
                 skipped_no_center += 1
-                continue
             if not series:
                 skipped_no_series += 1
-                continue
             if not occupation:
                 skipped_no_occupation += 1
-                continue
             
             if not created_by:
                 created_by = default_user
