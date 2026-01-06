@@ -56,33 +56,21 @@ def count_disabled_candidates():
     for col in cols:
         print(f"  {col['column_name']}")
     
-    # Count disabled candidates - try different column names
-    try:
-        cur.execute("SELECT COUNT(*) as cnt FROM eims_candidate WHERE disability_status = true OR disability_status = 'Yes'")
-        result = cur.fetchone()
-        disabled_count = result['cnt'] if result else 0
-    except:
-        try:
-            cur.execute("SELECT COUNT(*) as cnt FROM eims_candidate WHERE is_disabled = true")
-            result = cur.fetchone()
-            disabled_count = result['cnt'] if result else 0
-        except:
-            disabled_count = 0
-            print("Could not find disability column")
+    # Count disabled candidates - column is "disability"
+    cur.execute("SELECT COUNT(*) as cnt FROM eims_candidate WHERE disability = true")
+    result = cur.fetchone()
+    disabled_count = result['cnt'] if result else 0
     
     # Get nature of disability distribution
-    try:
-        cur.execute("""
-            SELECT nod.name, COUNT(c.id) as cnt 
-            FROM eims_candidate c
-            LEFT JOIN eims_natureofdisability nod ON c.nature_of_disability_id = nod.id
-            WHERE c.disability_status = true OR c.disability_status = 'Yes'
-            GROUP BY nod.name
-            ORDER BY cnt DESC
-        """)
-        distribution = cur.fetchall()
-    except:
-        distribution = []
+    cur.execute("""
+        SELECT nod.name, COUNT(c.id) as cnt 
+        FROM eims_candidate c
+        LEFT JOIN eims_natureofdisability nod ON c.nature_of_disability_id = nod.id
+        WHERE c.disability = true
+        GROUP BY nod.name
+        ORDER BY cnt DESC
+    """)
+    distribution = cur.fetchall()
     
     cur.close()
     conn.close()
@@ -149,9 +137,9 @@ def fix_disability_data(dry_run=False):
     
     # Get all candidates with disability from old system
     cur.execute("""
-        SELECT id, has_disability, nature_of_disability_id, disability_specification
+        SELECT id, disability, nature_of_disability_id, disability_specification
         FROM eims_candidate 
-        WHERE has_disability = true
+        WHERE disability = true
     """)
     rows = cur.fetchall()
     cur.close()
