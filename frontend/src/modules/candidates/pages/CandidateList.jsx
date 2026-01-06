@@ -287,7 +287,7 @@ const CandidateList = () => {
                   >
                     <option value="">Select</option>
                     {centers.map((c) => (
-                      <option key={c.id} value={c.id}>{c.center_name}</option>
+                      <option key={c.id} value={c.id}>{c.center_code} - {c.center_name}</option>
                     ))}
                   </select>
                 </th>
@@ -311,7 +311,7 @@ const CandidateList = () => {
                   >
                     <option value="">Select</option>
                     {occupations.map((o) => (
-                      <option key={o.id} value={o.id}>{o.occ_name}</option>
+                      <option key={o.id} value={o.id}>{o.occ_code} - {o.occ_name}</option>
                     ))}
                   </select>
                 </th>
