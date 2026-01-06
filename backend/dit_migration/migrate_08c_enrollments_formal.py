@@ -157,11 +157,13 @@ def migrate_formal_enrollments(dry_run=False, skip_existing=True):
         cols = [r['column_name'] for r in cur.fetchall()]
         log(f"eims_candidatelevel columns: {cols}")
         
-        # Get formal enrollments
+        # Get formal enrollments - join with candidate to get series
         cur.execute("""
-            SELECT * FROM eims_candidatelevel
-            WHERE assessment_series_id IS NOT NULL
-            ORDER BY candidate_id
+            SELECT cl.candidate_id, c.assessment_series_id, cl.level_id
+            FROM eims_candidatelevel cl
+            JOIN eims_candidate c ON cl.candidate_id = c.id
+            WHERE c.assessment_series_id IS NOT NULL
+            ORDER BY cl.candidate_id
         """)
         rows = cur.fetchall()
     else:
