@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Save } from 'lucide-react';
 import assessmentCenterApi from '../services/assessmentCenterApi';
-import configurationApi from '@services/configurationApi';
 import Button from '@shared/components/Button';
 import Card from '@shared/components/Card';
 
@@ -40,18 +39,26 @@ const BranchEdit = () => {
   // Fetch districts
   const { data: districtsData } = useQuery({
     queryKey: ['districts'],
-    queryFn: () => configurationApi.districts.getAll({ page_size: 200 }),
+    queryFn: async () => {
+      const response = await fetch('/api/configurations/districts/?page_size=200');
+      if (!response.ok) throw new Error('Failed to fetch districts');
+      return response.json();
+    },
   });
 
   // Fetch villages based on selected district
   const { data: villagesData } = useQuery({
     queryKey: ['villages', formData.district],
-    queryFn: () => configurationApi.villages.getAll({ district: formData.district, page_size: 500 }),
+    queryFn: async () => {
+      const response = await fetch(`/api/configurations/villages/?district=${formData.district}&page_size=500`);
+      if (!response.ok) throw new Error('Failed to fetch villages');
+      return response.json();
+    },
     enabled: !!formData.district,
   });
 
-  const districts = districtsData?.data?.results || [];
-  const villages = villagesData?.data?.results || [];
+  const districts = districtsData?.results || [];
+  const villages = villagesData?.results || [];
   const center = centerData?.data;
 
   // Populate form when editing
