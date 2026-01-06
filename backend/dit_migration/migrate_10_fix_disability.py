@@ -46,30 +46,53 @@ def count_disabled_candidates():
     conn = get_old_connection()
     cur = conn.cursor()
     
-    # Count disabled candidates
-    cur.execute("SELECT COUNT(*) as cnt FROM eims_candidate WHERE has_disability = true")
-    result = cur.fetchone()
-    disabled_count = result['cnt'] if result else 0
+    # First check column names
+    cur.execute("""
+        SELECT column_name FROM information_schema.columns 
+        WHERE table_name = 'eims_candidate' AND column_name LIKE '%disab%'
+    """)
+    cols = cur.fetchall()
+    print("\n=== Disability columns in old DB ===")
+    for col in cols:
+        print(f"  {col['column_name']}")
+    
+    # Count disabled candidates - try different column names
+    try:
+        cur.execute("SELECT COUNT(*) as cnt FROM eims_candidate WHERE disability_status = true OR disability_status = 'Yes'")
+        result = cur.fetchone()
+        disabled_count = result['cnt'] if result else 0
+    except:
+        try:
+            cur.execute("SELECT COUNT(*) as cnt FROM eims_candidate WHERE is_disabled = true")
+            result = cur.fetchone()
+            disabled_count = result['cnt'] if result else 0
+        except:
+            disabled_count = 0
+            print("Could not find disability column")
     
     # Get nature of disability distribution
-    cur.execute("""
-        SELECT nod.name, COUNT(c.id) as cnt 
-        FROM eims_candidate c
-        LEFT JOIN eims_natureofdisability nod ON c.nature_of_disability_id = nod.id
-        WHERE c.has_disability = true
-        GROUP BY nod.name
-        ORDER BY cnt DESC
-    """)
-    distribution = cur.fetchall()
+    try:
+        cur.execute("""
+            SELECT nod.name, COUNT(c.id) as cnt 
+            FROM eims_candidate c
+            LEFT JOIN eims_natureofdisability nod ON c.nature_of_disability_id = nod.id
+            WHERE c.disability_status = true OR c.disability_status = 'Yes'
+            GROUP BY nod.name
+            ORDER BY cnt DESC
+        """)
+        distribution = cur.fetchall()
+    except:
+        distribution = []
     
     cur.close()
     conn.close()
     
     print(f"\n=== Disabled Candidates in Old System ===")
     print(f"Total: {disabled_count}")
-    print("\nBy Nature of Disability:")
-    for row in distribution:
-        print(f"  {row['name'] or 'No category'}: {row['cnt']}")
+    if distribution:
+        print("\nBy Nature of Disability:")
+        for row in distribution:
+            print(f"  {row['name'] or 'No category'}: {row['cnt']}")
     
     return disabled_count
 
