@@ -31,11 +31,11 @@ export default function GenerateMarksheets() {
     },
   });
 
-  // Fetch occupations
+  // Fetch occupations (all - no pagination)
   const { data: occupationsData } = useQuery({
     queryKey: ['occupations'],
     queryFn: async () => {
-      const response = await apiClient.get('/occupations/occupations/');
+      const response = await apiClient.get('/occupations/occupations/', { params: { page_size: 500 } });
       return response.data.results || response.data;
     },
   });
@@ -80,11 +80,11 @@ export default function GenerateMarksheets() {
     enabled: !!formData.level && formData.registration_category === 'formal',
   });
 
-  // Fetch assessment centers
+  // Fetch assessment centers (all - no pagination)
   const { data: centersData } = useQuery({
     queryKey: ['assessment-centers'],
     queryFn: async () => {
-      const response = await apiClient.get('/assessment-centers/centers/');
+      const response = await apiClient.get('/assessment-centers/centers/', { params: { page_size: 1000 } });
       return response.data.results || response.data;
     },
   });

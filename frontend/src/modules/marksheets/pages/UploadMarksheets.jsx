@@ -28,11 +28,11 @@ export default function UploadMarksheets() {
     },
   });
 
-  // Fetch occupations
+  // Fetch occupations (all - no pagination)
   const { data: occupationsData } = useQuery({
     queryKey: ['occupations'],
     queryFn: async () => {
-      const response = await apiClient.get('/occupations/occupations/');
+      const response = await apiClient.get('/occupations/occupations/', { params: { page_size: 500 } });
       return response.data.results || response.data;
     },
   });
@@ -57,11 +57,11 @@ export default function UploadMarksheets() {
     enabled: !!formData.occupation && (formData.registration_category === 'formal' || formData.registration_category === 'workers_pas'),
   });
 
-  // Fetch assessment centers
+  // Fetch assessment centers (all - no pagination)
   const { data: centersData } = useQuery({
     queryKey: ['assessment-centers'],
     queryFn: async () => {
-      const response = await apiClient.get('/assessment-centers/centers/');
+      const response = await apiClient.get('/assessment-centers/centers/', { params: { page_size: 1000 } });
       return response.data.results || response.data;
     },
   });
