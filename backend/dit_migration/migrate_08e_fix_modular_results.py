@@ -128,13 +128,33 @@ def fix_modular_results(dry_run=False):
             LIMIT 30
         """)
         print("\nTop 30 old module names with result counts:")
+        unmatched_names = []
         for row in cur2.fetchall():
             name = row['module_name']
             clean = name.strip().lower() if name else ''
             matched = '✓' if clean in new_modules_by_name else '✗'
             print(f"  {matched} {row['module_name']} ({row['cnt']} results)")
+            if clean not in new_modules_by_name:
+                unmatched_names.append(name)
         cur2.close()
         conn2.close()
+        
+        # Show potential matches for unmatched names
+        if unmatched_names:
+            print("\nPotential matches for unmatched modules:")
+            for old_name in unmatched_names[:10]:
+                old_clean = old_name.strip().lower()
+                # Find similar names in new modules
+                similar = []
+                for new_name in new_modules_by_name.keys():
+                    # Check if key words match
+                    old_words = set(old_clean.split())
+                    new_words = set(new_name.split())
+                    common = old_words & new_words
+                    if len(common) >= 2:
+                        similar.append(new_name)
+                if similar:
+                    print(f"  '{old_name}' -> possible: {similar[:3]}")
     
     if dry_run:
         print("\nSample to add (first 10):")

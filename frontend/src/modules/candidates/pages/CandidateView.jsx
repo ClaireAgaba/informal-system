@@ -862,8 +862,9 @@ const CandidateView = () => {
                                         <span
                                           key={module.id}
                                           className="inline-flex px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded"
+                                          title={module.module_name}
                                         >
-                                          {module.module_code}
+                                          {module.module_code} - {module.module_name}
                                         </span>
                                       ))}
                                     </div>

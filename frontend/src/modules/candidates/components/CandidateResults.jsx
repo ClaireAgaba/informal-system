@@ -328,7 +328,7 @@ const FormalResults = ({ results, onAddResults, onEditResults, isCenterRep }) =>
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold text-gray-900">
-          Formal Assessment Results
+          {registrationCategory === 'Modular' ? 'Modular' : registrationCategory === 'Workers PAS' ? 'Workers PAS' : 'Formal'} Assessment Results
         </h3>
         <div className="flex items-center gap-3">
           {hasResults && (
