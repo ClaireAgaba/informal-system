@@ -97,10 +97,11 @@ def migrate_photos(dry_run=False):
                     skipped += 1
                     continue
             
-            # Get filename and create new path
+            # Get filename and create new path - keep it short!
             filename = os.path.basename(old_photo_full_path)
-            # Rename to include candidate ID to avoid conflicts
-            new_filename = f"candidate_{candidate_id}_{filename}"
+            ext = os.path.splitext(filename)[1].lower() or '.jpg'
+            # Use just candidate ID to keep path under 100 chars
+            new_filename = f"{candidate_id}{ext}"
             new_photo_rel_path = f"candidates/photos/{new_filename}"
             new_photo_full_path = os.path.join(NEW_MEDIA_PATH, new_photo_rel_path)
             
