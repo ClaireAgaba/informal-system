@@ -41,16 +41,19 @@ def migrate_series(dry_run=False):
     migrated = 0
     
     for row in rows:
-        # Old DB uses 'name' instead of 'series_name', 'is_current' instead of 'is_active'
-        series_name = (row.get('name') or '')[:200]
+        # New model uses: name, start_date, end_date, date_of_release, is_current, results_released, is_active
+        name = (row.get('name') or f"Series {row['id']}")[:200]
         
         AssessmentSeries.objects.update_or_create(
             id=row['id'],
             defaults={
-                'series_name': series_name,
+                'name': name,
                 'start_date': row.get('start_date'),
                 'end_date': row.get('end_date'),
-                'is_active': row.get('is_current', False),
+                'date_of_release': row.get('date_of_release') or row.get('end_date'),
+                'is_current': row.get('is_current', False),
+                'results_released': row.get('results_released', False),
+                'is_active': True,
             }
         )
         migrated += 1
