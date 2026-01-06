@@ -30,11 +30,12 @@ export default function UploadMarksheets() {
 
   // Fetch occupations (all - no pagination)
   const { data: occupationsData } = useQuery({
-    queryKey: ['occupations'],
+    queryKey: ['occupations-all'],
     queryFn: async () => {
       const response = await apiClient.get('/occupations/occupations/', { params: { page_size: 500 } });
       return response.data.results || response.data;
     },
+    staleTime: 0,
   });
 
   // Fetch modules for selected occupation (modular only)

@@ -33,11 +33,12 @@ export default function GenerateMarksheets() {
 
   // Fetch occupations (all - no pagination)
   const { data: occupationsData } = useQuery({
-    queryKey: ['occupations'],
+    queryKey: ['occupations-all'],
     queryFn: async () => {
       const response = await apiClient.get('/occupations/occupations/', { params: { page_size: 500 } });
       return response.data.results || response.data;
     },
+    staleTime: 0,
   });
 
   // Fetch levels for selected occupation (for formal and workers_pas)
