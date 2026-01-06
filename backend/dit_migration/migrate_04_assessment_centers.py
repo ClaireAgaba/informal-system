@@ -24,7 +24,7 @@ def count_records():
 def migrate_centers(dry_run=False):
     """Migrate assessment centers"""
     from assessment_centers.models import AssessmentCenter
-    from configurations.models import District
+    from configurations.models import District, Village
     
     conn = get_old_connection()
     cur = conn.cursor()
@@ -42,6 +42,7 @@ def migrate_centers(dry_run=False):
         return
     
     migrated = 0
+    skipped = 0
     
     for row in rows:
         district = None
@@ -51,16 +52,32 @@ def migrate_centers(dry_run=False):
             except District.DoesNotExist:
                 pass
         
+        village = None
+        if row.get('village_id'):
+            try:
+                village = Village.objects.get(id=row['village_id'])
+            except Village.DoesNotExist:
+                pass
+        
+        # Map category_id to assessment_category (default to VTI)
+        assessment_category = 'VTI'  # Default
+        
+        # Truncate fields to fit model limits
+        center_number = (row.get('center_number') or '')[:50]
+        center_name = (row.get('center_name') or '')[:200]
+        contact = (row.get('contact') or '')[:15]
+        
         AssessmentCenter.objects.update_or_create(
             id=row['id'],
             defaults={
-                'center_name': row.get('center_name', ''),
-                'center_number': row.get('center_number', ''),
+                'center_name': center_name,
+                'center_number': center_number,
+                'assessment_category': assessment_category,
                 'district': district,
-                'address': row.get('address', ''),
-                'contact': row.get('contact', ''),
-                'email': row.get('email', ''),
-                'is_active': row.get('is_active', True),
+                'village': village,
+                'contact_1': contact,
+                'has_branches': row.get('has_branches', False),
+                'is_active': True,
             }
         )
         migrated += 1
@@ -70,6 +87,7 @@ def migrate_centers(dry_run=False):
 def migrate_branches(dry_run=False):
     """Migrate center branches"""
     from assessment_centers.models import AssessmentCenter, CenterBranch
+    from configurations.models import District, Village
     
     conn = get_old_connection()
     cur = conn.cursor()
@@ -102,16 +120,31 @@ def migrate_branches(dry_run=False):
             skipped += 1
             continue
         
-        # Old DB has no branch_name, only branch_code - use code as name too
-        branch_code = row.get('branch_code') or ''
-        branch_name = branch_code or f"Branch {row['id']}"
+        district = None
+        if row.get('district_id'):
+            try:
+                district = District.objects.get(id=row['district_id'])
+            except District.DoesNotExist:
+                pass
         
+        village = None
+        if row.get('village_id'):
+            try:
+                village = Village.objects.get(id=row['village_id'])
+            except Village.DoesNotExist:
+                pass
+        
+        # Truncate branch_code to fit model limits
+        branch_code = (row.get('branch_code') or f"BR-{row['id']}")[:50]
+        
+        # CenterBranch model: branch_name is a property, not a field!
         CenterBranch.objects.update_or_create(
             id=row['id'],
             defaults={
                 'assessment_center': center,
-                'branch_name': branch_name,
                 'branch_code': branch_code,
+                'district': district,
+                'village': village,
                 'is_active': True,
             }
         )
