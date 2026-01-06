@@ -9,11 +9,19 @@ from db_connection import get_old_connection, log, get_old_table_count, describe
 from django.db import transaction
 
 MAPPING_FILE = os.path.join(os.path.dirname(__file__), 'occupation_mapping.json')
+LEVEL_MAPPING_FILE = os.path.join(os.path.dirname(__file__), 'level_mapping.json')
 
 def load_occupation_mapping():
     """Load occupation ID mapping (old_id -> new_id for -old occupations)"""
     if os.path.exists(MAPPING_FILE):
         with open(MAPPING_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+def load_level_mapping():
+    """Load level ID mapping (old_level_id -> new_level_id)"""
+    if os.path.exists(LEVEL_MAPPING_FILE):
+        with open(LEVEL_MAPPING_FILE, 'r') as f:
             return json.load(f)
     return {}
 
@@ -65,9 +73,12 @@ def migrate_levels(dry_run=False):
     
     migrated = 0
     skipped = 0
+    level_id_mapping = {}  # old_level_id -> new_level_id
     
     for row in rows:
         old_occ_id = row.get('occupation_id')
+        old_level_id = row['id']
+        
         if not old_occ_id:
             skipped += 1
             continue
@@ -84,11 +95,11 @@ def migrate_levels(dry_run=False):
         # Old DB uses 'name' field for level name
         level_name = row.get('name', '')
         
-        OccupationLevel.objects.update_or_create(
-            id=row['id'],
+        # Use (occupation, level_name) as unique lookup since that's the constraint
+        level, created = OccupationLevel.objects.update_or_create(
+            occupation=occupation,
+            level_name=level_name,
             defaults={
-                'occupation': occupation,
-                'level_name': level_name,
                 'structure_type': 'modules',  # Default, can be updated later
                 'formal_fee': row.get('formal_fee', 0) or 0,
                 'workers_pas_base_fee': row.get('workers_pas_fee', 0) or 0,
@@ -98,15 +109,24 @@ def migrate_levels(dry_run=False):
                 'is_active': True,
             }
         )
+        
+        # Map old level ID to new level ID
+        level_id_mapping[str(old_level_id)] = level.id
         migrated += 1
     
+    # Save level ID mapping for modules and papers migration
+    with open(LEVEL_MAPPING_FILE, 'w') as f:
+        json.dump(level_id_mapping, f, indent=2)
+    
     log(f"✓ Occupation levels migrated: {migrated}, skipped: {skipped}")
+    log(f"✓ Level ID mapping saved: {len(level_id_mapping)} entries -> {LEVEL_MAPPING_FILE}")
 
 def migrate_modules(dry_run=False):
     """Migrate occupation modules"""
     from occupations.models import OccupationModule, Occupation, OccupationLevel
     
-    mapping = load_occupation_mapping()
+    occ_mapping = load_occupation_mapping()
+    level_mapping = load_level_mapping()
     
     conn = get_old_connection()
     cur = conn.cursor()
@@ -129,13 +149,13 @@ def migrate_modules(dry_run=False):
     
     for row in rows:
         old_occ_id = row.get('occupation_id')
-        level_id = row.get('level_id') or row.get('occupation_level_id')
+        old_level_id = row.get('level_id')
         
         if not old_occ_id:
             skipped += 1
             continue
         
-        occ_id = get_mapped_occupation_id(old_occ_id, mapping)
+        occ_id = get_mapped_occupation_id(old_occ_id, occ_mapping)
         
         try:
             occupation = Occupation.objects.get(id=occ_id)
@@ -143,13 +163,15 @@ def migrate_modules(dry_run=False):
             skipped += 1
             continue
         
+        # Get mapped level ID
         level = None
-        if level_id:
-            try:
-                level = OccupationLevel.objects.get(id=level_id)
-            except OccupationLevel.DoesNotExist:
-                # Try to get first level of occupation
-                level = occupation.levels.first()
+        if old_level_id:
+            new_level_id = level_mapping.get(str(old_level_id))
+            if new_level_id:
+                try:
+                    level = OccupationLevel.objects.get(id=new_level_id)
+                except OccupationLevel.DoesNotExist:
+                    pass
         
         if not level:
             level = occupation.levels.first()
@@ -157,12 +179,15 @@ def migrate_modules(dry_run=False):
                 skipped += 1
                 continue
         
+        # Use (occupation, module_code) as unique lookup
+        module_code = row.get('code') or ''
+        module_name = row.get('name') or ''
+        
         OccupationModule.objects.update_or_create(
-            id=row['id'],
+            occupation=occupation,
+            module_code=module_code,
             defaults={
-                'module_code': row.get('code') or '',
-                'module_name': row.get('name') or '',
-                'occupation': occupation,
+                'module_name': module_name,
                 'level': level,
                 'is_active': True,
             }
@@ -175,7 +200,8 @@ def migrate_papers(dry_run=False):
     """Migrate occupation papers"""
     from occupations.models import OccupationPaper, Occupation, OccupationLevel, OccupationModule
     
-    mapping = load_occupation_mapping()
+    occ_mapping = load_occupation_mapping()
+    level_mapping = load_level_mapping()
     
     conn = get_old_connection()
     cur = conn.cursor()
@@ -198,13 +224,13 @@ def migrate_papers(dry_run=False):
     
     for row in rows:
         old_occ_id = row.get('occupation_id')
-        level_id = row.get('level_id') or row.get('occupation_level_id')
+        old_level_id = row.get('level_id')
         
         if not old_occ_id:
             skipped += 1
             continue
         
-        occ_id = get_mapped_occupation_id(old_occ_id, mapping)
+        occ_id = get_mapped_occupation_id(old_occ_id, occ_mapping)
         
         try:
             occupation = Occupation.objects.get(id=occ_id)
@@ -212,12 +238,15 @@ def migrate_papers(dry_run=False):
             skipped += 1
             continue
         
+        # Get mapped level ID
         level = None
-        if level_id:
-            try:
-                level = OccupationLevel.objects.get(id=level_id)
-            except OccupationLevel.DoesNotExist:
-                level = occupation.levels.first()
+        if old_level_id:
+            new_level_id = level_mapping.get(str(old_level_id))
+            if new_level_id:
+                try:
+                    level = OccupationLevel.objects.get(id=new_level_id)
+                except OccupationLevel.DoesNotExist:
+                    pass
         
         if not level:
             level = occupation.levels.first()
@@ -237,12 +266,15 @@ def migrate_papers(dry_run=False):
         if paper_type not in ['theory', 'practical']:
             paper_type = 'theory'
         
+        # Use (occupation, paper_code) as unique lookup
+        paper_code = row.get('code') or ''
+        paper_name = row.get('name') or ''
+        
         OccupationPaper.objects.update_or_create(
-            id=row['id'],
+            occupation=occupation,
+            paper_code=paper_code,
             defaults={
-                'paper_code': row.get('code') or '',
-                'paper_name': row.get('name') or '',
-                'occupation': occupation,
+                'paper_name': paper_name,
                 'level': level,
                 'module': module,
                 'paper_type': paper_type,
