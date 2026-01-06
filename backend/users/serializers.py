@@ -118,16 +118,42 @@ class CenterRepresentativeCreateSerializer(serializers.ModelSerializer):
     
     def validate(self, data):
         """Validate center representative data"""
-        # Check if a representative already exists for this center (if no branch specified)
-        if not data.get('assessment_center_branch'):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        center = data['assessment_center']
+        branch = data.get('assessment_center_branch')
+        
+        # Check if a representative already exists for this center/branch combo
+        if branch:
             existing = CenterRepresentative.objects.filter(
-                assessment_center=data['assessment_center'],
+                assessment_center=center,
+                assessment_center_branch=branch
+            ).exists()
+            if existing:
+                raise serializers.ValidationError(
+                    f"A representative for this branch already exists."
+                )
+            # Generate email for branch
+            branch_suffix = branch.branch_code.split('-')[-1] if branch.branch_code else ''
+            email = f"{center.center_number.lower()}-{branch_suffix.lower()}@uvtab.go.ug"
+        else:
+            existing = CenterRepresentative.objects.filter(
+                assessment_center=center,
                 assessment_center_branch__isnull=True
             ).exists()
             if existing:
                 raise serializers.ValidationError(
                     "A representative for this center already exists. Please specify a branch or update the existing representative."
                 )
+            email = f"{center.center_number.lower()}@uvtab.go.ug"
+        
+        # Check if user with this email already exists
+        if User.objects.filter(username=email).exists():
+            raise serializers.ValidationError(
+                f"A user account with email {email} already exists."
+            )
+        
         return data
     
     def create(self, validated_data):
