@@ -124,29 +124,32 @@ class CenterRepresentativeCreateSerializer(serializers.ModelSerializer):
         center = data['assessment_center']
         branch = data.get('assessment_center_branch')
         
-        # Check if a representative already exists for this center/branch combo
+        # Generate email based on center/branch
         if branch:
+            branch_suffix = branch.branch_code.split('-')[-1] if branch.branch_code else ''
+            email = f"{center.center_number.lower()}-{branch_suffix.lower()}@uvtab.go.ug"
+            
+            # Check if a representative already exists for this SPECIFIC branch
             existing = CenterRepresentative.objects.filter(
                 assessment_center=center,
                 assessment_center_branch=branch
             ).exists()
             if existing:
                 raise serializers.ValidationError(
-                    f"A representative for this branch already exists."
+                    f"A representative for branch '{branch.branch_name}' already exists."
                 )
-            # Generate email for branch
-            branch_suffix = branch.branch_code.split('-')[-1] if branch.branch_code else ''
-            email = f"{center.center_number.lower()}-{branch_suffix.lower()}@uvtab.go.ug"
         else:
+            email = f"{center.center_number.lower()}@uvtab.go.ug"
+            
+            # Check if a representative exists for main center (no branch)
             existing = CenterRepresentative.objects.filter(
                 assessment_center=center,
                 assessment_center_branch__isnull=True
             ).exists()
             if existing:
                 raise serializers.ValidationError(
-                    "A representative for this center already exists. Please specify a branch or update the existing representative."
+                    "A representative for the main center already exists. Select a branch to create a branch representative."
                 )
-            email = f"{center.center_number.lower()}@uvtab.go.ug"
         
         # Check if user with this email already exists
         if User.objects.filter(username=email).exists():

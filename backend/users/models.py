@@ -160,10 +160,17 @@ class CenterRepresentative(models.Model):
     
     def save(self, *args, **kwargs):
         """Override save to auto-generate email and create user account"""
-        # Generate email if not set (format: centerno@uvtab.go.ug)
+        # Generate email if not set (format: centerno@uvtab.go.ug or centerno-branchcode@uvtab.go.ug)
         if not self.email and self.assessment_center:
             center_no = self.assessment_center.center_number.lower()
-            self.email = f"{center_no}@uvtab.go.ug"
+            if self.assessment_center_branch:
+                # Branch rep: include branch code suffix
+                branch_code = self.assessment_center_branch.branch_code or ''
+                branch_suffix = branch_code.split('-')[-1].lower() if branch_code else ''
+                self.email = f"{center_no}-{branch_suffix}@uvtab.go.ug"
+            else:
+                # Main center rep
+                self.email = f"{center_no}@uvtab.go.ug"
         
         # Create or update User account
         if not self.user:
