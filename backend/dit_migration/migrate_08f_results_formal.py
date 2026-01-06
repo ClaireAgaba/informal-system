@@ -51,9 +51,18 @@ def migrate_formal_results(dry_run=False):
     )
     log(f"Found {len(existing)} existing formal results (will skip)")
     
-    # Build level lookup
+    # Build level lookup by ID and by name
     levels_by_id = {l.id: l for l in OccupationLevel.objects.all()}
-    log(f"Loaded {len(levels_by_id)} levels")
+    levels_by_name = {}
+    for l in OccupationLevel.objects.all():
+        clean_name = l.level_name.strip().lower()
+        levels_by_name[clean_name] = l
+    log(f"Loaded {len(levels_by_id)} levels by ID, {len(levels_by_name)} by name")
+    
+    # Get old level names for mapping
+    cur.execute("SELECT id, name FROM eims_level")
+    old_levels = {row['id']: row['name'] for row in cur.fetchall()}
+    log(f"Loaded {len(old_levels)} old level names")
     
     # Get FORMAL results only (result_type = 'formal', has level_id)
     cur.execute("""
@@ -99,14 +108,20 @@ def migrate_formal_results(dry_run=False):
             result_type = assessment_type if assessment_type in ['practical', 'theory'] else 'practical'
             result_status = status if status in ['normal', 'retake', 'missing'] else 'normal'
             
-            # Get level
+            # Get level - first try by ID, then by name
             level = levels_by_id.get(level_id)
+            if not level:
+                # Try mapping by name
+                old_level_name = old_levels.get(level_id, '')
+                clean_name = old_level_name.strip().lower()
+                level = levels_by_name.get(clean_name)
+                
             if not level:
                 skipped_no_level += 1
                 continue
             
-            # Check if exists
-            if (candidate_id, series_id, level_id, result_type) in existing:
+            # Check if exists (use new level.id)
+            if (candidate_id, series_id, level.id, result_type) in existing:
                 skipped_exists += 1
                 continue
             
@@ -129,7 +144,7 @@ def migrate_formal_results(dry_run=False):
                 mark=mark,
                 status=result_status,
             )
-            existing.add((candidate_id, series_id, level_id, result_type))
+            existing.add((candidate_id, series_id, level.id, result_type))
             created += 1
             
             if created % 5000 == 0:
