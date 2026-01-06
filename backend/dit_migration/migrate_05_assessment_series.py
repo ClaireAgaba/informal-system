@@ -34,19 +34,23 @@ def migrate_series(dry_run=False):
     if dry_run:
         print("\nSample data (first 5):")
         for row in rows[:5]:
-            print(f"  ID: {row['id']}, Name: {row.get('series_name')}, Active: {row.get('is_active')}")
+            # Old DB uses 'name' and 'is_current' fields
+            print(f"  ID: {row['id']}, Name: {row.get('name')}, Current: {row.get('is_current')}")
         return
     
     migrated = 0
     
     for row in rows:
+        # Old DB uses 'name' instead of 'series_name', 'is_current' instead of 'is_active'
+        series_name = (row.get('name') or '')[:200]
+        
         AssessmentSeries.objects.update_or_create(
             id=row['id'],
             defaults={
-                'series_name': row.get('series_name', ''),
+                'series_name': series_name,
                 'start_date': row.get('start_date'),
                 'end_date': row.get('end_date'),
-                'is_active': row.get('is_active', False),
+                'is_active': row.get('is_current', False),
             }
         )
         migrated += 1
