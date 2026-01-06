@@ -25,26 +25,33 @@ def fix_missing_modules(dry_run=False):
     module_tables = [r['table_name'] for r in cur.fetchall()]
     log(f"Found module tables: {module_tables}")
     
-    # Try to find the module table with module_name column
+    # Find the module table and its name column
     module_table = None
+    name_col = None
     for t in module_tables:
         try:
             cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{t}'")
             cols = [r['column_name'] for r in cur.fetchall()]
-            if 'module_name' in cols:
-                module_table = t
+            log(f"  {t} columns: {cols}")
+            # Look for name column (could be module_name, name, title, etc.)
+            for possible_name in ['module_name', 'name', 'title']:
+                if possible_name in cols and 'id' in cols:
+                    module_table = t
+                    name_col = possible_name
+                    break
+            if module_table:
                 break
         except:
             pass
     
     if not module_table:
-        log("Could not find module table with module_name column")
+        log("Could not find module table with name column")
         cur.close()
         conn.close()
         return
     
-    log(f"Using module table: {module_table}")
-    cur.execute(f"SELECT id, module_name FROM {module_table}")
+    log(f"Using module table: {module_table}, name column: {name_col}")
+    cur.execute(f"SELECT id, {name_col} as module_name FROM {module_table}")
     old_modules = {row['id']: row['module_name'] for row in cur.fetchall()}
     log(f"Loaded {len(old_modules)} old module names")
     
