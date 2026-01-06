@@ -11,6 +11,9 @@ Updates candidates with disability info from old system:
 import os
 import sys
 
+# Add parent directory to path for Django
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # Django setup
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'emis.settings')
 import django
