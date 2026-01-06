@@ -13,7 +13,7 @@ export default function GenerateMarksheets() {
     module: '',
     assessment_center: '',
   });
-  
+
   const [selectedModule, setSelectedModule] = useState(null);
   const [selectedPapers, setSelectedPapers] = useState([]);
   const [moduleSearch, setModuleSearch] = useState('');
@@ -36,7 +36,7 @@ export default function GenerateMarksheets() {
   const { data: occupationsData } = useQuery({
     queryKey: ['occupations-all'],
     queryFn: async () => {
-      const response = await apiClient.get('/occupations/occupations/');
+      const response = await apiClient.get('/occupations/occupations/', { params: { page_size: 1000 } });
       // Handle both paginated and non-paginated responses
       return response.data.results || response.data;
     },
@@ -98,7 +98,7 @@ export default function GenerateMarksheets() {
   const levelModules = Array.isArray(levelModulesData) ? levelModulesData : [];
   const papers = Array.isArray(papersData) ? papersData : [];
   const centers = Array.isArray(centersData) ? centersData : [];
-  
+
   // Determine structure type from selected level
   const selectedLevel = levels.find(l => l.id === parseInt(formData.level));
   const structureType = selectedLevel?.structure_type; // 'modules' or 'papers'
@@ -106,13 +106,13 @@ export default function GenerateMarksheets() {
   // Filter occupations by registration category
   const occupations = formData.registration_category
     ? allOccupations.filter(occ => {
-        // Modular: only occupations that support modular (has_modular = true)
-        if (formData.registration_category === 'modular') {
-          return occ.has_modular === true;
-        }
-        // Formal and Workers PAS must match occupation category
-        return occ.occ_category === formData.registration_category;
-      })
+      // Modular: only occupations that support modular (has_modular = true)
+      if (formData.registration_category === 'modular') {
+        return occ.has_modular === true;
+      }
+      // Formal and Workers PAS must match occupation category
+      return occ.occ_category === formData.registration_category;
+    })
     : allOccupations;
 
   const filteredModules = modules.filter(module =>
@@ -126,21 +126,21 @@ export default function GenerateMarksheets() {
       ...prev,
       [name]: value
     }));
-    
+
     // Reset occupation, level and module when registration category changes
     if (name === 'registration_category') {
       setFormData(prev => ({ ...prev, occupation: '', level: '', module: '' }));
       setSelectedModule(null);
       setSelectedPapers([]);
     }
-    
+
     // Reset level and module when occupation changes
     if (name === 'occupation') {
       setFormData(prev => ({ ...prev, level: '', module: '' }));
       setSelectedModule(null);
       setSelectedPapers([]);
     }
-    
+
     // Reset module/papers when level changes
     if (name === 'level') {
       setFormData(prev => ({ ...prev, module: '' }));
@@ -157,29 +157,29 @@ export default function GenerateMarksheets() {
   const handleGenerate = async () => {
     setError('');
     setSuccess('');
-    
+
     // Validation
     if (!formData.assessment_series || !formData.registration_category || !formData.occupation) {
       setError('Please fill in all required fields');
       return;
     }
-    
+
     if (formData.registration_category === 'modular' && !formData.module) {
       setError('Please select a module');
       return;
     }
-    
+
     if ((formData.registration_category === 'formal' || formData.registration_category === 'workers_pas') && !formData.level) {
       setError('Please select a level');
       return;
     }
 
     setIsGenerating(true);
-    
+
     try {
       let response;
       let filename;
-      
+
       if (formData.registration_category === 'modular') {
         // Generate modular marksheet
         response = await marksheetsApi.generateModularMarksheet({
@@ -219,7 +219,7 @@ export default function GenerateMarksheets() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      
+
       setSuccess('Marksheet generated successfully!');
     } catch (err) {
       if (err.response?.status === 404) {
@@ -309,11 +309,11 @@ export default function GenerateMarksheets() {
             {formData.registration_category && occupationSearch && (
               <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                 {occupations
-                  .filter(occ => 
+                  .filter(occ =>
                     occ.occ_name?.toLowerCase().includes(occupationSearch.toLowerCase()) ||
                     occ.occ_code?.toLowerCase().includes(occupationSearch.toLowerCase())
                   )
-                  .slice(0, 20)
+                  // .slice(0, 20) - Removed to show all results
                   .map(occ => (
                     <div
                       key={occ.id}
@@ -326,12 +326,12 @@ export default function GenerateMarksheets() {
                       {occ.occ_name} ({occ.occ_code})
                     </div>
                   ))}
-                {occupations.filter(occ => 
+                {occupations.filter(occ =>
                   occ.occ_name?.toLowerCase().includes(occupationSearch.toLowerCase()) ||
                   occ.occ_code?.toLowerCase().includes(occupationSearch.toLowerCase())
                 ).length === 0 && (
-                  <div className="px-3 py-2 text-gray-500">No occupations found</div>
-                )}
+                    <div className="px-3 py-2 text-gray-500">No occupations found</div>
+                  )}
               </div>
             )}
           </div>
@@ -460,7 +460,7 @@ export default function GenerateMarksheets() {
           <button
             onClick={handleGenerate}
             disabled={
-              isGenerating || 
+              isGenerating ||
               (formData.registration_category === 'modular' && !formData.module) ||
               (formData.registration_category === 'formal' && !formData.level) ||
               (formData.registration_category === 'workers_pas' && !formData.level)
