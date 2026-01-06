@@ -13,7 +13,7 @@ from db_connection import get_old_connection, log
 from django.db import transaction
 
 # Paths - adjust these based on your server setup
-OLD_MEDIA_PATH = '/home/deploy/uvtab_emis/media'
+OLD_MEDIA_PATH = '/home/deploy/uvtab_emis/uvtab_emis/emis/media'
 NEW_MEDIA_PATH = '/home/deploy/informal-system/backend/media'
 
 def show_photo_columns():
