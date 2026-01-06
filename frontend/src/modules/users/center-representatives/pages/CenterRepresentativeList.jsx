@@ -9,16 +9,30 @@ const CenterRepresentativeList = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 20;
 
   useEffect(() => {
     fetchRepresentatives();
-  }, []);
+  }, [currentPage]);
 
   const fetchRepresentatives = async () => {
     try {
       setLoading(true);
-      const response = await centerRepresentativeApi.getAll();
-      setRepresentatives(response.data.results || response.data || []);
+      const response = await centerRepresentativeApi.getAll({ page: currentPage });
+      const data = response.data;
+      
+      if (data.results) {
+        setRepresentatives(data.results);
+        setTotalCount(data.count || 0);
+        setTotalPages(Math.ceil((data.count || 0) / pageSize));
+      } else {
+        setRepresentatives(data || []);
+        setTotalCount(data?.length || 0);
+        setTotalPages(1);
+      }
     } catch (error) {
       console.error('Error fetching center representatives:', error);
     } finally {
@@ -133,7 +147,7 @@ const CenterRepresentativeList = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Representatives</p>
-              <p className="text-2xl font-bold text-gray-900">{representatives.length}</p>
+              <p className="text-2xl font-bold text-gray-900">{totalCount}</p>
             </div>
             <Users className="w-8 h-8 text-blue-600" />
           </div>
@@ -283,6 +297,56 @@ const CenterRepresentativeList = () => {
             </tbody>
           </table>
         </div>
+        
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              Page {currentPage} of {totalPages} ({totalCount} total)
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              >
+                Previous
+              </button>
+              {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`px-3 py-1 border rounded-md ${
+                      currentPage === pageNum
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'border-gray-300 hover:bg-gray-100'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
