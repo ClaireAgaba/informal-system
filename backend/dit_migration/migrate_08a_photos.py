@@ -25,9 +25,18 @@ def show_photo_columns():
         if 'photo' in col_name or 'image' in col_name or 'pic' in col_name or 'passport' in col_name:
             print(f"  {col['column_name']}: {col['data_type']}")
 
-def migrate_photos(dry_run=False):
+def migrate_photos(dry_run=False, skip_existing=True):
     """Migrate candidate photos"""
     from candidates.models import Candidate
+    
+    # Get candidates that already have photos (to skip)
+    existing_with_photos = set()
+    if skip_existing:
+        existing_with_photos = set(
+            Candidate.objects.exclude(passport_photo='').exclude(passport_photo__isnull=True)
+            .values_list('id', flat=True)
+        )
+        log(f"Found {len(existing_with_photos)} candidates with photos already (will skip)")
     
     conn = get_old_connection()
     cur = conn.cursor()
@@ -60,7 +69,11 @@ def migrate_photos(dry_run=False):
     cur.close()
     conn.close()
     
-    log(f"Found {len(rows)} candidates with photos in old database")
+    # Filter out candidates that already have photos
+    if skip_existing:
+        rows = [r for r in rows if r['id'] not in existing_with_photos]
+    
+    log(f"Found {len(rows)} candidates to process")
     
     if dry_run:
         print("\nSample photos (first 10):")
