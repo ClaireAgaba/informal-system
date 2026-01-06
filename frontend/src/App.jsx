@@ -18,6 +18,7 @@ import AssessmentCenterList from '@modules/assessment-centers/pages/AssessmentCe
 import AssessmentCenterView from '@modules/assessment-centers/pages/AssessmentCenterView';
 import AssessmentCenterEdit from '@modules/assessment-centers/pages/AssessmentCenterEdit';
 import AssessmentCenterCreate from '@modules/assessment-centers/pages/AssessmentCenterCreate';
+import BranchEdit from '@modules/assessment-centers/pages/BranchEdit';
 import AssessmentSeriesList from '@modules/assessment-series/pages/AssessmentSeriesList';
 import AssessmentSeriesView from '@modules/assessment-series/pages/AssessmentSeriesView';
 import AssessmentSeriesEdit from '@modules/assessment-series/pages/AssessmentSeriesEdit';
@@ -76,6 +77,8 @@ function App() {
         <Route path="assessment-centers/new" element={<AssessmentCenterCreate />} />
         <Route path="assessment-centers/:id" element={<AssessmentCenterView />} />
         <Route path="assessment-centers/:id/edit" element={<AssessmentCenterEdit />} />
+        <Route path="assessment-centers/:centerId/branches/new" element={<BranchEdit />} />
+        <Route path="assessment-centers/branches/:branchId/edit" element={<BranchEdit />} />
         
         {/* Assessment Series routes */}
         <Route path="assessment-series" element={<AssessmentSeriesList />} />
