@@ -46,10 +46,10 @@ def count_disabled_candidates():
     conn = get_old_connection()
     cur = conn.cursor()
     
-    # First check column names
+    # Check all disability-related column names
     cur.execute("""
         SELECT column_name FROM information_schema.columns 
-        WHERE table_name = 'eims_candidate' AND column_name LIKE '%disab%'
+        WHERE table_name = 'eims_candidate' AND (column_name LIKE '%disab%' OR column_name LIKE '%nature%')
     """)
     cols = cur.fetchall()
     print("\n=== Disability columns in old DB ===")
@@ -61,26 +61,11 @@ def count_disabled_candidates():
     result = cur.fetchone()
     disabled_count = result['cnt'] if result else 0
     
-    # Get nature of disability distribution
-    cur.execute("""
-        SELECT nod.name, COUNT(c.id) as cnt 
-        FROM eims_candidate c
-        LEFT JOIN eims_natureofdisability nod ON c.nature_of_disability_id = nod.id
-        WHERE c.disability = true
-        GROUP BY nod.name
-        ORDER BY cnt DESC
-    """)
-    distribution = cur.fetchall()
-    
     cur.close()
     conn.close()
     
     print(f"\n=== Disabled Candidates in Old System ===")
     print(f"Total: {disabled_count}")
-    if distribution:
-        print("\nBy Nature of Disability:")
-        for row in distribution:
-            print(f"  {row['name'] or 'No category'}: {row['cnt']}")
     
     return disabled_count
 
@@ -136,8 +121,9 @@ def fix_disability_data(dry_run=False):
     cur = conn.cursor()
     
     # Get all candidates with disability from old system
+    # Note: old DB has 'disability' and 'disability_specification' columns only
     cur.execute("""
-        SELECT id, disability, nature_of_disability_id, disability_specification
+        SELECT id, disability, disability_specification
         FROM eims_candidate 
         WHERE disability = true
     """)
@@ -150,8 +136,7 @@ def fix_disability_data(dry_run=False):
     if dry_run:
         print("\nSample disabled candidates (first 10):")
         for row in rows[:10]:
-            print(f"  ID: {row['id']}, Nature: {row['nature_of_disability_id']}, "
-                  f"Spec: {(row['disability_specification'] or '')[:50]}...")
+            print(f"  ID: {row['id']}, Spec: {(row['disability_specification'] or '')[:50]}...")
         return
     
     updated = 0
@@ -175,11 +160,7 @@ def fix_disability_data(dry_run=False):
                 candidate.has_disability = True
                 candidate.disability_specification = row['disability_specification'] or ''
                 
-                # Set nature of disability
-                if row['nature_of_disability_id'] and row['nature_of_disability_id'] in nod_mapping:
-                    candidate.nature_of_disability = nod_mapping[row['nature_of_disability_id']]
-                
-                candidate.save(update_fields=['has_disability', 'nature_of_disability', 'disability_specification'])
+                candidate.save(update_fields=['has_disability', 'disability_specification'])
                 updated += 1
                 
             except Candidate.DoesNotExist:
