@@ -17,8 +17,34 @@ def fix_missing_modules(dry_run=False):
     conn = get_old_connection()
     cur = conn.cursor()
     
-    # Get old module names
-    cur.execute("SELECT id, module_name FROM eims_occupationmodule")
+    # Get old module names - find correct table name first
+    cur.execute("""
+        SELECT table_name FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name LIKE '%module%'
+    """)
+    module_tables = [r['table_name'] for r in cur.fetchall()]
+    log(f"Found module tables: {module_tables}")
+    
+    # Try to find the module table with module_name column
+    module_table = None
+    for t in module_tables:
+        try:
+            cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{t}'")
+            cols = [r['column_name'] for r in cur.fetchall()]
+            if 'module_name' in cols:
+                module_table = t
+                break
+        except:
+            pass
+    
+    if not module_table:
+        log("Could not find module table with module_name column")
+        cur.close()
+        conn.close()
+        return
+    
+    log(f"Using module table: {module_table}")
+    cur.execute(f"SELECT id, module_name FROM {module_table}")
     old_modules = {row['id']: row['module_name'] for row in cur.fetchall()}
     log(f"Loaded {len(old_modules)} old module names")
     
