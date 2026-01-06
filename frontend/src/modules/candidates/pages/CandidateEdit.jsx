@@ -635,7 +635,7 @@ const CandidateEdit = () => {
                           <option value="">Select assessment center</option>
                           {centers.map((center) => (
                             <option key={center.id} value={center.id}>
-                              {center.center_name}
+                              {center.center_number} - {center.center_name}
                             </option>
                           ))}
                         </select>

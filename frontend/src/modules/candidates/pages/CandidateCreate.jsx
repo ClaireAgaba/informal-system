@@ -594,7 +594,7 @@ const CandidateCreate = () => {
                         <option value="">Select assessment center</option>
                         {centers.map((center) => (
                           <option key={center.id} value={center.id}>
-                            {center.center_name}
+                            {center.center_number} - {center.center_name}
                           </option>
                         ))}
                       </select>
@@ -616,7 +616,7 @@ const CandidateCreate = () => {
                           <option value="">Select branch (optional)</option>
                           {branches.map((branch) => (
                             <option key={branch.id} value={branch.id}>
-                              {branch.branch_name}
+                              {branch.branch_code} - {branch.branch_name}
                             </option>
                           ))}
                         </select>
