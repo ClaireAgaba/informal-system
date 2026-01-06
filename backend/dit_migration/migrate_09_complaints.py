@@ -4,6 +4,11 @@ Migration Script 9: Complaints
 Run: python dit_migration/migrate_09_complaints.py [--dry-run]
 
 Migrates complaints from old system to new system.
+Old table columns:
+  - id, ticket_no, phone, issue_description, team_response, status
+  - assessment_center_id, assessment_series_id, occupation_id
+  - category_id, helpdesk_team_id, created_by_id, updated_by_id
+  - created_at, updated_at, archived
 """
 import argparse
 from db_connection import get_old_connection, log, describe_old_table
@@ -45,8 +50,17 @@ def show_old_structure():
         print("\nSample complaints:")
         for row in rows:
             print(f"  {dict(row)}")
-    else:
-        print("\nNo eims_complaint table found")
+    
+    # Check categories
+    cur.execute("""
+        SELECT table_name FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = 'eims_complaintcategory'
+    """)
+    if cur.fetchone():
+        print("\neims_complaintcategory:")
+        cur.execute('SELECT * FROM eims_complaintcategory ORDER BY id')
+        for row in cur.fetchall():
+            print(f"  {dict(row)}")
     
     cur.close()
     conn.close()
@@ -80,6 +94,48 @@ def count_records():
     
     return old_count
 
+def migrate_categories(dry_run=False):
+    """Migrate complaint categories first"""
+    from complaints.models import ComplaintCategory
+    
+    log("Migrating complaint categories...")
+    
+    conn = get_old_connection()
+    cur = conn.cursor()
+    
+    cur.execute('SELECT * FROM eims_complaintcategory ORDER BY id')
+    old_categories = cur.fetchall()
+    log(f"Found {len(old_categories)} categories")
+    
+    categories_map = {}  # old_id -> new_category
+    
+    for old in old_categories:
+        name = old.get('name', '').strip()
+        if not name:
+            continue
+            
+        if dry_run:
+            log(f"  Would create category: {name}")
+            categories_map[old['id']] = None
+            continue
+        
+        category, created = ComplaintCategory.objects.get_or_create(
+            name=name,
+            defaults={
+                'description': old.get('description', '') or '',
+                'is_active': old.get('is_active', True)
+            }
+        )
+        categories_map[old['id']] = category
+        if created:
+            log(f"  Created: {name}")
+        else:
+            log(f"  Exists: {name}")
+    
+    cur.close()
+    conn.close()
+    return categories_map
+
 def migrate_complaints(dry_run=False):
     """Migrate complaints from old to new system"""
     from complaints.models import Complaint, ComplaintCategory
@@ -90,24 +146,16 @@ def migrate_complaints(dry_run=False):
     
     log("Starting complaints migration...")
     
+    # First migrate categories
+    categories_map = migrate_categories(dry_run)
+    
     conn = get_old_connection()
     cur = conn.cursor()
-    
-    # Check if complaints table exists
-    cur.execute("""
-        SELECT table_name FROM information_schema.tables 
-        WHERE table_schema = 'public' AND table_name = 'eims_complaint'
-    """)
-    if not cur.fetchone():
-        log("No eims_complaint table found - nothing to migrate")
-        cur.close()
-        conn.close()
-        return
     
     # Get old complaints
     cur.execute('SELECT * FROM eims_complaint ORDER BY id')
     old_complaints = cur.fetchall()
-    log(f"Found {len(old_complaints)} complaints to migrate")
+    log(f"\nFound {len(old_complaints)} complaints to migrate")
     
     if not old_complaints:
         log("No complaints to migrate")
@@ -120,14 +168,12 @@ def migrate_complaints(dry_run=False):
     series_by_id = {s.id: s for s in AssessmentSeries.objects.all()}
     occupations_by_id = {o.id: o for o in Occupation.objects.all()}
     users_by_id = {u.id: u for u in User.objects.all()}
+    new_categories_by_name = {c.name: c for c in ComplaintCategory.objects.all()}
     
-    # Get or create a default category
-    default_category, _ = ComplaintCategory.objects.get_or_create(
-        name='General',
-        defaults={'description': 'General complaints migrated from old system'}
-    )
+    # Get default category
+    default_category = ComplaintCategory.objects.first()
     
-    # Get or create a default user for old complaints without user
+    # Get default user for old complaints without user
     default_user = User.objects.filter(is_superuser=True).first()
     if not default_user:
         default_user = User.objects.first()
@@ -137,15 +183,23 @@ def migrate_complaints(dry_run=False):
     skipped_no_center = 0
     skipped_no_series = 0
     skipped_no_occupation = 0
+    skipped_archived = 0
     errors = 0
     
     for old in old_complaints:
         try:
-            # Get related objects
-            center = centers_by_id.get(old.get('exam_center_id') or old.get('center_id'))
-            series = series_by_id.get(old.get('exam_series_id') or old.get('series_id'))
-            occupation = occupations_by_id.get(old.get('program_id') or old.get('occupation_id'))
-            created_by = users_by_id.get(old.get('created_by_id') or old.get('user_id'))
+            # Skip archived complaints
+            if old.get('archived'):
+                skipped_archived += 1
+                continue
+            
+            # Get related objects using correct column names
+            center = centers_by_id.get(old.get('assessment_center_id'))
+            series = series_by_id.get(old.get('assessment_series_id'))
+            occupation = occupations_by_id.get(old.get('occupation_id'))
+            created_by = users_by_id.get(old.get('created_by_id'))
+            helpdesk = users_by_id.get(old.get('helpdesk_team_id'))
+            category = categories_map.get(old.get('category_id')) or default_category
             
             if not center:
                 skipped_no_center += 1
@@ -160,8 +214,8 @@ def migrate_complaints(dry_run=False):
             if not created_by:
                 created_by = default_user
             
-            # Check if already migrated (by ticket number if exists)
-            ticket = old.get('ticket_number') or old.get('ticket')
+            # Check if already migrated by ticket_no
+            ticket = old.get('ticket_no')
             if ticket and Complaint.objects.filter(ticket_number=ticket).exists():
                 skipped_exists += 1
                 continue
@@ -172,24 +226,28 @@ def migrate_complaints(dry_run=False):
             
             with transaction.atomic():
                 complaint = Complaint(
-                    category=default_category,
+                    category=category,
                     exam_center=center,
                     exam_series=series,
                     program=occupation,
                     phone=old.get('phone', '') or '',
-                    issue_description=old.get('issue_description') or old.get('description') or old.get('complaint') or '',
+                    issue_description=old.get('issue_description', '') or '',
                     status=old.get('status', 'new') or 'new',
-                    team_response=old.get('team_response') or old.get('response') or '',
+                    team_response=old.get('team_response', '') or '',
+                    helpdesk_team=helpdesk,
                     created_by=created_by,
                 )
-                # Set ticket number if provided
+                # Set ticket number
                 if ticket:
                     complaint.ticket_number = ticket
                 complaint.save()
                 
-                # Update timestamps if available
+                # Update timestamps
                 if old.get('created_at'):
-                    Complaint.objects.filter(id=complaint.id).update(created_at=old['created_at'])
+                    Complaint.objects.filter(id=complaint.id).update(
+                        created_at=old['created_at'],
+                        updated_at=old.get('updated_at') or old['created_at']
+                    )
                 
                 created += 1
                 
@@ -203,6 +261,7 @@ def migrate_complaints(dry_run=False):
     log(f"\n=== Migration Summary ===")
     log(f"Created: {created}")
     log(f"Skipped (exists): {skipped_exists}")
+    log(f"Skipped (archived): {skipped_archived}")
     log(f"Skipped (no center): {skipped_no_center}")
     log(f"Skipped (no series): {skipped_no_series}")
     log(f"Skipped (no occupation): {skipped_no_occupation}")
