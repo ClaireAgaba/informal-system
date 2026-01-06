@@ -14,41 +14,51 @@ from django.db import transaction
 def show_old_structure():
     """Show structure of old results data"""
     print("\n=== Old Table Structure ===")
-    print("\neims_candidatemodule columns (for marks):")
     
     conn = get_old_connection()
     cur = conn.cursor()
+    
+    print("\neims_result columns:")
     cur.execute("""
         SELECT column_name, data_type 
         FROM information_schema.columns 
-        WHERE table_name = 'eims_candidatemodule'
+        WHERE table_name = 'eims_result'
         ORDER BY ordinal_position
     """)
     for col in cur.fetchall():
         print(f"  {col['column_name']}: {col['data_type']}")
+    
     cur.close()
     conn.close()
 
 def count_records():
-    """Count modular results records"""
+    """Count results records"""
     print("\n=== Record Counts ===")
     
     conn = get_old_connection()
     cur = conn.cursor()
     
-    cur.execute("SELECT COUNT(*) as cnt FROM eims_candidatemodule WHERE marks IS NOT NULL")
+    cur.execute("SELECT COUNT(*) as cnt FROM eims_result")
+    result = cur.fetchone()
+    print(f"  Total eims_result: {result['cnt'] if result else 0}")
+    
+    cur.execute("SELECT COUNT(*) as cnt FROM eims_result WHERE mark IS NOT NULL")
     result = cur.fetchone()
     print(f"  Records with marks: {result['cnt'] if result else 0}")
     
-    cur.execute("SELECT COUNT(*) as cnt FROM eims_candidatemodule WHERE marks IS NOT NULL AND marks > 0")
-    result = cur.fetchone()
-    print(f"  Records with marks > 0: {result['cnt'] if result else 0}")
+    # Check what columns exist to understand structure
+    cur.execute("""
+        SELECT column_name FROM information_schema.columns 
+        WHERE table_name = 'eims_result'
+    """)
+    cols = [r['column_name'] for r in cur.fetchall()]
+    print(f"  Columns: {cols}")
     
     cur.close()
     conn.close()
 
 def migrate_modular_results(dry_run=False, skip_existing=True):
-    """Migrate modular results"""
+    """Migrate modular results from eims_result table"""
     from results.models import ModularResult
     from candidates.models import Candidate
     from assessment_series.models import AssessmentSeries
@@ -56,6 +66,14 @@ def migrate_modular_results(dry_run=False, skip_existing=True):
     
     conn = get_old_connection()
     cur = conn.cursor()
+    
+    # First check the eims_result structure
+    cur.execute("""
+        SELECT column_name FROM information_schema.columns 
+        WHERE table_name = 'eims_result'
+    """)
+    cols = [r['column_name'] for r in cur.fetchall()]
+    log(f"eims_result columns: {cols}")
     
     # Build module name mapping
     cur.execute("SELECT id, name FROM eims_module")
@@ -79,25 +97,40 @@ def migrate_modular_results(dry_run=False, skip_existing=True):
         )
         log(f"Found {len(existing)} existing modular results (will skip)")
     
-    # Get modular results from old DB (only where marks exist)
-    cur.execute("""
-        SELECT candidate_id, assessment_series_id, module_id, marks, status
-        FROM eims_candidatemodule
-        WHERE marks IS NOT NULL AND assessment_series_id IS NOT NULL
-        ORDER BY candidate_id
-    """)
-    rows = cur.fetchall()
+    # Determine column names based on what exists
+    candidate_col = 'candidate_id' if 'candidate_id' in cols else 'candidate'
+    series_col = 'assessment_series_id' if 'assessment_series_id' in cols else 'series_id'
+    module_col = 'module_id' if 'module_id' in cols else 'module'
+    
+    # Get results from eims_result - join with candidate to filter modular only
+    query = f"""
+        SELECT r.*, c.registration_category
+        FROM eims_result r
+        JOIN eims_candidate c ON r.{candidate_col} = c.id
+        WHERE r.mark IS NOT NULL
+        ORDER BY r.{candidate_col}
+    """
+    
+    try:
+        cur.execute(query)
+        rows = cur.fetchall()
+    except Exception as e:
+        log(f"Query error: {e}")
+        # Try simpler query
+        cur.execute(f"SELECT * FROM eims_result WHERE mark IS NOT NULL ORDER BY id LIMIT 10")
+        rows = cur.fetchall()
+        if rows:
+            log(f"Sample row keys: {rows[0].keys()}")
+    
     cur.close()
     conn.close()
     
-    log(f"Found {len(rows)} modular results in old DB")
+    log(f"Found {len(rows)} results in eims_result")
     
     if dry_run:
         print("\nSample results (first 10):")
         for row in rows[:10]:
-            module_name = old_modules.get(row['module_id'], 'Unknown')
-            print(f"  Candidate {row['candidate_id']}, Series {row['assessment_series_id']}, "
-                  f"Module {row['module_id']} ({module_name}), Mark: {row['marks']}")
+            print(f"  {dict(row)}")
         return
     
     created = 0
@@ -105,19 +138,14 @@ def migrate_modular_results(dry_run=False, skip_existing=True):
     
     for row in rows:
         try:
-            candidate_id = row['candidate_id']
-            series_id = row['assessment_series_id']
-            module_id = row['module_id']
-            mark = row['marks']
-            status = row.get('status', 'normal')
+            candidate_id = row.get('candidate_id') or row.get('candidate')
+            series_id = row.get('assessment_series_id') or row.get('series_id')
+            module_id = row.get('module_id') or row.get('module')
+            mark = row.get('mark')
             
-            # Map status
-            if status in ['normal', 'retake', 'missing']:
-                result_status = status
-            elif status == 'completed':
-                result_status = 'normal'
-            else:
-                result_status = 'normal'
+            if not all([candidate_id, series_id, module_id, mark is not None]):
+                skipped += 1
+                continue
             
             # Get module by name mapping
             module = module_mapping.get(module_id)
@@ -147,7 +175,7 @@ def migrate_modular_results(dry_run=False, skip_existing=True):
                 module=module,
                 type='practical',
                 mark=mark,
-                status=result_status,
+                status='normal',
             )
             existing.add((candidate_id, series_id, module.id, 'practical'))
             created += 1
