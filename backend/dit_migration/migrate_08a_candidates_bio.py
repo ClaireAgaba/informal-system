@@ -39,7 +39,7 @@ def count_records():
     except:
         print("  eims_candidate: Table not found")
 
-def migrate_candidates(dry_run=False):
+def migrate_candidates(dry_run=False, skip_existing=True):
     """Migrate candidates bio data"""
     from candidates.models import Candidate
     from configurations.models import District, Village, NatureOfDisability
@@ -48,6 +48,12 @@ def migrate_candidates(dry_run=False):
     
     occ_mapping = load_occupation_mapping()
     
+    # Get existing candidate IDs to skip
+    existing_ids = set()
+    if skip_existing:
+        existing_ids = set(Candidate.objects.values_list('id', flat=True))
+        log(f"Found {len(existing_ids)} existing candidates in new database (will skip)")
+    
     conn = get_old_connection()
     cur = conn.cursor()
     cur.execute("SELECT * FROM eims_candidate ORDER BY id")
@@ -55,7 +61,11 @@ def migrate_candidates(dry_run=False):
     cur.close()
     conn.close()
     
-    log(f"Found {len(rows)} candidates in old database")
+    # Filter out existing candidates
+    if skip_existing:
+        rows = [r for r in rows if r['id'] not in existing_ids]
+    
+    log(f"Found {len(rows)} candidates to migrate")
     
     if dry_run:
         print("\nSample data (first 10):")
