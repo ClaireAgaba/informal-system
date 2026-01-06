@@ -83,7 +83,8 @@ def migrate_branches(dry_run=False):
     if dry_run:
         print("\nSample data (first 5):")
         for row in rows[:5]:
-            print(f"  ID: {row['id']}, Center ID: {row.get('assessment_center_id')}, Name: {row.get('branch_name')}")
+            # Old DB uses branch_code, no branch_name field
+            print(f"  ID: {row['id']}, Center ID: {row.get('assessment_center_id')}, Code: {row.get('branch_code')}")
         return
     
     migrated = 0
@@ -101,13 +102,17 @@ def migrate_branches(dry_run=False):
             skipped += 1
             continue
         
+        # Old DB has no branch_name, only branch_code - use code as name too
+        branch_code = row.get('branch_code') or ''
+        branch_name = branch_code or f"Branch {row['id']}"
+        
         CenterBranch.objects.update_or_create(
             id=row['id'],
             defaults={
                 'assessment_center': center,
-                'branch_name': row.get('branch_name', ''),
-                'branch_code': row.get('branch_code', ''),
-                'is_active': row.get('is_active', True),
+                'branch_name': branch_name,
+                'branch_code': branch_code,
+                'is_active': True,
             }
         )
         migrated += 1
