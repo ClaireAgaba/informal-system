@@ -14,6 +14,8 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import candidateApi from '../services/candidateApi';
+import assessmentCenterApi from '@modules/assessment-centers/services/assessmentCenterApi';
+import occupationApi from '@modules/occupations/services/occupationApi';
 import Button from '@shared/components/Button';
 import Card from '@shared/components/Card';
 import { formatDate } from '@shared/utils/formatters';
@@ -46,6 +48,26 @@ const CandidateList = () => {
       ...filters,
     }),
   });
+
+  // Fetch filter options
+  const { data: centersData } = useQuery({
+    queryKey: ['centers-filter'],
+    queryFn: () => assessmentCenterApi.getAll({ page_size: 1000 }),
+  });
+
+  const { data: occupationsData } = useQuery({
+    queryKey: ['occupations-filter'],
+    queryFn: () => occupationApi.getAll({ page_size: 500 }),
+  });
+
+  const { data: sectorsData } = useQuery({
+    queryKey: ['sectors-filter'],
+    queryFn: () => occupationApi.sectors.getAll(),
+  });
+
+  const centers = centersData?.data?.results || centersData?.data || [];
+  const occupations = occupationsData?.data?.results || occupationsData?.data || [];
+  const sectors = sectorsData?.data?.results || sectorsData?.data || [];
 
   const candidates = data?.data?.results || [];
   const totalCount = data?.data?.count || 0;
@@ -264,6 +286,9 @@ const CandidateList = () => {
                     onChange={(e) => setFilters({ ...filters, assessment_center: e.target.value })}
                   >
                     <option value="">Select</option>
+                    {centers.map((c) => (
+                      <option key={c.id} value={c.id}>{c.center_name}</option>
+                    ))}
                   </select>
                 </th>
                 <th className="px-2 py-2">
@@ -285,13 +310,21 @@ const CandidateList = () => {
                     onChange={(e) => setFilters({ ...filters, occupation: e.target.value })}
                   >
                     <option value="">Select</option>
+                    {occupations.map((o) => (
+                      <option key={o.id} value={o.id}>{o.occ_name}</option>
+                    ))}
                   </select>
                 </th>
                 <th className="px-2 py-2">
                   <select
                     className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    value={filters.sector || ''}
+                    onChange={(e) => setFilters({ ...filters, sector: e.target.value })}
                   >
                     <option value="">Select</option>
+                    {sectors.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
                   </select>
                 </th>
                 <th className="px-2 py-2">
