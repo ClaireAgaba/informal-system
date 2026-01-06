@@ -6,7 +6,11 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 from django.db import transaction
+from django.http import HttpResponse
 from decimal import Decimal
+from datetime import date
+import openpyxl
+from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from .models import Candidate, CandidateEnrollment, EnrollmentModule, EnrollmentPaper
 from .serializers import (
     CandidateListSerializer,
@@ -204,6 +208,104 @@ class CandidateViewSet(viewsets.ModelViewSet):
         }
         
         return Response(stats)
+    
+    @action(detail=False, methods=['post'])
+    def export(self, request):
+        """Export candidates to Excel"""
+        candidate_ids = request.data.get('ids', [])
+        export_all = request.data.get('export_all', False)
+        
+        # Get queryset based on filters or IDs
+        if export_all:
+            # Apply same filters as list view
+            queryset = self.filter_queryset(self.get_queryset())
+        elif candidate_ids:
+            queryset = self.get_queryset().filter(id__in=candidate_ids)
+        else:
+            return Response({'error': 'No candidates selected'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Candidates"
+        
+        # Define headers
+        headers = [
+            'Reg No', 'Full Name', 'Assessment Center', 'Category', 
+            'Occupation', 'Sector', 'Disability', 'Refugee', 
+            'Nationality', 'Age', 'District', 'Gender', 'Contact'
+        ]
+        
+        # Style for headers
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+        header_alignment = Alignment(horizontal="center", vertical="center")
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        # Write headers
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = thin_border
+        
+        # Calculate age helper
+        def calculate_age(dob):
+            if not dob:
+                return ''
+            today = date.today()
+            return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        
+        # Write data
+        for row, candidate in enumerate(queryset, 2):
+            data = [
+                candidate.registration_number or '',
+                candidate.full_name or '',
+                candidate.assessment_center.center_name if candidate.assessment_center else '',
+                candidate.get_registration_category_display() if candidate.registration_category else '',
+                candidate.occupation.occ_name if candidate.occupation else '',
+                candidate.occupation.sector.name if candidate.occupation and candidate.occupation.sector else '',
+                'Yes' if candidate.has_disability else 'No',
+                'Yes' if candidate.is_refugee else 'No',
+                candidate.nationality or 'Uganda',
+                calculate_age(candidate.date_of_birth),
+                candidate.district.name if candidate.district else '',
+                candidate.get_gender_display() if candidate.gender else '',
+                candidate.contact or '',
+            ]
+            
+            for col, value in enumerate(data, 1):
+                cell = ws.cell(row=row, column=col, value=value)
+                cell.border = thin_border
+                cell.alignment = Alignment(vertical="center")
+        
+        # Auto-adjust column widths
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column].width = adjusted_width
+        
+        # Create response
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename=candidates_export_{date.today().strftime("%Y%m%d")}.xlsx'
+        wb.save(response)
+        
+        return response
     
     @action(detail=True, methods=['get'])
     def enrollments(self, request, pk=None):

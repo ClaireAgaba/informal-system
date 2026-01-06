@@ -26,7 +26,9 @@ const CandidateList = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [selectedCandidates, setSelectedCandidates] = useState([]);
+  const [selectAllPages, setSelectAllPages] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [exporting, setExporting] = useState(false);
   
   // Filter states
   const [filters, setFilters] = useState({
@@ -73,21 +75,65 @@ const CandidateList = () => {
   const totalCount = data?.data?.count || 0;
   const totalPages = Math.ceil(totalCount / pageSize);
 
-  // Select all candidates
+  // Select all candidates on current page
   const handleSelectAll = () => {
-    if (selectedCandidates.length === candidates.length) {
+    if (selectedCandidates.length === candidates.length && !selectAllPages) {
       setSelectedCandidates([]);
+      setSelectAllPages(false);
     } else {
       setSelectedCandidates(candidates.map((c) => c.id));
     }
   };
 
+  // Select all candidates across all pages
+  const handleSelectAllPages = () => {
+    setSelectAllPages(true);
+    setSelectedCandidates(candidates.map((c) => c.id));
+  };
+
+  // Clear selection
+  const handleClearSelection = () => {
+    setSelectedCandidates([]);
+    setSelectAllPages(false);
+  };
+
   // Toggle individual candidate selection
   const handleSelectCandidate = (id) => {
+    setSelectAllPages(false);
     if (selectedCandidates.includes(id)) {
       setSelectedCandidates(selectedCandidates.filter((cId) => cId !== id));
     } else {
       setSelectedCandidates([...selectedCandidates, id]);
+    }
+  };
+
+  // Export candidates
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const payload = selectAllPages 
+        ? { export_all: true, ...filters, search: searchQuery }
+        : { ids: selectedCandidates };
+      
+      const response = await candidateApi.export(payload);
+      
+      // Create download link
+      const blob = new Blob([response.data], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `candidates_export_${new Date().toISOString().slice(0,10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Export failed. Please try again.');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -234,22 +280,51 @@ const CandidateList = () => {
       </Card>
 
       {/* Bulk Actions */}
-      {selectedCandidates.length > 0 && (
-        <div className="bg-primary-50 border border-primary-200 rounded-lg px-4 py-3 flex items-center justify-between">
-          <span className="text-sm font-medium text-primary-900">
-            {selectedCandidates.length} candidate(s) selected
-          </span>
-          <div className="flex items-center space-x-2">
-            <Button variant="outline" size="sm">
-              Verify Selected
-            </Button>
-            <Button variant="outline" size="sm">
-              Export Selected
-            </Button>
-            <Button variant="danger" size="sm">
-              <Trash2 className="w-4 h-4 mr-1" />
-              Delete Selected
-            </Button>
+      {(selectedCandidates.length > 0 || selectAllPages) && (
+        <div className="bg-primary-50 border border-primary-200 rounded-lg px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <span className="text-sm font-medium text-primary-900">
+                {selectAllPages ? (
+                  <>All {totalCount} candidates selected</>
+                ) : (
+                  <>{selectedCandidates.length} candidate(s) selected</>
+                )}
+              </span>
+              {selectedCandidates.length === candidates.length && !selectAllPages && totalCount > pageSize && (
+                <button 
+                  onClick={handleSelectAllPages}
+                  className="text-sm text-blue-600 hover:text-blue-800 underline"
+                >
+                  Select all {totalCount} candidates
+                </button>
+              )}
+              {selectAllPages && (
+                <button 
+                  onClick={handleClearSelection}
+                  className="text-sm text-gray-600 hover:text-gray-800 underline"
+                >
+                  Clear selection
+                </button>
+              )}
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button variant="outline" size="sm">
+                Verify Selected
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleExport}
+                disabled={exporting}
+              >
+                {exporting ? 'Exporting...' : 'Export Selected'}
+              </Button>
+              <Button variant="danger" size="sm">
+                <Trash2 className="w-4 h-4 mr-1" />
+                Delete Selected
+              </Button>
+            </div>
           </div>
         </div>
       )}

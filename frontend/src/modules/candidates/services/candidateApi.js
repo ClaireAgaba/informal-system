@@ -177,6 +177,13 @@ export const candidateApi = {
     if (seriesId) params.append('series_id', seriesId);
     return apiClient.get(`/results/formal/list/?${params.toString()}`);
   },
+
+  // Export candidates to Excel
+  export: (data) => {
+    return apiClient.post(`${CANDIDATES_BASE}/export/`, data, {
+      responseType: 'blob',
+    });
+  },
 };
 
 export default candidateApi;
