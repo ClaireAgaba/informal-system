@@ -4,8 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Search,
   Filter,
-  Download,
-  Upload,
   Plus,
   Edit,
   Trash2,
@@ -95,22 +93,6 @@ const CandidateList = () => {
           </p>
         </div>
         <div className="flex items-center space-x-3">
-          <Button
-            variant="outline"
-            size="md"
-            onClick={() => {/* Handle export */}}
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-          <Button
-            variant="outline"
-            size="md"
-            onClick={() => {/* Handle import */}}
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            Import
-          </Button>
           <Button
             variant="primary"
             size="md"
