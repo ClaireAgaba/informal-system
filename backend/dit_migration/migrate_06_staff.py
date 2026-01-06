@@ -58,6 +58,7 @@ def generate_email_from_name(name, domain='uvtab.go.ug'):
 def migrate_staff(dry_run=False):
     """Migrate staff members"""
     from users.models import Staff, User
+    from django.contrib.auth.hashers import make_password
     
     conn = get_old_connection()
     cur = conn.cursor()
@@ -76,6 +77,9 @@ def migrate_staff(dry_run=False):
         cur.close()
         conn.close()
         return
+    
+    # Pre-hash the default password once
+    default_password = make_password('Uvtab@2025')
     
     migrated = 0
     skipped = 0
@@ -104,16 +108,33 @@ def migrate_staff(dry_run=False):
             else:
                 account_status = status
             
+            # Create user account for staff
+            user, created = User.objects.get_or_create(
+                username=email,
+                defaults={
+                    'email': email,
+                    'password': default_password,
+                    'first_name': full_name.split()[0] if full_name else '',
+                    'last_name': ' '.join(full_name.split()[1:]) if len(full_name.split()) > 1 else '',
+                    'user_type': 'staff',
+                    'phone_number': contact,
+                    'is_staff': True,
+                    'is_active': True
+                }
+            )
+            
             # Check if staff with this email already exists
             existing = Staff.objects.filter(email=email).first()
             if existing:
                 existing.full_name = full_name
                 existing.contact = contact
                 existing.account_status = account_status
+                existing.user = user
                 existing.save()
             else:
                 Staff.objects.create(
                     id=row['id'],
+                    user=user,
                     full_name=full_name,
                     email=email,
                     contact=contact,
@@ -132,6 +153,7 @@ def migrate_staff(dry_run=False):
 def migrate_support_staff(dry_run=False):
     """Migrate support staff members"""
     from users.models import SupportStaff, User
+    from django.contrib.auth.hashers import make_password
     
     conn = get_old_connection()
     cur = conn.cursor()
@@ -157,6 +179,9 @@ def migrate_support_staff(dry_run=False):
         conn.close()
         return
     
+    # Pre-hash the default password once
+    default_password = make_password('Uvtab@2025')
+    
     migrated = 0
     skipped = 0
     
@@ -184,15 +209,32 @@ def migrate_support_staff(dry_run=False):
             else:
                 account_status = status
             
+            # Create user account for support staff
+            user, created = User.objects.get_or_create(
+                username=email,
+                defaults={
+                    'email': email,
+                    'password': default_password,
+                    'first_name': full_name.split()[0] if full_name else '',
+                    'last_name': ' '.join(full_name.split()[1:]) if len(full_name.split()) > 1 else '',
+                    'user_type': 'support_staff',
+                    'phone_number': contact,
+                    'is_staff': False,
+                    'is_active': True
+                }
+            )
+            
             existing = SupportStaff.objects.filter(email=email).first()
             if existing:
                 existing.full_name = full_name
                 existing.contact = contact
                 existing.account_status = account_status
+                existing.user = user
                 existing.save()
             else:
                 SupportStaff.objects.create(
                     id=row['id'],
+                    user=user,
                     full_name=full_name,
                     email=email,
                     contact=contact,
