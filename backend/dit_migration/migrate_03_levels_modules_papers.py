@@ -180,8 +180,9 @@ def migrate_modules(dry_run=False):
                 continue
         
         # Use (occupation, module_code) as unique lookup
-        module_code = row.get('code') or ''
-        module_name = row.get('name') or ''
+        # Truncate to fit model field limits (50 for code, 200 for name)
+        module_code = (row.get('code') or '')[:50]
+        module_name = (row.get('name') or '')[:200]
         
         OccupationModule.objects.update_or_create(
             occupation=occupation,
@@ -267,8 +268,9 @@ def migrate_papers(dry_run=False):
             paper_type = 'theory'
         
         # Use (occupation, paper_code) as unique lookup
-        paper_code = row.get('code') or ''
-        paper_name = row.get('name') or ''
+        # Truncate to fit model field limits (50 for code, 200 for name)
+        paper_code = (row.get('code') or '')[:50]
+        paper_name = (row.get('name') or '')[:200]
         
         OccupationPaper.objects.update_or_create(
             occupation=occupation,
