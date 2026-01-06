@@ -65,6 +65,28 @@ def migrate_modular_enrollments(dry_run=False, skip_existing=True):
     
     level_mapping = load_level_mapping()
     
+    # Build module name mapping (old module_id -> new module by name)
+    # This handles the -old occupation issue
+    conn = get_old_connection()
+    cur = conn.cursor()
+    
+    # Get old module names
+    cur.execute("""
+        SELECT id, module_name FROM eims_occupationmodule
+    """)
+    old_modules = {row['id']: row['module_name'] for row in cur.fetchall()}
+    log(f"Loaded {len(old_modules)} old module names")
+    
+    # Build mapping: old_module_id -> new OccupationModule (by name match)
+    module_mapping = {}
+    new_modules_by_name = {m.module_name.strip().lower(): m for m in OccupationModule.objects.all()}
+    for old_id, old_name in old_modules.items():
+        if old_name:
+            clean_name = old_name.strip().lower()
+            if clean_name in new_modules_by_name:
+                module_mapping[old_id] = new_modules_by_name[clean_name]
+    log(f"Mapped {len(module_mapping)} modules by name")
+    
     # Get existing (candidate_id, series_id) pairs to skip
     existing_pairs = set()
     if skip_existing:
@@ -72,9 +94,6 @@ def migrate_modular_enrollments(dry_run=False, skip_existing=True):
             CandidateEnrollment.objects.values_list('candidate_id', 'assessment_series_id')
         )
         log(f"Found {len(existing_pairs)} existing enrollments (will skip)")
-    
-    conn = get_old_connection()
-    cur = conn.cursor()
     
     # Get unique enrollment combinations with their modules
     cur.execute("""
@@ -150,18 +169,17 @@ def migrate_modular_enrollments(dry_run=False, skip_existing=True):
             if created:
                 migrated_enrollments += 1
             
-            # Create EnrollmentModule for each module
+            # Create EnrollmentModule for each module (using name mapping)
             for module_id in module_ids:
                 if module_id:
-                    try:
-                        module = OccupationModule.objects.get(id=module_id)
+                    # Use module_mapping to get correct module by name
+                    module = module_mapping.get(module_id)
+                    if module:
                         EnrollmentModule.objects.get_or_create(
                             enrollment=enrollment,
                             module=module
                         )
                         migrated_modules += 1
-                    except OccupationModule.DoesNotExist:
-                        pass
             
             if migrated_enrollments % 1000 == 0 and migrated_enrollments > 0:
                 log(f"  Progress: {migrated_enrollments} enrollments, {migrated_modules} modules...")
