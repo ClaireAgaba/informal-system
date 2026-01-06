@@ -217,7 +217,29 @@ class CandidateViewSet(viewsets.ModelViewSet):
         
         # Get queryset based on filters or IDs - use values() for speed
         if export_all:
-            queryset = self.filter_queryset(self.get_queryset())
+            # Apply filters from request data
+            queryset = self.get_queryset()
+            
+            # Apply filters manually from POST data
+            if request.data.get('registration_category'):
+                queryset = queryset.filter(registration_category=request.data['registration_category'])
+            if request.data.get('assessment_center'):
+                queryset = queryset.filter(assessment_center_id=request.data['assessment_center'])
+            if request.data.get('occupation'):
+                queryset = queryset.filter(occupation_id=request.data['occupation'])
+            if request.data.get('has_disability'):
+                queryset = queryset.filter(has_disability=request.data['has_disability'] == 'true')
+            if request.data.get('is_refugee'):
+                queryset = queryset.filter(is_refugee=request.data['is_refugee'] == 'true')
+            if request.data.get('verification_status'):
+                queryset = queryset.filter(verification_status=request.data['verification_status'])
+            if request.data.get('search'):
+                search = request.data['search']
+                queryset = queryset.filter(
+                    Q(registration_number__icontains=search) |
+                    Q(full_name__icontains=search) |
+                    Q(contact__icontains=search)
+                )
         elif candidate_ids:
             queryset = self.get_queryset().filter(id__in=candidate_ids)
         else:
