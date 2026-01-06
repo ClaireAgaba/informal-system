@@ -28,6 +28,7 @@ def migrate_center_reps(dry_run=False):
     """Migrate center representatives"""
     from users.models import CenterRepresentative, User
     from assessment_centers.models import AssessmentCenter, CenterBranch
+    from django.contrib.auth.hashers import make_password
     
     conn = get_old_connection()
     cur = conn.cursor()
@@ -41,22 +42,23 @@ def migrate_center_reps(dry_run=False):
     if dry_run:
         print("\nSample data (first 5):")
         for row in rows[:5]:
-            name = row.get('name') or row.get('fullname') or row.get('full_name')
-            center_id = row.get('assessment_center_id') or row.get('center_id')
-            print(f"  ID: {row['id']}, Name: {name}, Center ID: {center_id}, Email: {row.get('email')}")
+            name = row.get('name') or ''
+            center_id = row.get('center_id')  # Old DB uses center_id
+            print(f"  ID: {row['id']}, Name: {name}, Center ID: {center_id}")
         return
+    
+    # Pre-hash the default password once (much faster than hashing 916 times)
+    default_password = make_password('uvtab@2025')
     
     migrated = 0
     skipped = 0
     
     for row in rows:
         try:
-            # Get name from various possible field names
-            fullname = row.get('name') or row.get('fullname') or row.get('full_name') or ''
-            fullname = fullname[:200]
+            fullname = (row.get('name') or '')[:200]
             
-            # Get center
-            center_id = row.get('assessment_center_id') or row.get('center_id')
+            # Old DB uses center_id
+            center_id = row.get('center_id')
             if not center_id:
                 skipped += 1
                 continue
@@ -69,37 +71,34 @@ def migrate_center_reps(dry_run=False):
             
             # Get branch if exists
             branch = None
-            branch_id = row.get('assessment_center_branch_id') or row.get('branch_id')
+            branch_id = row.get('assessment_center_branch_id')
             if branch_id:
                 try:
                     branch = CenterBranch.objects.get(id=branch_id)
                 except CenterBranch.DoesNotExist:
                     pass
             
-            contact = (row.get('contact') or row.get('phone') or '')[:15]
-            account_status = row.get('account_status') or 'active'
-            if account_status not in ['active', 'inactive', 'suspended']:
-                account_status = 'active'
+            contact = (row.get('contact') or '')[:15]
             
             # Generate email based on center number
-            email = row.get('email') or f"{center.center_number.lower()}@uvtab.go.ug"
+            email = f"{center.center_number.lower()}@uvtab.go.ug"
             
             # Check if center rep with this email already exists
             existing = CenterRepresentative.objects.filter(email=email).first()
             if existing:
-                # Update existing
                 existing.fullname = fullname
                 existing.contact = contact
                 existing.assessment_center = center
                 existing.assessment_center_branch = branch
-                existing.account_status = account_status
+                existing.account_status = 'active'
                 existing.save()
             else:
-                # Create user first
+                # Create user with pre-hashed password (fast)
                 user, created = User.objects.get_or_create(
                     username=email,
                     defaults={
                         'email': email,
+                        'password': default_password,  # Pre-hashed
                         'first_name': fullname.split()[0] if fullname else '',
                         'last_name': ' '.join(fullname.split()[1:]) if len(fullname.split()) > 1 else '',
                         'user_type': 'center_representative',
@@ -108,22 +107,24 @@ def migrate_center_reps(dry_run=False):
                         'is_active': True
                     }
                 )
-                if created:
-                    user.set_password('uvtab@2025')
-                    user.save()
                 
-                # Create center rep
-                CenterRepresentative.objects.create(
+                # Create center rep without triggering save() override
+                CenterRepresentative.objects.update_or_create(
                     id=row['id'],
-                    user=user,
-                    fullname=fullname,
-                    email=email,
-                    contact=contact,
-                    assessment_center=center,
-                    assessment_center_branch=branch,
-                    account_status=account_status,
+                    defaults={
+                        'user': user,
+                        'fullname': fullname,
+                        'email': email,
+                        'contact': contact,
+                        'assessment_center': center,
+                        'assessment_center_branch': branch,
+                        'account_status': 'active',
+                    }
                 )
             migrated += 1
+            
+            if migrated % 100 == 0:
+                log(f"  Progress: {migrated} migrated...")
             
         except Exception as e:
             log(f"  Error migrating center rep {row['id']}: {e}")
