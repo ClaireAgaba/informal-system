@@ -237,6 +237,100 @@ const CandidateList = () => {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
+              {/* Filter Row */}
+              <tr className="bg-gray-100">
+                <th className="px-2 py-2"></th>
+                <th className="px-2 py-2"></th>
+                <th className="px-2 py-2">
+                  <input
+                    type="text"
+                    placeholder="Reg No"
+                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </th>
+                <th className="px-2 py-2">
+                  <input
+                    type="text"
+                    placeholder="Name"
+                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </th>
+                <th className="px-2 py-2">
+                  <select
+                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    value={filters.assessment_center}
+                    onChange={(e) => setFilters({ ...filters, assessment_center: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                  </select>
+                </th>
+                <th className="px-2 py-2">
+                  <select
+                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    value={filters.registration_category}
+                    onChange={(e) => setFilters({ ...filters, registration_category: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                    <option value="modular">Modular</option>
+                    <option value="formal">Formal</option>
+                    <option value="workers_pas">Worker's PAS</option>
+                  </select>
+                </th>
+                <th className="px-2 py-2">
+                  <select
+                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    value={filters.occupation}
+                    onChange={(e) => setFilters({ ...filters, occupation: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                  </select>
+                </th>
+                <th className="px-2 py-2">
+                  <select
+                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  >
+                    <option value="">Select</option>
+                  </select>
+                </th>
+                <th className="px-2 py-2">
+                  <select
+                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    value={filters.has_disability}
+                    onChange={(e) => setFilters({ ...filters, has_disability: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </th>
+                <th className="px-2 py-2">
+                  <select
+                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    value={filters.is_refugee}
+                    onChange={(e) => setFilters({ ...filters, is_refugee: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </th>
+                <th className="px-2 py-2">
+                  <select
+                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    value={filters.verification_status}
+                    onChange={(e) => setFilters({ ...filters, verification_status: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                    <option value="pending_verification">Pending</option>
+                    <option value="verified">Verified</option>
+                    <option value="declined">Declined</option>
+                  </select>
+                </th>
+                <th className="px-2 py-2"></th>
+              </tr>
+              {/* Header Row */}
               <tr>
                 <th className="px-4 py-3 text-left">
                   <button onClick={handleSelectAll}>
@@ -257,7 +351,7 @@ const CandidateList = () => {
                   Full Name
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Assessment Center
+                  Center
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Category
