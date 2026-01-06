@@ -30,6 +30,31 @@ def count_records():
     except:
         print("  eims_supportstaff: Table not found")
 
+def get_user_email(user_id, cur):
+    """Get email from auth_user table"""
+    if not user_id:
+        return None
+    try:
+        cur.execute("SELECT email, username FROM auth_user WHERE id = %s", (user_id,))
+        result = cur.fetchone()
+        if result:
+            return result.get('email') or result.get('username')
+    except:
+        pass
+    return None
+
+def generate_email_from_name(name, domain='uvtab.go.ug'):
+    """Generate email from name"""
+    if not name:
+        return None
+    # Clean and format name
+    parts = name.strip().lower().split()
+    if len(parts) >= 2:
+        return f"{parts[0]}.{parts[-1]}@{domain}"
+    elif len(parts) == 1:
+        return f"{parts[0]}@{domain}"
+    return None
+
 def migrate_staff(dry_run=False):
     """Migrate staff members"""
     from users.models import Staff, User
@@ -38,15 +63,18 @@ def migrate_staff(dry_run=False):
     cur = conn.cursor()
     cur.execute("SELECT * FROM eims_staff ORDER BY id")
     rows = cur.fetchall()
-    cur.close()
-    conn.close()
     
     log(f"Found {len(rows)} staff in old database")
     
     if dry_run:
         print("\nSample data (first 5):")
         for row in rows[:5]:
-            print(f"  ID: {row['id']}, Name: {row.get('name') or row.get('fullname') or row.get('full_name')}, Email: {row.get('email')}")
+            name = row.get('name') or ''
+            user_id = row.get('user_id')
+            email = get_user_email(user_id, cur) or generate_email_from_name(name)
+            print(f"  ID: {row['id']}, Name: {name}, User ID: {user_id}, Generated Email: {email}")
+        cur.close()
+        conn.close()
         return
     
     migrated = 0
@@ -54,30 +82,36 @@ def migrate_staff(dry_run=False):
     
     for row in rows:
         try:
-            # Get name from various possible field names
-            full_name = row.get('name') or row.get('fullname') or row.get('full_name') or ''
-            full_name = full_name[:200]
+            full_name = (row.get('name') or '')[:200]
+            if not full_name:
+                skipped += 1
+                continue
             
-            email = row.get('email') or ''
+            # Try to get email from auth_user, otherwise generate from name
+            user_id = row.get('user_id')
+            email = get_user_email(user_id, cur) or generate_email_from_name(full_name)
+            
             if not email:
                 skipped += 1
                 continue
             
-            contact = (row.get('contact') or row.get('phone') or '')[:15]
-            account_status = row.get('account_status') or 'active'
-            if account_status not in ['active', 'inactive', 'suspended']:
+            contact = (row.get('contact') or '')[:15]
+            
+            # Map old status to new account_status
+            status = row.get('status') or 'active'
+            if status not in ['active', 'inactive', 'suspended']:
                 account_status = 'active'
+            else:
+                account_status = status
             
             # Check if staff with this email already exists
             existing = Staff.objects.filter(email=email).first()
             if existing:
-                # Update existing
                 existing.full_name = full_name
                 existing.contact = contact
                 existing.account_status = account_status
                 existing.save()
             else:
-                # Create new staff (without user for now - can be created later)
                 Staff.objects.create(
                     id=row['id'],
                     full_name=full_name,
@@ -91,6 +125,8 @@ def migrate_staff(dry_run=False):
             log(f"  Error migrating staff {row['id']}: {e}")
             skipped += 1
     
+    cur.close()
+    conn.close()
     log(f"✓ Staff migrated: {migrated}, skipped: {skipped}")
 
 def migrate_support_staff(dry_run=False):
@@ -108,15 +144,17 @@ def migrate_support_staff(dry_run=False):
         conn.close()
         return
     
-    cur.close()
-    conn.close()
-    
     log(f"Found {len(rows)} support staff in old database")
     
     if dry_run:
         print("\nSample data (first 5):")
         for row in rows[:5]:
-            print(f"  ID: {row['id']}, Name: {row.get('name') or row.get('fullname') or row.get('full_name')}, Email: {row.get('email')}")
+            name = row.get('name') or ''
+            user_id = row.get('user_id')
+            email = get_user_email(user_id, cur) or generate_email_from_name(name)
+            print(f"  ID: {row['id']}, Name: {name}, User ID: {user_id}, Generated Email: {email}")
+        cur.close()
+        conn.close()
         return
     
     migrated = 0
@@ -124,18 +162,27 @@ def migrate_support_staff(dry_run=False):
     
     for row in rows:
         try:
-            full_name = row.get('name') or row.get('fullname') or row.get('full_name') or ''
-            full_name = full_name[:200]
+            full_name = (row.get('name') or '')[:200]
+            if not full_name:
+                skipped += 1
+                continue
             
-            email = row.get('email') or ''
+            # Try to get email from auth_user, otherwise generate from name
+            user_id = row.get('user_id')
+            email = get_user_email(user_id, cur) or generate_email_from_name(full_name)
+            
             if not email:
                 skipped += 1
                 continue
             
-            contact = (row.get('contact') or row.get('phone') or '')[:15]
-            account_status = row.get('account_status') or 'active'
-            if account_status not in ['active', 'inactive', 'suspended']:
+            contact = (row.get('contact') or '')[:15]
+            
+            # Map old status to new account_status
+            status = row.get('status') or 'active'
+            if status not in ['active', 'inactive', 'suspended']:
                 account_status = 'active'
+            else:
+                account_status = status
             
             existing = SupportStaff.objects.filter(email=email).first()
             if existing:
@@ -157,6 +204,8 @@ def migrate_support_staff(dry_run=False):
             log(f"  Error migrating support staff {row['id']}: {e}")
             skipped += 1
     
+    cur.close()
+    conn.close()
     log(f"✓ Support staff migrated: {migrated}, skipped: {skipped}")
 
 def run(dry_run=False):
