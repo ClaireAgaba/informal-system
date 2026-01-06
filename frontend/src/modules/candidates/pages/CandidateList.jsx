@@ -309,9 +309,6 @@ const CandidateList = () => {
               )}
             </div>
             <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm">
-                Verify Selected
-              </Button>
               <Button 
                 variant="outline" 
                 size="sm"
@@ -319,10 +316,6 @@ const CandidateList = () => {
                 disabled={exporting}
               >
                 {exporting ? 'Exporting...' : 'Export Selected'}
-              </Button>
-              <Button variant="danger" size="sm">
-                <Trash2 className="w-4 h-4 mr-1" />
-                Delete Selected
               </Button>
             </div>
           </div>
