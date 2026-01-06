@@ -211,92 +211,75 @@ class CandidateViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'])
     def export(self, request):
-        """Export candidates to Excel"""
+        """Export candidates to Excel - optimized for large datasets"""
         candidate_ids = request.data.get('ids', [])
         export_all = request.data.get('export_all', False)
         
-        # Get queryset based on filters or IDs
+        # Get queryset based on filters or IDs - use values() for speed
         if export_all:
-            # Apply same filters as list view
             queryset = self.filter_queryset(self.get_queryset())
         elif candidate_ids:
             queryset = self.get_queryset().filter(id__in=candidate_ids)
         else:
             return Response({'error': 'No candidates selected'}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Use values for faster data retrieval (avoid model instantiation)
+        candidates = queryset.values(
+            'registration_number', 'full_name', 'date_of_birth', 'gender',
+            'nationality', 'contact', 'has_disability', 'is_refugee',
+            'assessment_center__center_name', 'registration_category',
+            'occupation__occ_name', 'occupation__sector__name', 'district__name'
+        )
+        
         # Create workbook
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Candidates"
         
-        # Define headers
+        # Define headers and column widths
         headers = [
-            'Reg No', 'Full Name', 'Assessment Center', 'Category', 
-            'Occupation', 'Sector', 'Disability', 'Refugee', 
-            'Nationality', 'Age', 'District', 'Gender', 'Contact'
+            ('Reg No', 20), ('Full Name', 25), ('Center', 30), ('Category', 12), 
+            ('Occupation', 20), ('Sector', 15), ('Disability', 10), ('Refugee', 10), 
+            ('Nationality', 12), ('Age', 6), ('District', 15), ('Gender', 8), ('Contact', 15)
         ]
         
-        # Style for headers
+        # Style for headers only
         header_font = Font(bold=True, color="FFFFFF")
         header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
-        header_alignment = Alignment(horizontal="center", vertical="center")
-        thin_border = Border(
-            left=Side(style='thin'),
-            right=Side(style='thin'),
-            top=Side(style='thin'),
-            bottom=Side(style='thin')
-        )
         
-        # Write headers
-        for col, header in enumerate(headers, 1):
+        # Write headers and set column widths
+        for col, (header, width) in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col, value=header)
             cell.font = header_font
             cell.fill = header_fill
-            cell.alignment = header_alignment
-            cell.border = thin_border
+            ws.column_dimensions[cell.column_letter].width = width
+        
+        # Category display mapping
+        category_map = {'modular': 'Modular', 'formal': 'Formal', 'workers_pas': "Worker's PAS"}
+        gender_map = {'male': 'Male', 'female': 'Female', 'other': 'Other'}
         
         # Calculate age helper
-        def calculate_age(dob):
+        today = date.today()
+        def calc_age(dob):
             if not dob:
                 return ''
-            today = date.today()
             return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
         
-        # Write data
-        for row, candidate in enumerate(queryset, 2):
-            data = [
-                candidate.registration_number or '',
-                candidate.full_name or '',
-                candidate.assessment_center.center_name if candidate.assessment_center else '',
-                candidate.get_registration_category_display() if candidate.registration_category else '',
-                candidate.occupation.occ_name if candidate.occupation else '',
-                candidate.occupation.sector.name if candidate.occupation and candidate.occupation.sector else '',
-                'Yes' if candidate.has_disability else 'No',
-                'Yes' if candidate.is_refugee else 'No',
-                candidate.nationality or 'Uganda',
-                calculate_age(candidate.date_of_birth),
-                candidate.district.name if candidate.district else '',
-                candidate.get_gender_display() if candidate.gender else '',
-                candidate.contact or '',
-            ]
-            
-            for col, value in enumerate(data, 1):
-                cell = ws.cell(row=row, column=col, value=value)
-                cell.border = thin_border
-                cell.alignment = Alignment(vertical="center")
-        
-        # Auto-adjust column widths
-        for col in ws.columns:
-            max_length = 0
-            column = col[0].column_letter
-            for cell in col:
-                try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
-            adjusted_width = min(max_length + 2, 50)
-            ws.column_dimensions[column].width = adjusted_width
+        # Write data rows (no styling for speed)
+        for row_num, c in enumerate(candidates, 2):
+            ws.cell(row=row_num, column=1, value=c['registration_number'] or '')
+            ws.cell(row=row_num, column=2, value=c['full_name'] or '')
+            ws.cell(row=row_num, column=3, value=c['assessment_center__center_name'] or '')
+            ws.cell(row=row_num, column=4, value=category_map.get(c['registration_category'], ''))
+            ws.cell(row=row_num, column=5, value=c['occupation__occ_name'] or '')
+            ws.cell(row=row_num, column=6, value=c['occupation__sector__name'] or '')
+            ws.cell(row=row_num, column=7, value='Yes' if c['has_disability'] else 'No')
+            ws.cell(row=row_num, column=8, value='Yes' if c['is_refugee'] else 'No')
+            ws.cell(row=row_num, column=9, value=c['nationality'] or 'Uganda')
+            ws.cell(row=row_num, column=10, value=calc_age(c['date_of_birth']))
+            ws.cell(row=row_num, column=11, value=c['district__name'] or '')
+            ws.cell(row=row_num, column=12, value=gender_map.get(c['gender'], ''))
+            ws.cell(row=row_num, column=13, value=c['contact'] or '')
         
         # Create response
         response = HttpResponse(
