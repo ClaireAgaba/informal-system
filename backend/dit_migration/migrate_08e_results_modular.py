@@ -102,25 +102,13 @@ def migrate_modular_results(dry_run=False, skip_existing=True):
     series_col = 'assessment_series_id' if 'assessment_series_id' in cols else 'series_id'
     module_col = 'module_id' if 'module_id' in cols else 'module'
     
-    # Get results from eims_result - join with candidate to filter modular only
-    query = f"""
-        SELECT r.*, c.registration_category
-        FROM eims_result r
-        JOIN eims_candidate c ON r.{candidate_col} = c.id
-        WHERE r.mark IS NOT NULL
-        ORDER BY r.{candidate_col}
-    """
-    
-    try:
-        cur.execute(query)
-        rows = cur.fetchall()
-    except Exception as e:
-        log(f"Query error: {e}")
-        # Try simpler query
-        cur.execute(f"SELECT * FROM eims_result WHERE mark IS NOT NULL ORDER BY id LIMIT 10")
-        rows = cur.fetchall()
-        if rows:
-            log(f"Sample row keys: {rows[0].keys()}")
+    # Get MODULAR results only (result_type = 'modular')
+    cur.execute("""
+        SELECT * FROM eims_result 
+        WHERE result_type = 'modular' AND mark IS NOT NULL
+        ORDER BY candidate_id
+    """)
+    rows = cur.fetchall()
     
     cur.close()
     conn.close()
@@ -138,14 +126,28 @@ def migrate_modular_results(dry_run=False, skip_existing=True):
     
     for row in rows:
         try:
-            candidate_id = row.get('candidate_id') or row.get('candidate')
-            series_id = row.get('assessment_series_id') or row.get('series_id')
-            module_id = row.get('module_id') or row.get('module')
-            mark = row.get('mark')
+            candidate_id = row['candidate_id']
+            series_id = row['assessment_series_id']
+            module_id = row['module_id']
+            mark = row['mark']
+            assessment_type = row.get('assessment_type', 'practical').lower()
+            status = row.get('status', 'Normal')
             
             if not all([candidate_id, series_id, module_id, mark is not None]):
                 skipped += 1
                 continue
+            
+            # Map assessment type
+            if assessment_type in ['practical', 'theory']:
+                result_type = assessment_type
+            else:
+                result_type = 'practical'
+            
+            # Map status
+            if status and status.lower() in ['normal', 'retake', 'missing']:
+                result_status = status.lower()
+            else:
+                result_status = 'normal'
             
             # Get module by name mapping
             module = module_mapping.get(module_id)
@@ -153,8 +155,8 @@ def migrate_modular_results(dry_run=False, skip_existing=True):
                 skipped += 1
                 continue
             
-            # Check if exists (practical type - modular is practical)
-            if (candidate_id, series_id, module.id, 'practical') in existing:
+            # Check if exists
+            if (candidate_id, series_id, module.id, result_type) in existing:
                 skipped += 1
                 continue
             
@@ -168,16 +170,16 @@ def migrate_modular_results(dry_run=False, skip_existing=True):
                 skipped += 1
                 continue
             
-            # Create result (modular is practical type)
+            # Create result
             ModularResult.objects.create(
                 candidate_id=candidate_id,
                 assessment_series_id=series_id,
                 module=module,
-                type='practical',
+                type=result_type,
                 mark=mark,
-                status='normal',
+                status=result_status,
             )
-            existing.add((candidate_id, series_id, module.id, 'practical'))
+            existing.add((candidate_id, series_id, module.id, result_type))
             created += 1
             
             if created % 5000 == 0:
