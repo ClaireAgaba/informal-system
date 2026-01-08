@@ -7,11 +7,11 @@ from .models import AssessmentSeries
 class AssessmentSeriesAdmin(admin.ModelAdmin):
     list_display = [
         'name', 'start_date', 'end_date', 'date_of_release',
-        'get_status_display', 'is_current', 'results_released', 'created_at'
+        'get_status_display', 'is_current', 'results_released', 'dont_charge', 'created_at'
     ]
     
     list_filter = [
-        'is_current', 'results_released', 'is_active',
+        'is_current', 'results_released', 'dont_charge', 'is_active',
         'start_date', 'end_date', 'created_at'
     ]
     
@@ -38,6 +38,7 @@ class AssessmentSeriesAdmin(admin.ModelAdmin):
             'fields': (
                 'is_current',
                 'results_released',
+                'dont_charge',
                 'is_active',
                 'get_status_display'
             ),

@@ -342,11 +342,14 @@ class CandidateViewSet(viewsets.ModelViewSet):
         modules = validated_data.get('modules', [])
         papers = validated_data.get('papers', [])
         
-        # Calculate billing
+        # Calculate billing (check if series has don't charge enabled)
         total_amount = Decimal('0.00')
         reg_category = candidate.registration_category
         
-        if reg_category == 'formal':
+        # Check if assessment series has "don't charge" enabled
+        if assessment_series.dont_charge:
+            total_amount = Decimal('0.00')
+        elif reg_category == 'formal':
             # Formal: use formal_fee from the level
             total_amount = occupation_level.formal_fee
         

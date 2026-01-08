@@ -41,6 +41,12 @@ class AssessmentSeries(models.Model):
         help_text='Toggle to release results to candidates and assessment centers'
     )
     
+    dont_charge = models.BooleanField(
+        default=False,
+        verbose_name="Don't Charge",
+        help_text="If enabled, candidates enrolled in this series will not be charged any fees"
+    )
+    
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
