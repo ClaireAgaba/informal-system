@@ -19,16 +19,16 @@ from occupations.models import Occupation
 
 # Mapping of missing codes to existing occupation codes
 CODE_MAPPINGS = {
-    'MFR': 'MF',  # Manufacturing -> Manufacturing
-    'WR': 'WE',   # Welding and Fabrication -> Welding
-    'VGF': 'VF',  # Vehicle Garage Foreman -> Vehicle Foreman
-    'BFM': 'BF',  # Block Fixing Mason -> Block Fixing
-    'DAR': 'DA',  # Draughtsman -> Draughtsman
-    'GD': 'TL',   # General Duty -> Tailor (update regno)
+    'MFR': 'MF',  # Mushroom Farmer
+    'WR': 'WE',   # Weaver
+    'VGF': 'VF',  # Vegetable Farmer
+    'BFM': 'BF',  # Banana Farmer
+    'DAR': 'DA',  # Drama Artist
+    'GD': 'TL',   # Tailor
 }
 
 def map_missing_occupations(dry_run=True):
-    """Map missing occupation codes to existing ones and update registration numbers"""
+    """Map missing occupation codes to existing ones (no registration number changes)"""
     
     print(f"\n{'='*60}")
     print(f"{'DRY RUN - ' if dry_run else ''}Map Missing Occupations")
@@ -70,28 +70,16 @@ def map_missing_occupations(dry_run=True):
             target_code = CODE_MAPPINGS[occ_code]
             target_occupation = occupations[target_code]
             
-            # Update registration number if needed (only for GD -> TL)
-            if occ_code != target_code:
-                parts[4] = target_code
-                new_regno = '/'.join(parts)
-                updated_regno_count += 1
-            else:
-                new_regno = regno
-            
+            # Only update occupation field, keep registration number as is
             if not dry_run:
                 candidate.occupation = target_occupation
-                if new_regno != regno:
-                    candidate.registration_number = new_regno
-                candidate.save(update_fields=['occupation', 'registration_number'])
+                candidate.save(update_fields=['occupation'])
             
             mapped_count += 1
             
             # Show first few examples
             if mapped_count <= 10:
-                if new_regno != regno:
-                    print(f"  {regno} -> {new_regno} -> {target_code} ({target_occupation.occ_name})")
-                else:
-                    print(f"  {regno} -> {target_code} ({target_occupation.occ_name})")
+                print(f"  {regno} -> {target_code} ({target_occupation.occ_name})")
         elif occ_code not in occupations:
             # Track codes we can't map
             if occ_code not in not_found_codes:
@@ -102,7 +90,6 @@ def map_missing_occupations(dry_run=True):
     print(f"SUMMARY")
     print(f"{'='*60}")
     print(f"Candidates mapped: {mapped_count}")
-    print(f"Registration numbers updated: {updated_regno_count}")
     
     if not_found_codes:
         print(f"Codes not mapped (still missing):")
@@ -118,7 +105,7 @@ if __name__ == '__main__':
     if dry_run:
         print("\nRunning in DRY RUN mode. Use --apply to actually map occupations.")
     else:
-        confirm = input("\nThis will UPDATE candidate records and registration numbers. Type 'yes' to continue: ")
+        confirm = input("\nThis will UPDATE candidate occupation fields only. Type 'yes' to continue: ")
         if confirm.lower() != 'yes':
             print("Aborted.")
             sys.exit(0)
