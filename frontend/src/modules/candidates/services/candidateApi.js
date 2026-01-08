@@ -99,8 +99,8 @@ export const candidateApi = {
     return apiClient.post(`${CANDIDATES_BASE}/${id}/enroll/`, data);
   },
 
-  // De-enroll from an enrollment
-  deEnroll: (enrollmentId) => apiClient.delete(`${CANDIDATES_BASE}/enrollments/${enrollmentId}/`),
+  // De-enroll from an enrollment (candidateId is unused, kept for API compatibility)
+  deEnroll: (candidateId, enrollmentId) => apiClient.delete(`${CANDIDATES_BASE}/enrollments/${enrollmentId}/`),
 
   // Submit a draft candidate
   submit: (id) => apiClient.post(`${CANDIDATES_BASE}/${id}/submit/`),
