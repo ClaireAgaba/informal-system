@@ -60,7 +60,7 @@ def fix_occupation_data(dry_run=True):
         return
     
     # Get all occupations for lookup
-    occupations = {occ.code.upper(): occ for occ in Occupation.objects.all()}
+    occupations = {occ.occ_code.upper(): occ for occ in Occupation.objects.all()}
     print(f"Loaded {len(occupations)} occupations for mapping")
     print(f"Available codes: {sorted(occupations.keys())[:20]}...")
     
