@@ -84,7 +84,7 @@ def fix_occupation_data(dry_run=True):
                 candidate.save(update_fields=['occupation'])
             fixed_count += 1
             if fixed_count <= 10:  # Show first 10 examples
-                print(f"  {candidate.registration_number} -> {occ_code} -> {occupation.name}")
+                print(f"  {candidate.registration_number} -> {occ_code} -> {occupation.occ_name}")
         else:
             # Track codes not found
             if occ_code not in not_found_codes:
