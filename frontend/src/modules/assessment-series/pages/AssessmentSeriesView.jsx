@@ -9,6 +9,7 @@ import {
   Clock,
   AlertCircle,
   Flag,
+  DollarSign,
 } from 'lucide-react';
 import assessmentSeriesApi from '../services/assessmentSeriesApi';
 import Button from '@shared/components/Button';
@@ -198,6 +199,18 @@ const AssessmentSeriesView = () => {
                     <span className="text-green-600 font-medium">Yes</span>
                   ) : (
                     <span className="text-gray-500">No</span>
+                  )
+                }
+              />
+
+              <InfoItem
+                icon={<DollarSign className="w-5 h-5 text-gray-400" />}
+                label="Billing Status"
+                value={
+                  series.dont_charge ? (
+                    <span className="text-purple-600 font-medium">No Charges</span>
+                  ) : (
+                    <span className="text-green-600 font-medium">Standard Billing</span>
                   )
                 }
               />

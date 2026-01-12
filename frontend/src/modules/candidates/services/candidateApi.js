@@ -184,6 +184,11 @@ export const candidateApi = {
       responseType: 'blob',
     });
   },
+
+  // Bulk enroll candidates
+  bulkEnroll: (data) => {
+    return apiClient.post(`${CANDIDATES_BASE}/bulk-enroll/`, data);
+  },
 };
 
 export default candidateApi;

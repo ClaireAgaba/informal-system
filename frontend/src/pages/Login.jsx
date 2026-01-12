@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Mail, Lock } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Mail, Lock, User } from 'lucide-react';
 import apiClient from '../services/apiClient';
 
 const Login = () => {
@@ -194,6 +194,18 @@ const Login = () => {
                 {loading ? 'Logging in...' : 'Login'}
               </button>
             </form>
+            
+            {/* Candidate Portal Link */}
+            <div className="mt-6 text-center">
+              <p className="text-gray-600 text-sm mb-3">Are you a candidate?</p>
+              <Link
+                to="/candidate-login"
+                className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-green-700 transition-colors"
+              >
+                <User className="w-4 h-4" />
+                Login As a Candidate
+              </Link>
+            </div>
           </div>
         </div>
       </div>

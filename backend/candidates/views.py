@@ -17,7 +17,8 @@ from .serializers import (
     CandidateDetailSerializer,
     CandidateCreateUpdateSerializer,
     CandidateEnrollmentSerializer,
-    EnrollCandidateSerializer
+    EnrollCandidateSerializer,
+    BulkEnrollSerializer
 )
 from occupations.models import OccupationLevel, OccupationModule, OccupationPaper
 from assessment_series.models import AssessmentSeries
@@ -372,22 +373,18 @@ class CandidateViewSet(viewsets.ModelViewSet):
         try:
             with transaction.atomic():
                 # Check if enrollment already exists
-                if reg_category == 'workers_pas':
-                    # For Workers PAS, check by candidate and assessment_series only
-                    existing = CandidateEnrollment.objects.filter(
-                        candidate=candidate,
-                        assessment_series=assessment_series
-                    ).first()
-                else:
-                    existing = CandidateEnrollment.objects.filter(
-                        candidate=candidate,
-                        assessment_series=assessment_series,
-                        occupation_level=occupation_level
-                    ).first()
+                # For formal and modular, check by candidate + assessment_series (no duplicate enrollments allowed)
+                # For workers_pas, also check by candidate + assessment_series
+                existing = CandidateEnrollment.objects.filter(
+                    candidate=candidate,
+                    assessment_series=assessment_series,
+                    is_active=True
+                ).first()
                 
                 if existing:
+                    level_info = f" at {existing.occupation_level.level_name}" if existing.occupation_level else ""
                     return Response(
-                        {'error': 'Candidate is already enrolled in this assessment series'},
+                        {'error': f'Candidate is already enrolled in {assessment_series.name}{level_info}. Please de-enroll first.'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
                 
@@ -446,6 +443,175 @@ class CandidateViewSet(viewsets.ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+    
+    @action(detail=False, methods=['post'], url_path='bulk-enroll')
+    def bulk_enroll(self, request):
+        """Bulk enroll multiple candidates in the same assessment series and level"""
+        
+        serializer = BulkEnrollSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        candidate_ids = serializer.validated_data['candidate_ids']
+        assessment_series = serializer.validated_data['assessment_series_obj']
+        occupation_level = serializer.validated_data.get('occupation_level_obj')
+        
+        # Validate all candidates have same registration category and occupation
+        candidates = Candidate.objects.filter(id__in=candidate_ids).select_related('occupation')
+        
+        if len(candidates) != len(candidate_ids):
+            return Response(
+                {'error': 'Some candidates not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check all candidates have same registration category and occupation
+        reg_categories = set(c.registration_category for c in candidates)
+        occupations = set(c.occupation.id for c in candidates)
+        
+        if len(reg_categories) > 1:
+            return Response(
+                {'error': 'All candidates must have the same registration category'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if len(occupations) > 1:
+            return Response(
+                {'error': 'All candidates must have the same occupation'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        reg_category = reg_categories.pop()
+        occupation_id = occupations.pop()
+        
+        # Validate modules/papers for modular/workers_pas
+        modules = serializer.validated_data.get('modules', [])
+        papers = serializer.validated_data.get('papers', [])
+        
+        if reg_category == 'modular' and not modules:
+            return Response(
+                {'error': 'Modules are required for modular enrollment'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if reg_category == 'workers_pas' and not papers:
+            return Response(
+                {'error': 'Papers are required for workers_pas enrollment'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if level belongs to the occupation (only for formal/modular)
+        if occupation_level and occupation_level.occupation.id != occupation_id:
+            return Response(
+                {'error': 'Level does not belong to the candidates occupation'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # For formal/modular, level is required
+        if reg_category in ['formal', 'modular'] and not occupation_level:
+            return Response(
+                {'error': 'Level is required for formal/modular enrollment'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Bulk enroll candidates
+        enrolled_count = 0
+        failed_enrollments = []
+        
+        with transaction.atomic():
+            for candidate in candidates:
+                try:
+                    # Check if already enrolled in this assessment series
+                    existing = CandidateEnrollment.objects.filter(
+                        candidate=candidate,
+                        assessment_series=assessment_series,
+                        is_active=True
+                    ).first()
+                    
+                    if existing:
+                        level_info = f" at {existing.occupation_level.level_name}" if existing.occupation_level else ""
+                        failed_enrollments.append({
+                            'candidate_id': candidate.id,
+                            'name': candidate.full_name,
+                            'reason': f'Already enrolled in {assessment_series.name}{level_info}. De-enroll first.'
+                        })
+                        continue
+                    
+                    # Calculate billing (check if series has don't charge enabled)
+                    total_amount = Decimal('0.00')
+                    
+                    if assessment_series.dont_charge:
+                        total_amount = Decimal('0.00')
+                    elif reg_category == 'formal':
+                        total_amount = occupation_level.formal_fee
+                    elif reg_category == 'modular':
+                        if len(modules) == 1:
+                            total_amount = occupation_level.modular_fee_single_module
+                        elif len(modules) == 2:
+                            total_amount = occupation_level.modular_fee_double_module
+                    elif reg_category == 'workers_pas':
+                        any_level = candidate.occupation.levels.first()
+                        if any_level:
+                            per_paper_fee = any_level.workers_pas_per_module_fee
+                            total_amount = per_paper_fee * len(papers)
+                    
+                    # Create enrollment
+                    enrollment = CandidateEnrollment.objects.create(
+                        candidate=candidate,
+                        assessment_series=assessment_series,
+                        occupation_level=occupation_level,
+                        total_amount=total_amount
+                    )
+                    
+                    # Add modules/papers for modular/workers_pas
+                    if reg_category == 'modular' and modules:
+                        for module in modules:
+                            EnrollmentModule.objects.create(
+                                enrollment=enrollment,
+                                module=module
+                            )
+                    elif reg_category == 'workers_pas' and papers:
+                        for paper in papers:
+                            EnrollmentPaper.objects.create(
+                                enrollment=enrollment,
+                                paper=paper
+                            )
+                    
+                    enrolled_count += 1
+                    
+                except Exception as e:
+                    failed_enrollments.append({
+                        'candidate_id': candidate.id,
+                        'name': candidate.full_name,
+                        'reason': str(e)
+                    })
+        
+        # Return results
+        if occupation_level:
+            message = f'Successfully enrolled {enrolled_count} candidates in {occupation_level.level_name} {occupation_level.occupation.occ_name}'
+            level_info = {
+                'id': occupation_level.id,
+                'name': occupation_level.level_name,
+                'occupation': occupation_level.occupation.occ_name
+            }
+        else:
+            # For workers_pas without occupation_level
+            occupation = candidates[0].occupation
+            message = f'Successfully enrolled {enrolled_count} candidates in {occupation.occ_name}'
+            level_info = None
+        
+        response_data = {
+            'message': message,
+            'enrolled_count': enrolled_count,
+            'total_candidates': len(candidate_ids),
+        }
+        
+        if level_info:
+            response_data['level'] = level_info
+        
+        if failed_enrollments:
+            response_data['failed_enrollments'] = failed_enrollments
+        
+        return Response(response_data, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['get'], url_path='enrollment-options')
     def enrollment_options(self, request, pk=None):
@@ -803,12 +969,20 @@ class CandidateViewSet(viewsets.ModelViewSet):
         """Get candidate results based on registration category"""
         candidate = self.get_object()
         
+        # Check if user is staff (can see all results) or center user (only released results)
+        user = request.user
+        is_staff_user = user.is_authenticated and user.user_type in ['staff', 'support_staff']
+        
         # Get results based on registration category
         if candidate.registration_category == 'modular':
             from results.models import ModularResult
             results = ModularResult.objects.filter(candidate=candidate).select_related(
                 'assessment_series', 'module', 'entered_by'
             )
+            
+            # For center users, only show results from released assessment series
+            if not is_staff_user:
+                results = results.filter(assessment_series__results_released=True)
             
             results_data = []
             for result in results:
@@ -833,6 +1007,10 @@ class CandidateViewSet(viewsets.ModelViewSet):
             results = FormalResult.objects.filter(candidate=candidate).select_related(
                 'assessment_series', 'level', 'exam', 'paper', 'entered_by'
             ).order_by('level__level_name', 'type')
+            
+            # For center users, only show results from released assessment series
+            if not is_staff_user:
+                results = results.filter(assessment_series__results_released=True)
             
             results_data = []
             for result in results:
@@ -871,6 +1049,10 @@ class CandidateViewSet(viewsets.ModelViewSet):
             results = WorkersPasResult.objects.filter(candidate=candidate).select_related(
                 'assessment_series', 'level', 'module', 'paper', 'entered_by'
             ).order_by('assessment_series', 'level', 'module', 'paper')
+            
+            # For center users, only show results from released assessment series
+            if not is_staff_user:
+                results = results.filter(assessment_series__results_released=True)
             
             results_data = []
             for result in results:
@@ -948,5 +1130,206 @@ def delete_enrollment_view(request, enrollment_id):
     except CandidateEnrollment.DoesNotExist:
         return Response(
             {'error': 'Enrollment not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def candidate_login(request):
+    """
+    Authenticate a candidate using their registration number.
+    Returns candidate data if registration number exists.
+    """
+    registration_number = request.data.get('registration_number', '').strip().upper()
+    
+    if not registration_number:
+        return Response(
+            {'error': 'Registration number is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        candidate = Candidate.objects.select_related(
+            'occupation', 'assessment_center', 'assessment_center_branch'
+        ).get(registration_number=registration_number)
+        
+        # Generate a simple token for the candidate session
+        import hashlib
+        import time
+        token = hashlib.sha256(f"{candidate.id}{time.time()}".encode()).hexdigest()[:32]
+        
+        # Return candidate basic info
+        candidate_data = {
+            'id': candidate.id,
+            'registration_number': candidate.registration_number,
+            'full_name': candidate.full_name,
+            'photo': candidate.passport_photo.url if candidate.passport_photo else None,
+            'gender': candidate.gender,
+            'date_of_birth': candidate.date_of_birth,
+            'nationality': candidate.nationality,
+            'registration_category': candidate.registration_category,
+            'registration_category_display': candidate.get_registration_category_display(),
+            'occupation': {
+                'id': candidate.occupation.id,
+                'name': candidate.occupation.occ_name,
+                'code': candidate.occupation.occ_code,
+            } if candidate.occupation else None,
+            'assessment_center': {
+                'id': candidate.assessment_center.id,
+                'name': candidate.assessment_center.center_name,
+            } if candidate.assessment_center else None,
+            'status': candidate.status,
+            'is_verified': candidate.status == 'verified',
+        }
+        
+        return Response({
+            'token': token,
+            'candidate': candidate_data
+        }, status=status.HTTP_200_OK)
+        
+    except Candidate.DoesNotExist:
+        return Response(
+            {'error': 'Registration number not found. Please check and try again.'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def candidate_portal_data(request, registration_number):
+    """
+    Get full candidate portal data including bio, enrollments, and results.
+    Results show only 'Uploaded' status, not raw marks.
+    """
+    try:
+        candidate = Candidate.objects.select_related(
+            'occupation', 'assessment_center', 'assessment_center_branch'
+        ).get(registration_number=registration_number.upper())
+        
+        # Bio Data
+        bio_data = {
+            'registration_number': candidate.registration_number,
+            'payment_code': candidate.payment_code,
+            'full_name': candidate.full_name,
+            'photo': candidate.passport_photo.url if candidate.passport_photo else None,
+            'gender': candidate.gender,
+            'date_of_birth': candidate.date_of_birth,
+            'nationality': candidate.nationality,
+            'contact': candidate.contact,
+            'district': candidate.district.name if candidate.district else None,
+            'village': candidate.village.name if candidate.village else None,
+            'is_refugee': candidate.is_refugee,
+            'refugee_number': candidate.refugee_number,
+            'has_disability': candidate.has_disability,
+            'disability': candidate.nature_of_disability.name if candidate.nature_of_disability else None,
+        }
+        
+        # Occupation Info
+        occupation_info = {
+            'registration_category': candidate.get_registration_category_display(),
+            'occupation': candidate.occupation.occ_name if candidate.occupation else None,
+            'occupation_code': candidate.occupation.occ_code if candidate.occupation else None,
+            'assessment_center': candidate.assessment_center.center_name if candidate.assessment_center else None,
+            'entry_year': candidate.entry_year,
+            'intake': candidate.get_intake_display() if candidate.intake else None,
+            'preferred_language': candidate.preferred_assessment_language,
+        }
+        
+        # Enrollments
+        enrollments = CandidateEnrollment.objects.filter(
+            candidate=candidate,
+            is_active=True
+        ).select_related('assessment_series', 'occupation_level')
+        
+        enrollment_data = []
+        for enrollment in enrollments:
+            enrollment_data.append({
+                'id': enrollment.id,
+                'assessment_series': enrollment.assessment_series.name,
+                'level': enrollment.occupation_level.level_name if enrollment.occupation_level else None,
+                'enrolled_date': enrollment.enrolled_at,
+                'total_amount': float(enrollment.total_amount) if enrollment.total_amount else 0,
+            })
+        
+        # Results (only from released assessment series, show 'Uploaded' instead of marks)
+        results_data = []
+        
+        if candidate.registration_category == 'modular':
+            from results.models import ModularResult
+            results = ModularResult.objects.filter(
+                candidate=candidate,
+                assessment_series__results_released=True
+            ).select_related('assessment_series', 'module')
+            
+            for result in results:
+                results_data.append({
+                    'assessment_series': result.assessment_series.name,
+                    'module': result.module.module_name,
+                    'module_code': result.module.module_code,
+                    'type': result.get_type_display(),
+                    'mark_status': 'Uploaded' if result.mark is not None else 'Pending',
+                    'grade': result.grade,
+                    'comment': result.comment,
+                    'status': result.get_status_display(),
+                })
+        
+        elif candidate.registration_category == 'formal':
+            from results.models import FormalResult
+            results = FormalResult.objects.filter(
+                candidate=candidate,
+                assessment_series__results_released=True
+            ).select_related('assessment_series', 'level', 'exam', 'paper')
+            
+            for result in results:
+                exam_or_paper = ''
+                if result.exam:
+                    exam_or_paper = result.exam.module_name
+                elif result.paper:
+                    exam_or_paper = result.paper.paper_name
+                
+                results_data.append({
+                    'assessment_series': result.assessment_series.name,
+                    'level': result.level.level_name,
+                    'exam_or_paper': exam_or_paper,
+                    'type': result.get_type_display(),
+                    'mark_status': 'Uploaded' if result.mark is not None else 'Pending',
+                    'grade': result.grade,
+                    'comment': result.comment,
+                    'status': result.get_status_display(),
+                })
+        
+        elif candidate.registration_category == 'workers_pas':
+            from results.models import WorkersPasResult
+            results = WorkersPasResult.objects.filter(
+                candidate=candidate,
+                assessment_series__results_released=True
+            ).select_related('assessment_series', 'level', 'module', 'paper')
+            
+            for result in results:
+                results_data.append({
+                    'assessment_series': result.assessment_series.name,
+                    'level': result.level.level_name,
+                    'module': result.module.module_name,
+                    'paper': result.paper.paper_name,
+                    'type': 'Practical',
+                    'mark_status': 'Uploaded' if result.mark is not None else 'Pending',
+                    'grade': result.grade,
+                    'comment': result.comment,
+                    'status': result.get_status_display(),
+                })
+        
+        return Response({
+            'bio_data': bio_data,
+            'occupation_info': occupation_info,
+            'enrollments': enrollment_data,
+            'results': results_data,
+            'status': candidate.status,
+            'is_verified': candidate.status == 'verified',
+        }, status=status.HTTP_200_OK)
+        
+    except Candidate.DoesNotExist:
+        return Response(
+            {'error': 'Candidate not found'},
             status=status.HTTP_404_NOT_FOUND
         )

@@ -64,6 +64,7 @@ const AssessmentSeriesCreate = () => {
       date_of_release: formData.date_of_release || null,
       is_current: formData.is_current || false,
       results_released: formData.results_released || false,
+      dont_charge: formData.dont_charge || false,
       is_active: formData.is_active !== false,
     };
 
@@ -183,6 +184,18 @@ const AssessmentSeriesCreate = () => {
                   />
                   <label className="ml-2 text-sm text-gray-700">
                     Results released
+                  </label>
+                </div>
+
+                {/* Don't Charge */}
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    {...register('dont_charge')}
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  />
+                  <label className="ml-2 text-sm text-gray-700">
+                    Don't charge candidates
                   </label>
                 </div>
 

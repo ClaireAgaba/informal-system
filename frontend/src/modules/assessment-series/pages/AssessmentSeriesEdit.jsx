@@ -40,6 +40,7 @@ const AssessmentSeriesEdit = () => {
         date_of_release: series.date_of_release,
         is_current: series.is_current,
         results_released: series.results_released,
+        dont_charge: series.dont_charge,
         is_active: series.is_active,
       });
     }
@@ -79,6 +80,7 @@ const AssessmentSeriesEdit = () => {
       date_of_release: formData.date_of_release,
       is_current: formData.is_current || false,
       results_released: formData.results_released || false,
+      dont_charge: formData.dont_charge || false,
       is_active: formData.is_active !== false,
     };
 
@@ -188,6 +190,15 @@ const AssessmentSeriesEdit = () => {
                     className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                   />
                   <label className="ml-2 text-sm text-gray-700">Results released</label>
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    {...register('dont_charge')}
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  />
+                  <label className="ml-2 text-sm text-gray-700">Don't charge candidates</label>
                 </div>
 
                 <div className="flex items-center">

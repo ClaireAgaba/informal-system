@@ -19,6 +19,7 @@ import occupationApi from '@modules/occupations/services/occupationApi';
 import Button from '@shared/components/Button';
 import Card from '@shared/components/Card';
 import { formatDate } from '@shared/utils/formatters';
+import BulkEnrollModal from '../components/BulkEnrollModal';
 
 const CandidateList = () => {
   const navigate = useNavigate();
@@ -29,6 +30,7 @@ const CandidateList = () => {
   const [selectAllPages, setSelectAllPages] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [showBulkEnrollModal, setShowBulkEnrollModal] = useState(false);
   
   // Filter states
   const [filters, setFilters] = useState({
@@ -135,6 +137,17 @@ const CandidateList = () => {
     } finally {
       setExporting(false);
     }
+  };
+
+  // Handle bulk enroll
+  const handleBulkEnroll = () => {
+    console.log('handleBulkEnroll called, selectedCandidates:', selectedCandidates);
+    if (selectedCandidates.length === 0) {
+      alert('Please select candidates to enroll');
+      return;
+    }
+    console.log('Setting showBulkEnrollModal to true');
+    setShowBulkEnrollModal(true);
   };
 
   // Clear filters
@@ -314,6 +327,8 @@ const CandidateList = () => {
                 onChange={(e) => {
                   if (e.target.value === 'export') {
                     handleExport();
+                  } else if (e.target.value === 'enroll') {
+                    handleBulkEnroll();
                   }
                   e.target.value = '';
                 }}
@@ -322,6 +337,7 @@ const CandidateList = () => {
               >
                 <option value="" disabled>⚙ Action</option>
                 <option value="export">{exporting ? 'Exporting...' : 'Export'}</option>
+                <option value="enroll">Enroll</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
@@ -693,6 +709,14 @@ const CandidateList = () => {
           </div>
         </div>
       </Card>
+      
+      {/* Bulk Enroll Modal */}
+      <BulkEnrollModal
+        isOpen={showBulkEnrollModal}
+        onClose={() => setShowBulkEnrollModal(false)}
+        candidateIds={selectedCandidates}
+        filters={filters}
+      />
     </div>
   );
 };

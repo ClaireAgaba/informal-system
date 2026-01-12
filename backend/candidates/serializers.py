@@ -385,3 +385,61 @@ class EnrollCandidateSerializer(serializers.Serializer):
         data['assessment_series_obj'] = assessment_series
         data['occupation_level_obj'] = occupation_level
         return data
+
+
+class BulkEnrollSerializer(serializers.Serializer):
+    """Serializer for bulk enrolling multiple candidates"""
+    candidate_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        min_length=1
+    )
+    assessment_series = serializers.IntegerField()
+    occupation_level = serializers.IntegerField(required=False, allow_null=True)
+    modules = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        allow_empty=True
+    )
+    papers = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        allow_empty=True
+    )
+    
+    def validate(self, data):
+        # Validate assessment series exists
+        try:
+            assessment_series = AssessmentSeries.objects.get(id=data['assessment_series'])
+        except AssessmentSeries.DoesNotExist:
+            raise serializers.ValidationError({'assessment_series': 'Invalid assessment series'})
+        
+        # Validate occupation level exists (optional for workers_pas)
+        occupation_level = None
+        if data.get('occupation_level'):
+            try:
+                occupation_level = OccupationLevel.objects.get(id=data['occupation_level'])
+            except OccupationLevel.DoesNotExist:
+                raise serializers.ValidationError({'occupation_level': 'Invalid occupation level'})
+        
+        # Validate modules/papers if provided
+        modules = data.get('modules', [])
+        papers = data.get('papers', [])
+        
+        if modules and occupation_level:
+            valid_modules = OccupationModule.objects.filter(
+                id__in=modules,
+                level=occupation_level,
+                occupation=occupation_level.occupation
+            )
+            if valid_modules.count() != len(modules):
+                raise serializers.ValidationError({'modules': 'Invalid modules selected for this level'})
+        
+        if papers:
+            # For workers_pas, papers can be from any level
+            valid_papers = OccupationPaper.objects.filter(id__in=papers)
+            if valid_papers.count() != len(papers):
+                raise serializers.ValidationError({'papers': 'Invalid papers selected for this occupation'})
+        
+        data['assessment_series_obj'] = assessment_series
+        data['occupation_level_obj'] = occupation_level
+        return data

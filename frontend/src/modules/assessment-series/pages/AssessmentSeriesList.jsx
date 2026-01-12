@@ -192,6 +192,11 @@ const AssessmentSeriesList = () => {
                                       Results Released
                                     </span>
                                   )}
+                                  {s.dont_charge && (
+                                    <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                                      Don't Charge
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="grid grid-cols-3 gap-4 text-sm text-gray-600">
                                   <div>
