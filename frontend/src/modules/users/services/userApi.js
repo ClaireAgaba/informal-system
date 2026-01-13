@@ -2,7 +2,7 @@ import apiClient from '@services/apiClient';
 
 const STAFF_BASE = '/users/staff';
 const SUPPORT_STAFF_BASE = '/users/support-staff';
-const DEPARTMENTS_BASE = '/users/departments';
+const DEPARTMENTS_BASE = '/configurations/departments';
 
 export const userApi = {
   // Staff

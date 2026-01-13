@@ -42,7 +42,8 @@ class StaffCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Staff
-        fields = ['full_name', 'email', 'contact', 'department', 'account_status']
+        fields = ['id', 'full_name', 'email', 'contact', 'department', 'account_status']
+        read_only_fields = ['id']
     
     def validate_email(self, value):
         """Ensure email is unique"""
@@ -77,7 +78,8 @@ class SupportStaffCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = SupportStaff
-        fields = ['full_name', 'contact', 'email', 'department', 'account_status']
+        fields = ['id', 'full_name', 'contact', 'email', 'department', 'account_status']
+        read_only_fields = ['id']
     
     def validate_email(self, value):
         """Ensure email is unique"""

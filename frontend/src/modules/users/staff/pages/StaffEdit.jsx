@@ -12,14 +12,16 @@ const StaffEdit = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const isNew = id === 'new';
+  // id is undefined when route is /users/staff/new (no :id param)
+  const isNew = !id || id === 'new';
+  const isValidId = id && id !== 'new' && id !== 'undefined';
 
   const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm();
 
   const { data, isLoading } = useQuery({
     queryKey: ['staff', id],
     queryFn: () => userApi.staff.getById(id),
-    enabled: !isNew,
+    enabled: isValidId,
   });
 
   const { data: departmentsData } = useQuery({
@@ -29,6 +31,15 @@ const StaffEdit = () => {
 
   const staff = data?.data;
   const departments = departmentsData?.data?.results || [];
+
+  useEffect(() => {
+    // Redirect if ID is invalid (undefined or 'undefined' string)
+    if (!isNew && !isValidId) {
+      toast.error('Invalid staff ID');
+      navigate('/users/staff');
+      return;
+    }
+  }, [isNew, isValidId, navigate]);
 
   useEffect(() => {
     if (staff) {
