@@ -135,8 +135,10 @@ def login_view(request):
     """
     Login endpoint - authenticates user and returns token
     """
+    print(f"Login attempt - Data received: {request.data}")
     email = request.data.get('email')
     password = request.data.get('password')
+    print(f"Email: {email}, Password length: {len(password) if password else 0}")
     
     if not email or not password:
         return Response(
@@ -147,16 +149,21 @@ def login_view(request):
     # Try to find user by email
     try:
         user = User.objects.get(email=email)
+        print(f"User found: {user.username}, is_active: {user.is_active}")
     except User.DoesNotExist:
+        print(f"User not found with email: {email}")
         return Response(
             {'error': 'Invalid email or password'},
             status=status.HTTP_401_UNAUTHORIZED
         )
     
     # Authenticate using username (since Django auth uses username)
+    print(f"Attempting authenticate with username: {user.username}")
     user_auth = authenticate(username=user.username, password=password)
+    print(f"Auth result: {user_auth}")
     
     if user_auth is None:
+        print(f"Password check direct: {user.check_password(password)}")
         return Response(
             {'error': 'Invalid email or password'},
             status=status.HTTP_401_UNAUTHORIZED
