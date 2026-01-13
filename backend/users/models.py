@@ -66,6 +66,35 @@ class Staff(models.Model):
         if self.department:
             return self.department.module_rights
         return []
+    
+    def save(self, *args, **kwargs):
+        """Override save to auto-create user account"""
+        if not self.user:
+            # Create new user with email as username
+            user = User.objects.create(
+                username=self.email,
+                email=self.email,
+                first_name=self.full_name.split()[0] if self.full_name else '',
+                last_name=' '.join(self.full_name.split()[1:]) if len(self.full_name.split()) > 1 else '',
+                user_type='staff',
+                phone_number=self.contact,
+                is_staff=True,
+                is_active=self.account_status == 'active'
+            )
+            # Set default password: uvtab@2025
+            user.set_password('uvtab@2025')
+            user.save()
+            self.user = user
+        else:
+            # Update existing user
+            self.user.email = self.email
+            self.user.phone_number = self.contact
+            self.user.first_name = self.full_name.split()[0] if self.full_name else ''
+            self.user.last_name = ' '.join(self.full_name.split()[1:]) if len(self.full_name.split()) > 1 else ''
+            self.user.is_active = self.account_status == 'active'
+            self.user.save()
+        
+        super().save(*args, **kwargs)
 
 
 class SupportStaff(models.Model):
@@ -108,6 +137,35 @@ class SupportStaff(models.Model):
         if self.department:
             return self.department.module_rights
         return []
+    
+    def save(self, *args, **kwargs):
+        """Override save to auto-create user account"""
+        if not self.user:
+            # Create new user with email as username
+            user = User.objects.create(
+                username=self.email,
+                email=self.email,
+                first_name=self.full_name.split()[0] if self.full_name else '',
+                last_name=' '.join(self.full_name.split()[1:]) if len(self.full_name.split()) > 1 else '',
+                user_type='support_staff',
+                phone_number=self.contact,
+                is_staff=False,
+                is_active=self.account_status == 'active'
+            )
+            # Set default password: uvtab@2025
+            user.set_password('uvtab@2025')
+            user.save()
+            self.user = user
+        else:
+            # Update existing user
+            self.user.email = self.email
+            self.user.phone_number = self.contact
+            self.user.first_name = self.full_name.split()[0] if self.full_name else ''
+            self.user.last_name = ' '.join(self.full_name.split()[1:]) if len(self.full_name.split()) > 1 else ''
+            self.user.is_active = self.account_status == 'active'
+            self.user.save()
+        
+        super().save(*args, **kwargs)
 
 
 class CenterRepresentative(models.Model):
