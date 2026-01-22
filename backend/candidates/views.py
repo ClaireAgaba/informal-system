@@ -1833,6 +1833,76 @@ def bulk_change_candidate_registration_category(request):
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
+def bulk_change_candidate_series(request):
+    """Bulk change assessment series for multiple candidates"""
+    candidate_ids = request.data.get('candidate_ids', [])
+    new_series_id = request.data.get('new_series_id')
+    
+    if not new_series_id:
+        return Response(
+            {'error': 'New assessment series ID is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if not candidate_ids:
+        return Response(
+            {'error': 'No candidates selected'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    from assessment_series.models import AssessmentSeries
+    try:
+        new_series = AssessmentSeries.objects.get(id=new_series_id)
+    except AssessmentSeries.DoesNotExist:
+        return Response(
+            {'error': 'Assessment series not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    from results.models import ModularResult, FormalResult, WorkersPasResult
+    
+    candidates = Candidate.objects.filter(id__in=candidate_ids)
+    
+    total_updated = {
+        'candidates': 0,
+        'enrollments': 0,
+        'modular_results': 0,
+        'formal_results': 0,
+        'workers_pas_results': 0,
+    }
+    
+    for candidate in candidates:
+        # Update all enrollments
+        enrollments_updated = CandidateEnrollment.objects.filter(candidate=candidate).update(assessment_series=new_series)
+        total_updated['enrollments'] += enrollments_updated
+        
+        # Update all modular results
+        modular_updated = ModularResult.objects.filter(candidate=candidate).update(assessment_series=new_series)
+        total_updated['modular_results'] += modular_updated
+        
+        # Update all formal results
+        formal_updated = FormalResult.objects.filter(candidate=candidate).update(assessment_series=new_series)
+        total_updated['formal_results'] += formal_updated
+        
+        # Update all workers PAS results
+        workers_updated = WorkersPasResult.objects.filter(candidate=candidate).update(assessment_series=new_series)
+        total_updated['workers_pas_results'] += workers_updated
+        
+        total_updated['candidates'] += 1
+    
+    return Response({
+        'message': f'Successfully moved {total_updated["candidates"]} candidate(s) to {new_series.name}',
+        'new_series': {
+            'id': new_series.id,
+            'name': new_series.name,
+        },
+        'updated': total_updated
+    }, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def bulk_clear_candidate_data(request):
     """Bulk clear all results, enrollments, and fees for multiple candidates"""
     candidate_ids = request.data.get('candidate_ids', [])

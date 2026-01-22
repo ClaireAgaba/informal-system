@@ -23,6 +23,7 @@ import { formatDate } from '@shared/utils/formatters';
 import BulkEnrollModal from '../components/BulkEnrollModal';
 import BulkChangeOccupationModal from '../components/BulkChangeOccupationModal';
 import BulkChangeRegCategoryModal from '../components/BulkChangeRegCategoryModal';
+import BulkChangeSeriesModal from '../components/BulkChangeSeriesModal';
 
 const CandidateList = () => {
   const navigate = useNavigate();
@@ -41,6 +42,8 @@ const CandidateList = () => {
   const [changingOccupation, setChangingOccupation] = useState(false);
   const [showBulkChangeRegCategoryModal, setShowBulkChangeRegCategoryModal] = useState(false);
   const [changingRegCategory, setChangingRegCategory] = useState(false);
+  const [showBulkChangeSeriesModal, setShowBulkChangeSeriesModal] = useState(false);
+  const [changingSeries, setChangingSeries] = useState(false);
   
   // Filter states
   const [filters, setFilters] = useState({
@@ -317,6 +320,39 @@ const CandidateList = () => {
     }
   };
 
+  // Handle bulk change series
+  const handleBulkChangeSeries = () => {
+    if (selectedCandidates.length === 0) {
+      toast.error('Please select candidates to change assessment series');
+      return;
+    }
+    setShowBulkChangeSeriesModal(true);
+  };
+
+  // Process bulk change series
+  const processBulkChangeSeries = async (newSeriesId) => {
+    try {
+      setChangingSeries(true);
+      const response = await candidateApi.bulkChangeSeries(selectedCandidates, newSeriesId);
+      const { updated } = response.data;
+      
+      toast.success(
+        `Moved ${updated.candidates} candidate(s): ${updated.enrollments} enrollments, ${updated.modular_results + updated.formal_results + updated.workers_pas_results} results updated`
+      );
+      
+      // Refresh the list
+      queryClient.invalidateQueries(['candidates']);
+      setSelectedCandidates([]);
+      setSelectAllPages(false);
+      setShowBulkChangeSeriesModal(false);
+    } catch (error) {
+      console.error('Bulk change series failed:', error);
+      toast.error(error.response?.data?.error || 'Failed to change assessment series');
+    } finally {
+      setChangingSeries(false);
+    }
+  };
+
   // Clear filters
   const handleClearFilters = () => {
     setFilters({
@@ -504,16 +540,19 @@ const CandidateList = () => {
                     handleBulkChangeOccupation();
                   } else if (e.target.value === 'change-reg-category') {
                     handleBulkChangeRegCategory();
+                  } else if (e.target.value === 'change-series') {
+                    handleBulkChangeSeries();
                   }
                   e.target.value = '';
                 }}
-                disabled={exporting || deEnrolling || clearing || changingOccupation || changingRegCategory}
+                disabled={exporting || deEnrolling || clearing || changingOccupation || changingRegCategory || changingSeries}
                 defaultValue=""
               >
                 <option value="" disabled>⚙ Action</option>
                 <option value="export">{exporting ? 'Exporting...' : 'Export'}</option>
                 <option value="enroll">Enroll</option>
                 <option value="de-enroll">{deEnrolling ? 'De-enrolling...' : 'De-enroll'}</option>
+                <option value="change-series">{changingSeries ? 'Changing...' : 'Change Assessment Series'}</option>
                 <option value="change-occupation">{changingOccupation ? 'Changing...' : 'Change Occupation'}</option>
                 <option value="change-reg-category">{changingRegCategory ? 'Changing...' : 'Change Registration Category'}</option>
                 <option value="clear-data">{clearing ? 'Clearing...' : 'Clear Results, Enrollments & Fees'}</option>
@@ -914,6 +953,16 @@ const CandidateList = () => {
           onClose={() => setShowBulkChangeRegCategoryModal(false)}
           onConfirm={processBulkChangeRegCategory}
           isLoading={changingRegCategory}
+        />
+      )}
+
+      {/* Bulk Change Series Modal */}
+      {showBulkChangeSeriesModal && (
+        <BulkChangeSeriesModal
+          selectedCount={selectedCandidates.length}
+          onClose={() => setShowBulkChangeSeriesModal(false)}
+          onConfirm={processBulkChangeSeries}
+          isLoading={changingSeries}
         />
       )}
     </div>

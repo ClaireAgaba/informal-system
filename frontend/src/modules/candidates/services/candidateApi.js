@@ -240,6 +240,14 @@ export const candidateApi = {
       new_registration_category: newRegCategory 
     });
   },
+
+  // Bulk change assessment series for multiple candidates
+  bulkChangeSeries: (candidateIds, newSeriesId) => {
+    return apiClient.post(`${CANDIDATES_BASE}/bulk-change-series/`, { 
+      candidate_ids: candidateIds, 
+      new_series_id: newSeriesId 
+    });
+  },
 };
 
 export default candidateApi;
