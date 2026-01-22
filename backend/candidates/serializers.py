@@ -112,6 +112,8 @@ class CandidateDetailSerializer(serializers.ModelSerializer):
                 'id': obj.occupation.id,
                 'occ_code': obj.occupation.occ_code,
                 'occ_name': obj.occupation.occ_name,
+                'occ_category': obj.occupation.occ_category,
+                'has_modular': obj.occupation.has_modular,
                 'sector': {
                     'id': obj.occupation.sector.id,
                     'name': obj.occupation.sector.name,

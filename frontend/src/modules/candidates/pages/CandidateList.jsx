@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   Search,
   Filter,
@@ -20,9 +21,12 @@ import Button from '@shared/components/Button';
 import Card from '@shared/components/Card';
 import { formatDate } from '@shared/utils/formatters';
 import BulkEnrollModal from '../components/BulkEnrollModal';
+import BulkChangeOccupationModal from '../components/BulkChangeOccupationModal';
+import BulkChangeRegCategoryModal from '../components/BulkChangeRegCategoryModal';
 
 const CandidateList = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -30,7 +34,13 @@ const CandidateList = () => {
   const [selectAllPages, setSelectAllPages] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [deEnrolling, setDeEnrolling] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [showBulkEnrollModal, setShowBulkEnrollModal] = useState(false);
+  const [showBulkChangeOccupationModal, setShowBulkChangeOccupationModal] = useState(false);
+  const [changingOccupation, setChangingOccupation] = useState(false);
+  const [showBulkChangeRegCategoryModal, setShowBulkChangeRegCategoryModal] = useState(false);
+  const [changingRegCategory, setChangingRegCategory] = useState(false);
   
   // Filter states
   const [filters, setFilters] = useState({
@@ -148,6 +158,163 @@ const CandidateList = () => {
     }
     console.log('Setting showBulkEnrollModal to true');
     setShowBulkEnrollModal(true);
+  };
+
+  // Handle bulk de-enroll
+  const handleBulkDeEnroll = async () => {
+    if (selectedCandidates.length === 0) {
+      alert('Please select candidates to de-enroll');
+      return;
+    }
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to de-enroll ${selectedCandidates.length} candidate(s)? This will remove their enrollments and reset fees. Candidates with marks cannot be de-enrolled.`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      setDeEnrolling(true);
+      const response = await candidateApi.bulkDeEnroll(selectedCandidates);
+      const { success_count, skipped_with_marks, failed } = response.data;
+      
+      // Show results
+      if (success_count > 0) {
+        toast.success(`Successfully de-enrolled ${success_count} candidate(s)`);
+      }
+      
+      if (skipped_with_marks?.length > 0) {
+        toast.error(
+          `${skipped_with_marks.length} candidate(s) skipped - they have marks`,
+          { duration: 5000 }
+        );
+      }
+      
+      if (failed?.length > 0) {
+        toast.error(`${failed.length} candidate(s) failed to de-enroll`);
+      }
+      
+      // Refresh the list
+      queryClient.invalidateQueries(['candidates']);
+      setSelectedCandidates([]);
+      setSelectAllPages(false);
+    } catch (error) {
+      console.error('Bulk de-enroll failed:', error);
+      toast.error(error.response?.data?.error || 'Failed to de-enroll candidates');
+    } finally {
+      setDeEnrolling(false);
+    }
+  };
+
+  // Handle bulk clear data (results, enrollments, fees)
+  const handleBulkClearData = async () => {
+    if (selectedCandidates.length === 0) {
+      alert('Please select candidates to clear data');
+      return;
+    }
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to clear ALL results, enrollments, and fees for ${selectedCandidates.length} candidate(s)? This action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      setClearing(true);
+      const response = await candidateApi.bulkClearData(selectedCandidates);
+      const { cleared } = response.data;
+      
+      const totalResults = cleared.modular_results + cleared.formal_results + cleared.workers_pas_results;
+      toast.success(
+        `Cleared ${totalResults} results and ${cleared.enrollments} enrollments for ${cleared.candidates_processed} candidate(s)`
+      );
+      
+      // Refresh the list
+      queryClient.invalidateQueries(['candidates']);
+      setSelectedCandidates([]);
+      setSelectAllPages(false);
+    } catch (error) {
+      console.error('Bulk clear data failed:', error);
+      toast.error(error.response?.data?.error || 'Failed to clear data');
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  // Handle bulk change occupation
+  const handleBulkChangeOccupation = () => {
+    if (selectedCandidates.length === 0) {
+      toast.error('Please select candidates to change occupation');
+      return;
+    }
+    setShowBulkChangeOccupationModal(true);
+  };
+
+  // Process bulk change occupation
+  const processBulkChangeOccupation = async (newOccupationId) => {
+    try {
+      setChangingOccupation(true);
+      const response = await candidateApi.bulkChangeOccupation(selectedCandidates, newOccupationId);
+      const { successful, failed, failed_details } = response.data;
+      
+      if (successful > 0) {
+        toast.success(`Changed occupation for ${successful} candidate(s)`);
+      }
+      
+      if (failed > 0) {
+        const reasons = failed_details.slice(0, 3).map(f => `${f.name}: ${f.reason}`).join('\n');
+        toast.error(`Failed for ${failed} candidate(s):\n${reasons}${failed > 3 ? `\n...and ${failed - 3} more` : ''}`);
+      }
+      
+      // Refresh the list
+      queryClient.invalidateQueries(['candidates']);
+      setSelectedCandidates([]);
+      setSelectAllPages(false);
+      setShowBulkChangeOccupationModal(false);
+    } catch (error) {
+      console.error('Bulk change occupation failed:', error);
+      toast.error(error.response?.data?.error || 'Failed to change occupation');
+    } finally {
+      setChangingOccupation(false);
+    }
+  };
+
+  // Handle bulk change registration category
+  const handleBulkChangeRegCategory = () => {
+    if (selectedCandidates.length === 0) {
+      toast.error('Please select candidates to change registration category');
+      return;
+    }
+    setShowBulkChangeRegCategoryModal(true);
+  };
+
+  // Process bulk change registration category
+  const processBulkChangeRegCategory = async (newRegCategory) => {
+    try {
+      setChangingRegCategory(true);
+      const response = await candidateApi.bulkChangeRegistrationCategory(selectedCandidates, newRegCategory);
+      const { successful, failed, failed_details } = response.data;
+      
+      if (successful > 0) {
+        toast.success(`Changed registration category for ${successful} candidate(s)`);
+      }
+      
+      if (failed > 0) {
+        const reasons = failed_details.slice(0, 3).map(f => `${f.name}: ${f.reason}`).join('\n');
+        toast.error(`Failed for ${failed} candidate(s):\n${reasons}${failed > 3 ? `\n...and ${failed - 3} more` : ''}`);
+      }
+      
+      // Refresh the list
+      queryClient.invalidateQueries(['candidates']);
+      setSelectedCandidates([]);
+      setSelectAllPages(false);
+      setShowBulkChangeRegCategoryModal(false);
+    } catch (error) {
+      console.error('Bulk change registration category failed:', error);
+      toast.error(error.response?.data?.error || 'Failed to change registration category');
+    } finally {
+      setChangingRegCategory(false);
+    }
   };
 
   // Clear filters
@@ -329,15 +496,27 @@ const CandidateList = () => {
                     handleExport();
                   } else if (e.target.value === 'enroll') {
                     handleBulkEnroll();
+                  } else if (e.target.value === 'de-enroll') {
+                    handleBulkDeEnroll();
+                  } else if (e.target.value === 'clear-data') {
+                    handleBulkClearData();
+                  } else if (e.target.value === 'change-occupation') {
+                    handleBulkChangeOccupation();
+                  } else if (e.target.value === 'change-reg-category') {
+                    handleBulkChangeRegCategory();
                   }
                   e.target.value = '';
                 }}
-                disabled={exporting}
+                disabled={exporting || deEnrolling || clearing || changingOccupation || changingRegCategory}
                 defaultValue=""
               >
                 <option value="" disabled>⚙ Action</option>
                 <option value="export">{exporting ? 'Exporting...' : 'Export'}</option>
                 <option value="enroll">Enroll</option>
+                <option value="de-enroll">{deEnrolling ? 'De-enrolling...' : 'De-enroll'}</option>
+                <option value="change-occupation">{changingOccupation ? 'Changing...' : 'Change Occupation'}</option>
+                <option value="change-reg-category">{changingRegCategory ? 'Changing...' : 'Change Registration Category'}</option>
+                <option value="clear-data">{clearing ? 'Clearing...' : 'Clear Results, Enrollments & Fees'}</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
@@ -717,6 +896,26 @@ const CandidateList = () => {
         candidateIds={selectedCandidates}
         filters={filters}
       />
+
+      {/* Bulk Change Occupation Modal */}
+      {showBulkChangeOccupationModal && (
+        <BulkChangeOccupationModal
+          selectedCount={selectedCandidates.length}
+          onClose={() => setShowBulkChangeOccupationModal(false)}
+          onConfirm={processBulkChangeOccupation}
+          isLoading={changingOccupation}
+        />
+      )}
+
+      {/* Bulk Change Registration Category Modal */}
+      {showBulkChangeRegCategoryModal && (
+        <BulkChangeRegCategoryModal
+          selectedCount={selectedCandidates.length}
+          onClose={() => setShowBulkChangeRegCategoryModal(false)}
+          onConfirm={processBulkChangeRegCategory}
+          isLoading={changingRegCategory}
+        />
+      )}
     </div>
   );
 };

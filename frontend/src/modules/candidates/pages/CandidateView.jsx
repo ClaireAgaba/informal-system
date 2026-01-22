@@ -21,12 +21,21 @@ import {
   X,
   Plus,
   Send,
+  MoreVertical,
+  ChevronDown,
+  Building2,
+  Briefcase,
+  Tag,
 } from 'lucide-react';
 import candidateApi from '../services/candidateApi';
 import Button from '@shared/components/Button';
 import Card from '@shared/components/Card';
 import { formatDate } from '@shared/utils/formatters';
 import EnrollmentModal from '../components/EnrollmentModal';
+import ChangeSeriesModal from '../components/ChangeSeriesModal';
+import ChangeCenterModal from '../components/ChangeCenterModal';
+import ChangeOccupationModal from '../components/ChangeOccupationModal';
+import ChangeRegCategoryModal from '../components/ChangeRegCategoryModal';
 import CandidateResults from '../components/CandidateResults';
 
 const CandidateView = () => {
@@ -37,7 +46,12 @@ const CandidateView = () => {
   const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
   const [showEnrollmentModal, setShowEnrollmentModal] = useState(false);
+  const [showChangeSeriesModal, setShowChangeSeriesModal] = useState(false);
+  const [showChangeCenterModal, setShowChangeCenterModal] = useState(false);
+  const [showChangeOccupationModal, setShowChangeOccupationModal] = useState(false);
+  const [showChangeRegCategoryModal, setShowChangeRegCategoryModal] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [showActionsDropdown, setShowActionsDropdown] = useState(false);
 
   // Load current user from localStorage
   useEffect(() => {
@@ -300,6 +314,92 @@ const CandidateView = () => {
             <Edit className="w-4 h-4 mr-2" />
             Edit
           </Button>
+          
+          {/* Actions Dropdown */}
+          <div className="relative">
+            <Button
+              variant="outline"
+              size="md"
+              onClick={() => setShowActionsDropdown(!showActionsDropdown)}
+            >
+              Actions
+              <ChevronDown className="w-4 h-4 ml-2" />
+            </Button>
+            
+            {showActionsDropdown && (
+              <>
+                {/* Backdrop to close dropdown */}
+                <div 
+                  className="fixed inset-0 z-10" 
+                  onClick={() => setShowActionsDropdown(false)}
+                />
+                
+                {/* Dropdown Menu */}
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                  <button
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                    onClick={() => {
+                      setShowActionsDropdown(false);
+                      setShowChangeSeriesModal(true);
+                    }}
+                  >
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Change Assessment Series
+                  </button>
+                  <button
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                    onClick={() => {
+                      setShowActionsDropdown(false);
+                      setShowChangeCenterModal(true);
+                    }}
+                  >
+                    <Building2 className="w-4 h-4 mr-2" />
+                    Change Assessment Center
+                  </button>
+                  <button
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                    onClick={() => {
+                      setShowActionsDropdown(false);
+                      setShowChangeOccupationModal(true);
+                    }}
+                  >
+                    <Briefcase className="w-4 h-4 mr-2" />
+                    Change Occupation
+                  </button>
+                  <button
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                    onClick={() => {
+                      setShowActionsDropdown(false);
+                      setShowChangeRegCategoryModal(true);
+                    }}
+                  >
+                    <Tag className="w-4 h-4 mr-2" />
+                    Change Registration Category
+                  </button>
+                  <button
+                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center"
+                    onClick={async () => {
+                      setShowActionsDropdown(false);
+                      if (window.confirm(`Are you sure you want to clear ALL results, enrollments, and fees for ${candidate.full_name}? This action cannot be undone.`)) {
+                        try {
+                          const response = await candidateApi.clearData(id);
+                          const { cleared } = response.data;
+                          toast.success(`Cleared: ${cleared.modular_results + cleared.formal_results + cleared.workers_pas_results} results, ${cleared.enrollments} enrollments`);
+                          queryClient.invalidateQueries(['candidate', id]);
+                          queryClient.invalidateQueries(['candidate-enrollments', id]);
+                        } catch (error) {
+                          toast.error(error.response?.data?.error || 'Failed to clear data');
+                        }
+                      }
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Clear Results, Enrollments & Fees
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1156,6 +1256,38 @@ const CandidateView = () => {
         <EnrollmentModal
           candidate={candidate}
           onClose={() => setShowEnrollmentModal(false)}
+        />
+      )}
+
+      {/* Change Series Modal */}
+      {showChangeSeriesModal && candidate && (
+        <ChangeSeriesModal
+          candidate={candidate}
+          onClose={() => setShowChangeSeriesModal(false)}
+        />
+      )}
+
+      {/* Change Center Modal */}
+      {showChangeCenterModal && candidate && (
+        <ChangeCenterModal
+          candidate={candidate}
+          onClose={() => setShowChangeCenterModal(false)}
+        />
+      )}
+
+      {/* Change Occupation Modal */}
+      {showChangeOccupationModal && candidate && (
+        <ChangeOccupationModal
+          candidate={candidate}
+          onClose={() => setShowChangeOccupationModal(false)}
+        />
+      )}
+
+      {/* Change Registration Category Modal */}
+      {showChangeRegCategoryModal && candidate && (
+        <ChangeRegCategoryModal
+          candidate={candidate}
+          onClose={() => setShowChangeRegCategoryModal(false)}
         />
       )}
     </div>

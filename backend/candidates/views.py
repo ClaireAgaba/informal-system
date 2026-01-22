@@ -1089,6 +1089,74 @@ class CandidateViewSet(viewsets.ModelViewSet):
 from django.views.decorators.csrf import csrf_exempt
 
 @csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def bulk_de_enroll_view(request):
+    """Bulk de-enroll candidates by deleting their enrollments"""
+    candidate_ids = request.data.get('candidate_ids', [])
+    
+    if not candidate_ids:
+        return Response(
+            {'error': 'No candidates selected'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    from results.models import ModularResult, FormalResult, WorkersPasResult
+    
+    success_count = 0
+    failed = []
+    skipped_with_marks = []
+    
+    # Get all enrollments for selected candidates
+    enrollments = CandidateEnrollment.objects.filter(candidate_id__in=candidate_ids)
+    
+    for enrollment in enrollments:
+        candidate = enrollment.candidate
+        
+        # Check if candidate has any results for this enrollment
+        has_modular_results = ModularResult.objects.filter(
+            candidate=candidate,
+            assessment_series=enrollment.assessment_series
+        ).exists()
+        
+        has_formal_results = FormalResult.objects.filter(
+            candidate=candidate,
+            assessment_series=enrollment.assessment_series
+        ).exists()
+        
+        has_workers_pas_results = WorkersPasResult.objects.filter(
+            candidate=candidate,
+            assessment_series=enrollment.assessment_series
+        ).exists()
+        
+        if has_modular_results or has_formal_results or has_workers_pas_results:
+            skipped_with_marks.append({
+                'candidate_id': candidate.id,
+                'name': candidate.full_name,
+                'reg_no': candidate.registration_number,
+                'reason': 'Has marks - cannot de-enroll'
+            })
+            continue
+        
+        try:
+            enrollment.delete()
+            success_count += 1
+        except Exception as e:
+            failed.append({
+                'candidate_id': candidate.id,
+                'name': candidate.full_name,
+                'reason': str(e)
+            })
+    
+    return Response({
+        'message': f'Successfully de-enrolled {success_count} candidate(s)',
+        'success_count': success_count,
+        'skipped_with_marks': skipped_with_marks,
+        'failed': failed
+    }, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
 @api_view(['DELETE'])
 @permission_classes([AllowAny])
 def delete_enrollment_view(request, enrollment_id):
@@ -1132,6 +1200,730 @@ def delete_enrollment_view(request, enrollment_id):
             {'error': 'Enrollment not found'},
             status=status.HTTP_404_NOT_FOUND
         )
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def change_candidate_series(request, candidate_id):
+    """Change assessment series for a candidate's enrollments and results"""
+    new_series_id = request.data.get('new_series_id')
+    
+    if not new_series_id:
+        return Response(
+            {'error': 'New assessment series ID is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        candidate = Candidate.objects.get(id=candidate_id)
+    except Candidate.DoesNotExist:
+        return Response(
+            {'error': 'Candidate not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    from assessment_series.models import AssessmentSeries
+    try:
+        new_series = AssessmentSeries.objects.get(id=new_series_id)
+    except AssessmentSeries.DoesNotExist:
+        return Response(
+            {'error': 'Assessment series not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    from results.models import ModularResult, FormalResult, WorkersPasResult
+    
+    updated = {
+        'enrollments': 0,
+        'modular_results': 0,
+        'formal_results': 0,
+        'workers_pas_results': 0,
+    }
+    
+    # Update all enrollments
+    enrollments_updated = CandidateEnrollment.objects.filter(candidate=candidate).update(assessment_series=new_series)
+    updated['enrollments'] = enrollments_updated
+    
+    # Update all modular results
+    modular_updated = ModularResult.objects.filter(candidate=candidate).update(assessment_series=new_series)
+    updated['modular_results'] = modular_updated
+    
+    # Update all formal results
+    formal_updated = FormalResult.objects.filter(candidate=candidate).update(assessment_series=new_series)
+    updated['formal_results'] = formal_updated
+    
+    # Update all workers PAS results
+    workers_updated = WorkersPasResult.objects.filter(candidate=candidate).update(assessment_series=new_series)
+    updated['workers_pas_results'] = workers_updated
+    
+    return Response({
+        'message': f'Successfully moved {candidate.full_name} to {new_series.name}',
+        'candidate_id': candidate.id,
+        'new_series': {
+            'id': new_series.id,
+            'name': new_series.name,
+        },
+        'updated': updated
+    }, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def change_candidate_center(request, candidate_id):
+    """Change assessment center for a candidate, updating registration number and fees"""
+    new_center_id = request.data.get('new_center_id')
+    
+    if not new_center_id:
+        return Response(
+            {'error': 'New assessment center ID is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        candidate = Candidate.objects.get(id=candidate_id)
+    except Candidate.DoesNotExist:
+        return Response(
+            {'error': 'Candidate not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    from assessment_centers.models import AssessmentCenter
+    try:
+        new_center = AssessmentCenter.objects.get(id=new_center_id)
+    except AssessmentCenter.DoesNotExist:
+        return Response(
+            {'error': 'Assessment center not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    old_center = candidate.assessment_center
+    old_registration_number = candidate.registration_number
+    
+    # Update candidate's assessment center
+    candidate.assessment_center = new_center
+    candidate.assessment_center_branch = None  # Reset branch since new center may have different branches
+    
+    # Generate new registration number
+    new_registration_number = candidate.generate_registration_number()
+    candidate.registration_number = new_registration_number
+    
+    # Regenerate payment code with new center
+    new_payment_code = candidate.generate_payment_code()
+    candidate.payment_code = new_payment_code
+    
+    candidate.save()
+    
+    # Update CenterFee totals if candidate has fees
+    from fees.models import CandidateFee, CenterFee
+    
+    candidate_fees = CandidateFee.objects.filter(candidate=candidate)
+    fees_moved = 0
+    
+    for candidate_fee in candidate_fees:
+        if candidate_fee.total_amount > 0:
+            fees_moved += 1
+            
+            # Decrease old center's fee totals
+            if old_center:
+                try:
+                    old_center_fee = CenterFee.objects.get(
+                        assessment_center=old_center,
+                        assessment_series=candidate_fee.assessment_series
+                    )
+                    old_center_fee.total_candidates = max(0, old_center_fee.total_candidates - 1)
+                    old_center_fee.total_amount = max(0, old_center_fee.total_amount - candidate_fee.total_amount)
+                    old_center_fee.save()
+                except CenterFee.DoesNotExist:
+                    pass
+            
+            # Increase new center's fee totals
+            new_center_fee, created = CenterFee.objects.get_or_create(
+                assessment_center=new_center,
+                assessment_series=candidate_fee.assessment_series,
+                defaults={
+                    'total_candidates': 0,
+                    'total_amount': 0,
+                    'amount_due': 0,
+                }
+            )
+            new_center_fee.total_candidates += 1
+            new_center_fee.total_amount += candidate_fee.total_amount
+            new_center_fee.save()
+    
+    return Response({
+        'message': f'Successfully moved {candidate.full_name} to {new_center.center_name}',
+        'candidate_id': candidate.id,
+        'old_center': {
+            'id': old_center.id if old_center else None,
+            'name': old_center.center_name if old_center else None,
+        },
+        'new_center': {
+            'id': new_center.id,
+            'name': new_center.center_name,
+        },
+        'old_registration_number': old_registration_number,
+        'new_registration_number': new_registration_number,
+        'fees_moved': fees_moved,
+    }, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def change_candidate_occupation(request, candidate_id):
+    """Change occupation for a candidate, updating registration number"""
+    new_occupation_id = request.data.get('new_occupation_id')
+    
+    if not new_occupation_id:
+        return Response(
+            {'error': 'New occupation ID is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        candidate = Candidate.objects.get(id=candidate_id)
+    except Candidate.DoesNotExist:
+        return Response(
+            {'error': 'Candidate not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    from occupations.models import Occupation
+    try:
+        new_occupation = Occupation.objects.get(id=new_occupation_id)
+    except Occupation.DoesNotExist:
+        return Response(
+            {'error': 'Occupation not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    old_occupation = candidate.occupation
+    old_registration_number = candidate.registration_number
+    
+    # Check if candidate has any enrollments
+    has_enrollments = CandidateEnrollment.objects.filter(candidate=candidate).exists()
+    if has_enrollments:
+        return Response(
+            {'error': "Cannot change occupation. Candidate has existing enrollments. Clear enrollments first before changing occupation."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Check if candidate has any results
+    from results.models import ModularResult, FormalResult, WorkersPasResult
+    
+    has_results = (
+        ModularResult.objects.filter(candidate=candidate).exists() or
+        FormalResult.objects.filter(candidate=candidate).exists() or
+        WorkersPasResult.objects.filter(candidate=candidate).exists()
+    )
+    if has_results:
+        return Response(
+            {'error': "Cannot change occupation. Candidate has existing results. Clear results first before changing occupation."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Validate that new occupation supports candidate's registration category
+    candidate_reg_cat = candidate.registration_category
+    
+    if candidate_reg_cat == 'workers_pas':
+        # Workers PAS candidates can only move to workers_pas occupations
+        if new_occupation.occ_category != 'workers_pas':
+            return Response(
+                {'error': f"Occupation doesn't support current registration category. {new_occupation.occ_name} is a {new_occupation.get_occ_category_display()} occupation, but candidate is registered as Worker's PAS."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    elif candidate_reg_cat == 'formal':
+        # Formal candidates can only move to formal occupations
+        if new_occupation.occ_category != 'formal':
+            return Response(
+                {'error': f"Occupation doesn't support current registration category. {new_occupation.occ_name} is a {new_occupation.get_occ_category_display()} occupation, but candidate is registered as Formal."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    elif candidate_reg_cat == 'modular':
+        # Modular candidates can only move to formal occupations that support modular
+        if new_occupation.occ_category != 'formal' or not new_occupation.has_modular:
+            return Response(
+                {'error': f"Occupation doesn't support current registration category. {new_occupation.occ_name} doesn't support Modular registration."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    # Update candidate's occupation
+    candidate.occupation = new_occupation
+    
+    # Generate new registration number
+    new_registration_number = candidate.generate_registration_number()
+    candidate.registration_number = new_registration_number
+    
+    candidate.save()
+    
+    return Response({
+        'message': f'Successfully changed occupation for {candidate.full_name} to {new_occupation.occ_name}',
+        'candidate_id': candidate.id,
+        'old_occupation': {
+            'id': old_occupation.id if old_occupation else None,
+            'name': old_occupation.occ_name if old_occupation else None,
+            'code': old_occupation.occ_code if old_occupation else None,
+        },
+        'new_occupation': {
+            'id': new_occupation.id,
+            'name': new_occupation.occ_name,
+            'code': new_occupation.occ_code,
+        },
+        'old_registration_number': old_registration_number,
+        'new_registration_number': new_registration_number,
+    }, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def change_candidate_registration_category(request, candidate_id):
+    """Change registration category for a candidate"""
+    new_reg_category = request.data.get('new_registration_category')
+    
+    valid_categories = ['modular', 'formal', 'workers_pas']
+    if not new_reg_category or new_reg_category not in valid_categories:
+        return Response(
+            {'error': f'Invalid registration category. Must be one of: {", ".join(valid_categories)}'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        candidate = Candidate.objects.get(id=candidate_id)
+    except Candidate.DoesNotExist:
+        return Response(
+            {'error': 'Candidate not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    old_reg_category = candidate.registration_category
+    
+    # Check if trying to change to same category
+    if old_reg_category == new_reg_category:
+        return Response(
+            {'error': 'Candidate is already registered in this category'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Check if candidate has any enrollments
+    has_enrollments = CandidateEnrollment.objects.filter(candidate=candidate).exists()
+    if has_enrollments:
+        return Response(
+            {'error': "Cannot change registration category. Candidate has existing enrollments. Clear enrollments first."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Check if candidate has any results
+    from results.models import ModularResult, FormalResult, WorkersPasResult
+    
+    has_results = (
+        ModularResult.objects.filter(candidate=candidate).exists() or
+        FormalResult.objects.filter(candidate=candidate).exists() or
+        WorkersPasResult.objects.filter(candidate=candidate).exists()
+    )
+    if has_results:
+        return Response(
+            {'error': "Cannot change registration category. Candidate has existing results. Clear results first."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Check if current occupation supports the new registration category
+    occupation = candidate.occupation
+    if not occupation:
+        return Response(
+            {'error': "Cannot change registration category. Candidate has no occupation assigned."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Validation based on target registration category
+    if new_reg_category == 'workers_pas':
+        if occupation.occ_category != 'workers_pas':
+            return Response(
+                {'error': f"Cannot change to Worker's PAS. Current occupation '{occupation.occ_name}' is a {occupation.get_occ_category_display()} occupation and doesn't support Worker's PAS registration."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    elif new_reg_category == 'formal':
+        if occupation.occ_category != 'formal':
+            return Response(
+                {'error': f"Cannot change to Formal. Current occupation '{occupation.occ_name}' is a {occupation.get_occ_category_display()} occupation and doesn't support Formal registration."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    elif new_reg_category == 'modular':
+        if occupation.occ_category != 'formal':
+            return Response(
+                {'error': f"Cannot change to Modular. Current occupation '{occupation.occ_name}' is a {occupation.get_occ_category_display()} occupation and doesn't support Modular registration."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if not occupation.has_modular:
+            return Response(
+                {'error': f"Cannot change to Modular. Current occupation '{occupation.occ_name}' doesn't have Modular registration enabled."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    old_registration_number = candidate.registration_number
+    
+    # Update registration category
+    candidate.registration_category = new_reg_category
+    
+    # Generate new registration number (reg category code is part of it)
+    new_registration_number = candidate.generate_registration_number()
+    candidate.registration_number = new_registration_number
+    
+    candidate.save()
+    
+    category_display = {
+        'modular': 'Modular',
+        'formal': 'Formal',
+        'workers_pas': "Worker's PAS"
+    }
+    
+    return Response({
+        'message': f'Successfully changed registration category for {candidate.full_name} to {category_display[new_reg_category]}',
+        'candidate_id': candidate.id,
+        'old_registration_category': old_reg_category,
+        'new_registration_category': new_reg_category,
+        'old_registration_number': old_registration_number,
+        'new_registration_number': new_registration_number,
+    }, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def bulk_change_candidate_occupation(request):
+    """Bulk change occupation for multiple candidates"""
+    candidate_ids = request.data.get('candidate_ids', [])
+    new_occupation_id = request.data.get('new_occupation_id')
+    
+    if not candidate_ids:
+        return Response(
+            {'error': 'No candidates selected'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if not new_occupation_id:
+        return Response(
+            {'error': 'New occupation ID is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    from occupations.models import Occupation
+    try:
+        new_occupation = Occupation.objects.get(id=new_occupation_id)
+    except Occupation.DoesNotExist:
+        return Response(
+            {'error': 'Occupation not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    from results.models import ModularResult, FormalResult, WorkersPasResult
+    
+    candidates = Candidate.objects.filter(id__in=candidate_ids)
+    
+    successful = []
+    failed = []
+    
+    for candidate in candidates:
+        # Check if candidate has any enrollments
+        has_enrollments = CandidateEnrollment.objects.filter(candidate=candidate).exists()
+        if has_enrollments:
+            failed.append({
+                'id': candidate.id,
+                'name': candidate.full_name,
+                'reason': 'Has existing enrollments'
+            })
+            continue
+        
+        # Check if candidate has any results
+        has_results = (
+            ModularResult.objects.filter(candidate=candidate).exists() or
+            FormalResult.objects.filter(candidate=candidate).exists() or
+            WorkersPasResult.objects.filter(candidate=candidate).exists()
+        )
+        if has_results:
+            failed.append({
+                'id': candidate.id,
+                'name': candidate.full_name,
+                'reason': 'Has existing results'
+            })
+            continue
+        
+        # Validate registration category compatibility
+        candidate_reg_cat = candidate.registration_category
+        
+        if candidate_reg_cat == 'workers_pas' and new_occupation.occ_category != 'workers_pas':
+            failed.append({
+                'id': candidate.id,
+                'name': candidate.full_name,
+                'reason': f"Registration category mismatch (Worker's PAS → {new_occupation.get_occ_category_display()})"
+            })
+            continue
+        elif candidate_reg_cat == 'formal' and new_occupation.occ_category != 'formal':
+            failed.append({
+                'id': candidate.id,
+                'name': candidate.full_name,
+                'reason': f"Registration category mismatch (Formal → {new_occupation.get_occ_category_display()})"
+            })
+            continue
+        elif candidate_reg_cat == 'modular' and (new_occupation.occ_category != 'formal' or not new_occupation.has_modular):
+            failed.append({
+                'id': candidate.id,
+                'name': candidate.full_name,
+                'reason': "Occupation doesn't support Modular registration"
+            })
+            continue
+        
+        # All validations passed - update candidate
+        old_registration_number = candidate.registration_number
+        candidate.occupation = new_occupation
+        candidate.registration_number = candidate.generate_registration_number()
+        candidate.save()
+        
+        successful.append({
+            'id': candidate.id,
+            'name': candidate.full_name,
+            'old_reg_no': old_registration_number,
+            'new_reg_no': candidate.registration_number
+        })
+    
+    return Response({
+        'message': f'Changed occupation for {len(successful)} candidate(s) to {new_occupation.occ_name}',
+        'successful': len(successful),
+        'failed': len(failed),
+        'successful_details': successful,
+        'failed_details': failed,
+    }, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def bulk_change_candidate_registration_category(request):
+    """Bulk change registration category for multiple candidates"""
+    candidate_ids = request.data.get('candidate_ids', [])
+    new_reg_category = request.data.get('new_registration_category')
+    
+    valid_categories = ['modular', 'formal', 'workers_pas']
+    if not new_reg_category or new_reg_category not in valid_categories:
+        return Response(
+            {'error': f'Invalid registration category. Must be one of: {", ".join(valid_categories)}'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if not candidate_ids:
+        return Response(
+            {'error': 'No candidates selected'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    from results.models import ModularResult, FormalResult, WorkersPasResult
+    
+    candidates = Candidate.objects.filter(id__in=candidate_ids)
+    
+    successful = []
+    failed = []
+    
+    category_display = {
+        'modular': 'Modular',
+        'formal': 'Formal',
+        'workers_pas': "Worker's PAS"
+    }
+    
+    for candidate in candidates:
+        # Check if already in target category
+        if candidate.registration_category == new_reg_category:
+            failed.append({
+                'id': candidate.id,
+                'name': candidate.full_name,
+                'reason': f'Already registered as {category_display[new_reg_category]}'
+            })
+            continue
+        
+        # Check for enrollments
+        if CandidateEnrollment.objects.filter(candidate=candidate).exists():
+            failed.append({
+                'id': candidate.id,
+                'name': candidate.full_name,
+                'reason': 'Has existing enrollments'
+            })
+            continue
+        
+        # Check for results
+        has_results = (
+            ModularResult.objects.filter(candidate=candidate).exists() or
+            FormalResult.objects.filter(candidate=candidate).exists() or
+            WorkersPasResult.objects.filter(candidate=candidate).exists()
+        )
+        if has_results:
+            failed.append({
+                'id': candidate.id,
+                'name': candidate.full_name,
+                'reason': 'Has existing results'
+            })
+            continue
+        
+        # Check occupation
+        occupation = candidate.occupation
+        if not occupation:
+            failed.append({
+                'id': candidate.id,
+                'name': candidate.full_name,
+                'reason': 'No occupation assigned'
+            })
+            continue
+        
+        # Validate occupation supports target category
+        if new_reg_category == 'workers_pas':
+            if occupation.occ_category != 'workers_pas':
+                failed.append({
+                    'id': candidate.id,
+                    'name': candidate.full_name,
+                    'reason': f"Occupation doesn't support Worker's PAS"
+                })
+                continue
+        elif new_reg_category == 'formal':
+            if occupation.occ_category != 'formal':
+                failed.append({
+                    'id': candidate.id,
+                    'name': candidate.full_name,
+                    'reason': "Occupation doesn't support Formal"
+                })
+                continue
+        elif new_reg_category == 'modular':
+            if occupation.occ_category != 'formal':
+                failed.append({
+                    'id': candidate.id,
+                    'name': candidate.full_name,
+                    'reason': "Occupation doesn't support Modular"
+                })
+                continue
+            if not occupation.has_modular:
+                failed.append({
+                    'id': candidate.id,
+                    'name': candidate.full_name,
+                    'reason': "Occupation doesn't have Modular enabled"
+                })
+                continue
+        
+        old_registration_number = candidate.registration_number
+        
+        # Update registration category
+        candidate.registration_category = new_reg_category
+        candidate.registration_number = candidate.generate_registration_number()
+        candidate.save()
+        
+        successful.append({
+            'id': candidate.id,
+            'name': candidate.full_name,
+            'old_reg_no': old_registration_number,
+            'new_reg_no': candidate.registration_number
+        })
+    
+    return Response({
+        'message': f'Changed registration category for {len(successful)} candidate(s) to {category_display[new_reg_category]}',
+        'successful': len(successful),
+        'failed': len(failed),
+        'successful_details': successful,
+        'failed_details': failed,
+    }, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def bulk_clear_candidate_data(request):
+    """Bulk clear all results, enrollments, and fees for multiple candidates"""
+    candidate_ids = request.data.get('candidate_ids', [])
+    
+    if not candidate_ids:
+        return Response(
+            {'error': 'No candidates selected'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    from results.models import ModularResult, FormalResult, WorkersPasResult
+    
+    total_cleared = {
+        'modular_results': 0,
+        'formal_results': 0,
+        'workers_pas_results': 0,
+        'enrollments': 0,
+        'candidates_processed': 0,
+    }
+    
+    candidates = Candidate.objects.filter(id__in=candidate_ids)
+    
+    for candidate in candidates:
+        # Delete all modular results
+        modular_deleted = ModularResult.objects.filter(candidate=candidate).delete()
+        total_cleared['modular_results'] += modular_deleted[0] if modular_deleted else 0
+        
+        # Delete all formal results
+        formal_deleted = FormalResult.objects.filter(candidate=candidate).delete()
+        total_cleared['formal_results'] += formal_deleted[0] if formal_deleted else 0
+        
+        # Delete all workers PAS results
+        workers_deleted = WorkersPasResult.objects.filter(candidate=candidate).delete()
+        total_cleared['workers_pas_results'] += workers_deleted[0] if workers_deleted else 0
+        
+        # Delete all enrollments
+        enrollments_deleted = CandidateEnrollment.objects.filter(candidate=candidate).delete()
+        total_cleared['enrollments'] += enrollments_deleted[0] if enrollments_deleted else 0
+        
+        total_cleared['candidates_processed'] += 1
+    
+    return Response({
+        'message': f'Successfully cleared data for {total_cleared["candidates_processed"]} candidate(s)',
+        'cleared': total_cleared
+    }, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def clear_candidate_data(request, candidate_id):
+    """Clear all results, enrollments, and fees for a candidate"""
+    try:
+        candidate = Candidate.objects.get(id=candidate_id)
+    except Candidate.DoesNotExist:
+        return Response(
+            {'error': 'Candidate not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    from results.models import ModularResult, FormalResult, WorkersPasResult
+    
+    cleared = {
+        'modular_results': 0,
+        'formal_results': 0,
+        'workers_pas_results': 0,
+        'enrollments': 0,
+    }
+    
+    # Delete all modular results
+    modular_deleted = ModularResult.objects.filter(candidate=candidate).delete()
+    cleared['modular_results'] = modular_deleted[0] if modular_deleted else 0
+    
+    # Delete all formal results
+    formal_deleted = FormalResult.objects.filter(candidate=candidate).delete()
+    cleared['formal_results'] = formal_deleted[0] if formal_deleted else 0
+    
+    # Delete all workers PAS results
+    workers_deleted = WorkersPasResult.objects.filter(candidate=candidate).delete()
+    cleared['workers_pas_results'] = workers_deleted[0] if workers_deleted else 0
+    
+    # Delete all enrollments (this will also reset fees since fees are tied to enrollments)
+    enrollments_deleted = CandidateEnrollment.objects.filter(candidate=candidate).delete()
+    cleared['enrollments'] = enrollments_deleted[0] if enrollments_deleted else 0
+    
+    return Response({
+        'message': f'Successfully cleared all data for {candidate.full_name}',
+        'candidate_id': candidate.id,
+        'candidate_name': candidate.full_name,
+        'cleared': cleared
+    }, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])

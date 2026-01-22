@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import CandidateViewSet, delete_enrollment_view, candidate_login, candidate_portal_data
+from .views import CandidateViewSet, delete_enrollment_view, bulk_de_enroll_view, clear_candidate_data, bulk_clear_candidate_data, change_candidate_series, change_candidate_center, change_candidate_occupation, bulk_change_candidate_occupation, change_candidate_registration_category, bulk_change_candidate_registration_category, candidate_login, candidate_portal_data
 from .views_payment import (
     schoolpay_check_balance,
     schoolpay_payment_callback,
@@ -15,8 +15,17 @@ urlpatterns = [
     path('candidate-login/', candidate_login, name='candidate-login'),
     path('candidate-portal/<path:registration_number>/', candidate_portal_data, name='candidate-portal-data'),
     
-    # De-enrollment endpoint (must come before router.urls)
+    # De-enrollment endpoints (must come before router.urls)
     path('enrollments/<int:enrollment_id>/', delete_enrollment_view, name='delete-enrollment'),
+    path('bulk-de-enroll/', bulk_de_enroll_view, name='bulk-de-enroll'),
+    path('bulk-clear-data/', bulk_clear_candidate_data, name='bulk-clear-candidate-data'),
+    path('bulk-change-occupation/', bulk_change_candidate_occupation, name='bulk-change-candidate-occupation'),
+    path('bulk-change-registration-category/', bulk_change_candidate_registration_category, name='bulk-change-candidate-registration-category'),
+    path('<int:candidate_id>/clear-data/', clear_candidate_data, name='clear-candidate-data'),
+    path('<int:candidate_id>/change-series/', change_candidate_series, name='change-candidate-series'),
+    path('<int:candidate_id>/change-center/', change_candidate_center, name='change-candidate-center'),
+    path('<int:candidate_id>/change-occupation/', change_candidate_occupation, name='change-candidate-occupation'),
+    path('<int:candidate_id>/change-registration-category/', change_candidate_registration_category, name='change-candidate-registration-category'),
     
     path('', include(router.urls)),
     

@@ -189,6 +189,57 @@ export const candidateApi = {
   bulkEnroll: (data) => {
     return apiClient.post(`${CANDIDATES_BASE}/bulk-enroll/`, data);
   },
+
+  // Bulk de-enroll candidates
+  bulkDeEnroll: (candidateIds) => {
+    return apiClient.post(`${CANDIDATES_BASE}/bulk-de-enroll/`, { candidate_ids: candidateIds });
+  },
+
+  // Clear all results, enrollments, and fees for a candidate
+  clearData: (candidateId) => {
+    return apiClient.post(`${CANDIDATES_BASE}/${candidateId}/clear-data/`);
+  },
+
+  // Bulk clear all results, enrollments, and fees for multiple candidates
+  bulkClearData: (candidateIds) => {
+    return apiClient.post(`${CANDIDATES_BASE}/bulk-clear-data/`, { candidate_ids: candidateIds });
+  },
+
+  // Change assessment series for a candidate
+  changeSeries: (candidateId, newSeriesId) => {
+    return apiClient.post(`${CANDIDATES_BASE}/${candidateId}/change-series/`, { new_series_id: newSeriesId });
+  },
+
+  // Change assessment center for a candidate
+  changeCenter: (candidateId, newCenterId) => {
+    return apiClient.post(`${CANDIDATES_BASE}/${candidateId}/change-center/`, { new_center_id: newCenterId });
+  },
+
+  // Change occupation for a candidate
+  changeOccupation: (candidateId, newOccupationId) => {
+    return apiClient.post(`${CANDIDATES_BASE}/${candidateId}/change-occupation/`, { new_occupation_id: newOccupationId });
+  },
+
+  // Bulk change occupation for multiple candidates
+  bulkChangeOccupation: (candidateIds, newOccupationId) => {
+    return apiClient.post(`${CANDIDATES_BASE}/bulk-change-occupation/`, { 
+      candidate_ids: candidateIds, 
+      new_occupation_id: newOccupationId 
+    });
+  },
+
+  // Change registration category for a candidate
+  changeRegistrationCategory: (candidateId, newRegCategory) => {
+    return apiClient.post(`${CANDIDATES_BASE}/${candidateId}/change-registration-category/`, { new_registration_category: newRegCategory });
+  },
+
+  // Bulk change registration category for multiple candidates
+  bulkChangeRegistrationCategory: (candidateIds, newRegCategory) => {
+    return apiClient.post(`${CANDIDATES_BASE}/bulk-change-registration-category/`, { 
+      candidate_ids: candidateIds, 
+      new_registration_category: newRegCategory 
+    });
+  },
 };
 
 export default candidateApi;
