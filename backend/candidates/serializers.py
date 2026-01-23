@@ -251,6 +251,7 @@ class EnrollmentPaperSerializer(serializers.ModelSerializer):
 class CandidateEnrollmentSerializer(serializers.ModelSerializer):
     assessment_series_name = serializers.CharField(source='assessment_series.name', read_only=True)
     level_name = serializers.SerializerMethodField()
+    level_id = serializers.IntegerField(source='occupation_level.id', read_only=True)
     occupation_name = serializers.SerializerMethodField()
     structure_type = serializers.CharField(source='occupation_level.structure_type', read_only=True)
     modules = EnrollmentModuleSerializer(many=True, read_only=True)
@@ -288,7 +289,7 @@ class CandidateEnrollmentSerializer(serializers.ModelSerializer):
         model = CandidateEnrollment
         fields = [
             'id', 'candidate', 'assessment_series', 'assessment_series_name',
-            'occupation_level', 'level_name', 'occupation_name', 'structure_type',
+            'occupation_level', 'level_id', 'level_name', 'occupation_name', 'structure_type',
             'total_amount', 'modules', 'papers', 'is_active',
             'enrolled_at', 'updated_at'
         ]
