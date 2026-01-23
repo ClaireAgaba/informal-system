@@ -19,7 +19,7 @@ class OccupationLevelSerializer(serializers.ModelSerializer):
     class Meta:
         model = OccupationLevel
         fields = '__all__'
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'occupation']
 
 
 class OccupationLevelCreateSerializer(serializers.ModelSerializer):
