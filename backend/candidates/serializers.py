@@ -427,21 +427,25 @@ class BulkEnrollSerializer(serializers.Serializer):
         modules = data.get('modules', [])
         papers = data.get('papers', [])
         
+        valid_modules = []
         if modules and occupation_level:
-            valid_modules = OccupationModule.objects.filter(
+            valid_modules = list(OccupationModule.objects.filter(
                 id__in=modules,
                 level=occupation_level,
                 occupation=occupation_level.occupation
-            )
-            if valid_modules.count() != len(modules):
+            ))
+            if len(valid_modules) != len(modules):
                 raise serializers.ValidationError({'modules': 'Invalid modules selected for this level'})
         
+        valid_papers = []
         if papers:
             # For workers_pas, papers can be from any level
-            valid_papers = OccupationPaper.objects.filter(id__in=papers)
-            if valid_papers.count() != len(papers):
+            valid_papers = list(OccupationPaper.objects.filter(id__in=papers))
+            if len(valid_papers) != len(papers):
                 raise serializers.ValidationError({'papers': 'Invalid papers selected for this occupation'})
         
         data['assessment_series_obj'] = assessment_series
         data['occupation_level_obj'] = occupation_level
+        data['modules'] = valid_modules
+        data['papers'] = valid_papers
         return data
