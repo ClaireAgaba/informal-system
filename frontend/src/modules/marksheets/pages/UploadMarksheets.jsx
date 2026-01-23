@@ -28,11 +28,11 @@ export default function UploadMarksheets() {
     },
   });
 
-  // Fetch occupations (all - no pagination on backend)
+  // Fetch occupations (all with large page_size)
   const { data: occupationsData } = useQuery({
     queryKey: ['occupations-all'],
     queryFn: async () => {
-      const response = await apiClient.get('/occupations/occupations/');
+      const response = await apiClient.get('/occupations/occupations/', { params: { page_size: 1000 } });
       return response.data.results || response.data;
     },
   });
