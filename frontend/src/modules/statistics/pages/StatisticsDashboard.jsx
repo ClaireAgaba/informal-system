@@ -1,11 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Briefcase, Building, FileText, TrendingUp, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
-import candidateApi from '@modules/candidates/services/candidateApi';
-import occupationApi from '@modules/occupations/services/occupationApi';
-import assessmentCenterApi from '@modules/assessment-centers/services/assessmentCenterApi';
-import assessmentSeriesApi from '@modules/assessment-series/services/assessmentSeriesApi';
 import statisticsApi from '../services/statisticsApi';
+import assessmentSeriesApi from '@modules/assessment-series/services/assessmentSeriesApi';
 
 const StatisticsDashboard = () => {
   const navigate = useNavigate();
@@ -31,42 +28,51 @@ const StatisticsDashboard = () => {
   const fetchStatistics = async () => {
     try {
       setLoading(true);
-      
-      // Fetch data - use candidate statistics endpoint for accurate counts
-      const [candidateStatsRes, candidatesRes, occupationsRes, centersRes, seriesRes] = await Promise.all([
-        statisticsApi.getCandidatesStats().catch(() => ({ data: null })),
-        candidateApi.getAll({ page_size: 1 }),
-        occupationApi.getAll({ page_size: 1 }),
-        assessmentCenterApi.getAll({ page_size: 1 }),
-        assessmentSeriesApi.getAll()
+
+      // Fetch all statistics from backend APIs in parallel
+      const [
+        overallStatsRes,
+        genderStatsRes,
+        categoryStatsRes,
+        specialNeedsStatsRes,
+        seriesRes
+      ] = await Promise.all([
+        statisticsApi.getOverallStats().catch(() => ({ data: { total_candidates: 0, total_occupations: 0, total_centers: 0, total_results: 0 } })),
+        statisticsApi.getCandidatesByGender().catch(() => ({ data: { male: 0, female: 0, other: 0 } })),
+        statisticsApi.getCandidatesByCategory().catch(() => ({ data: { modular: 0, formal: 0, workers_pas: 0 } })),
+        statisticsApi.getCandidatesBySpecialNeeds().catch(() => ({ data: { with_special_needs: 0, without_special_needs: 0, male_with_special_needs: 0, female_with_special_needs: 0 } })),
+        assessmentSeriesApi.getAll().catch(() => ({ data: { results: [] } }))
       ]);
 
-      // Get total counts from API response count field (accurate even with pagination)
-      const totalCandidates = candidatesRes.data?.count || 0;
-      const totalOccupations = occupationsRes.data?.count || 0;
-      const totalCenters = centersRes.data?.count || 0;
-      
-      // Use backend statistics if available, otherwise show basic totals
-      const candidateStats = candidateStatsRes.data || {};
-      const genderStats = candidateStats.by_gender || { male: 0, female: 0 };
-      const categoryStats = candidateStats.by_category || { modular: 0, formal: 0, workers_pas: 0 };
-      const specialNeedsStats = {
-        overall: { 
-          withSpecialNeeds: candidateStats.with_disability || 0, 
-          withoutSpecialNeeds: totalCandidates - (candidateStats.with_disability || 0)
-        },
-        byGender: { male: 0, female: 0 }
-      };
+      const overallStats = overallStatsRes.data;
+      const genderStats = genderStatsRes.data;
+      const categoryStats = categoryStatsRes.data;
+      const specialNeedsStats = specialNeedsStatsRes.data;
 
       setStats({
-        totalCandidates: totalCandidates,
-        totalOccupations: totalOccupations,
-        totalCenters: totalCenters,
-        totalResults: 46151,
-        candidatesByGender: genderStats,
-        candidatesByCategory: categoryStats,
-        specialNeeds: specialNeedsStats.overall,
-        specialNeedsByGender: specialNeedsStats.byGender,
+        totalCandidates: overallStats.total_candidates || 0,
+        totalOccupations: overallStats.total_occupations || 0,
+        totalCenters: overallStats.total_centers || 0,
+        totalResults: overallStats.total_results || 0,
+        candidatesByGender: {
+          male: genderStats.male || 0,
+          female: genderStats.female || 0,
+          other: genderStats.other || 0
+        },
+        candidatesByCategory: {
+          modular: categoryStats.modular || 0,
+          formal: categoryStats.formal || 0,
+          workers_pas: categoryStats.workers_pas || 0,
+          unknown: 0
+        },
+        specialNeeds: {
+          withSpecialNeeds: specialNeedsStats.with_special_needs || 0,
+          withoutSpecialNeeds: specialNeedsStats.without_special_needs || 0
+        },
+        specialNeedsByGender: {
+          male: specialNeedsStats.male_with_special_needs || 0,
+          female: specialNeedsStats.female_with_special_needs || 0
+        },
         categoryByGender: [],
         assessmentSeries: []
       });
@@ -94,10 +100,10 @@ const StatisticsDashboard = () => {
   const calculateSpecialNeedsStats = (candidates) => {
     const withSpecialNeeds = candidates.filter(c => c.has_special_needs).length;
     const withoutSpecialNeeds = candidates.filter(c => !c.has_special_needs).length;
-    
+
     const maleWithSpecialNeeds = candidates.filter(c => c.has_special_needs && c.gender?.toLowerCase() === 'male').length;
     const femaleWithSpecialNeeds = candidates.filter(c => c.has_special_needs && c.gender?.toLowerCase() === 'female').length;
-    
+
     return {
       overall: { withSpecialNeeds, withoutSpecialNeeds },
       byGender: { male: maleWithSpecialNeeds, female: femaleWithSpecialNeeds }
@@ -112,10 +118,10 @@ const StatisticsDashboard = () => {
       'workers_pas': "Worker's PAS"
     };
     return categories.map(category => {
-      const male = candidates.filter(c => 
+      const male = candidates.filter(c =>
         c.registration_category?.toLowerCase() === category && c.gender?.toLowerCase() === 'male'
       ).length;
-      const female = candidates.filter(c => 
+      const female = candidates.filter(c =>
         c.registration_category?.toLowerCase() === category && c.gender?.toLowerCase() === 'female'
       ).length;
       return { category, label: categoryLabels[category], male, female, total: male + female };
@@ -125,12 +131,12 @@ const StatisticsDashboard = () => {
   const calculateSeriesStats = (candidates, series) => {
     return series.map(s => {
       // Filter candidates who have enrollments in this series
-      const seriesCandidates = candidates.filter(c => 
+      const seriesCandidates = candidates.filter(c =>
         c.enrollments && c.enrollments.some(e => e.assessment_series === s.id)
       );
       const male = seriesCandidates.filter(c => c.gender?.toLowerCase() === 'male').length;
       const female = seriesCandidates.filter(c => c.gender?.toLowerCase() === 'female').length;
-      
+
       // Get unique occupations from enrollments for this series
       const occupationIds = new Set();
       seriesCandidates.forEach(c => {
@@ -140,9 +146,9 @@ const StatisticsDashboard = () => {
           }
         });
       });
-      
+
       const specialNeeds = seriesCandidates.filter(c => c.has_special_needs).length;
-      
+
       return {
         id: s.id,
         name: s.name,
@@ -228,6 +234,35 @@ const StatisticsDashboard = () => {
         </div>
       </div>
 
+      {/* Quick Access Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <button
+          onClick={() => navigate('/statistics/series-results')}
+          className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1 text-left"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-white mb-2">📊 Series Results Analysis</h3>
+              <p className="text-blue-100">View detailed results for each assessment series with gender breakdowns, pass rates, and performance metrics</p>
+            </div>
+            <ChevronRight className="w-8 h-8 text-white opacity-50" />
+          </div>
+        </button>
+
+        <button
+          onClick={() => navigate('/statistics/special-needs')}
+          className="bg-gradient-to-r from-purple-500 to-purple-600 p-6 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1 text-left"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-white mb-2">🎯 Special Needs Analytics</h3>
+              <p className="text-purple-100">Analyze special needs and refugee candidates with disability type and nationality breakdowns</p>
+            </div>
+            <ChevronRight className="w-8 h-8 text-white opacity-50" />
+          </div>
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Candidates by Gender */}
         <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
@@ -244,8 +279,8 @@ const StatisticsDashboard = () => {
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-pink-500 h-2 rounded-full" 
+                <div
+                  className="bg-pink-500 h-2 rounded-full"
                   style={{ width: `${getPercentage(stats.candidatesByGender.female, stats.totalCandidates)}%` }}
                 ></div>
               </div>
@@ -262,8 +297,8 @@ const StatisticsDashboard = () => {
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-500 h-2 rounded-full" 
+                <div
+                  className="bg-blue-500 h-2 rounded-full"
                   style={{ width: `${getPercentage(stats.candidatesByGender.male, stats.totalCandidates)}%` }}
                 ></div>
               </div>
@@ -286,8 +321,8 @@ const StatisticsDashboard = () => {
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-red-500 h-2 rounded-full" 
+                <div
+                  className="bg-red-500 h-2 rounded-full"
                   style={{ width: `${getPercentage(stats.specialNeeds.withSpecialNeeds, stats.totalCandidates)}%` }}
                 ></div>
               </div>
@@ -304,8 +339,8 @@ const StatisticsDashboard = () => {
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-green-500 h-2 rounded-full" 
+                <div
+                  className="bg-green-500 h-2 rounded-full"
                   style={{ width: `${getPercentage(stats.specialNeeds.withoutSpecialNeeds, stats.totalCandidates)}%` }}
                 ></div>
               </div>
@@ -329,8 +364,8 @@ const StatisticsDashboard = () => {
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-green-500 h-2 rounded-full" 
+              <div
+                className="bg-green-500 h-2 rounded-full"
                 style={{ width: `${getPercentage(stats.candidatesByCategory.modular, stats.totalCandidates)}%` }}
               ></div>
             </div>
@@ -347,8 +382,8 @@ const StatisticsDashboard = () => {
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-blue-500 h-2 rounded-full" 
+              <div
+                className="bg-blue-500 h-2 rounded-full"
                 style={{ width: `${getPercentage(stats.candidatesByCategory.formal, stats.totalCandidates)}%` }}
               ></div>
             </div>
@@ -365,8 +400,8 @@ const StatisticsDashboard = () => {
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-orange-500 h-2 rounded-full" 
+              <div
+                className="bg-orange-500 h-2 rounded-full"
                 style={{ width: `${getPercentage(stats.candidatesByCategory.workers_pas, stats.totalCandidates)}%` }}
               ></div>
             </div>
@@ -384,8 +419,8 @@ const StatisticsDashboard = () => {
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-gray-500 h-2 rounded-full" 
+                <div
+                  className="bg-gray-500 h-2 rounded-full"
                   style={{ width: `${getPercentage(stats.candidatesByCategory.unknown, stats.totalCandidates)}%` }}
                 ></div>
               </div>
@@ -409,8 +444,8 @@ const StatisticsDashboard = () => {
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-red-500 h-2 rounded-full" 
+              <div
+                className="bg-red-500 h-2 rounded-full"
                 style={{ width: `${getPercentage(stats.specialNeedsByGender.male, stats.specialNeeds.withSpecialNeeds)}%` }}
               ></div>
             </div>
@@ -427,9 +462,9 @@ const StatisticsDashboard = () => {
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-pink-500 h-2 rounded-full" 
-                  style={{ width: `${getPercentage(stats.specialNeedsByGender.female, stats.specialNeeds.withSpecialNeeds)}%` }}
+              <div
+                className="bg-pink-500 h-2 rounded-full"
+                style={{ width: `${getPercentage(stats.specialNeedsByGender.female, stats.specialNeeds.withSpecialNeeds)}%` }}
               ></div>
             </div>
           </div>
@@ -454,10 +489,9 @@ const StatisticsDashboard = () => {
                 <tr key={row.category}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className={`w-3 h-3 rounded-full mr-2 ${
-                        row.category === 'modular' ? 'bg-green-500' :
+                      <div className={`w-3 h-3 rounded-full mr-2 ${row.category === 'modular' ? 'bg-green-500' :
                         row.category === 'formal' ? 'bg-blue-500' : 'bg-orange-500'
-                      }`}></div>
+                        }`}></div>
                       <span className="text-sm font-medium text-gray-900">{row.label}</span>
                     </div>
                   </td>
@@ -505,7 +539,7 @@ const StatisticsDashboard = () => {
           return (
             <div key={year} className="mb-4 border border-gray-200 rounded-lg overflow-hidden">
               {/* Year Header - Clickable */}
-              <div 
+              <div
                 className="flex items-center justify-between p-4 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={toggleYear}
               >
@@ -566,8 +600,8 @@ const StatisticsDashboard = () => {
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {yearSeries.map((series) => (
-                          <tr 
-                            key={series.id} 
+                          <tr
+                            key={series.id}
                             className="hover:bg-gray-50 cursor-pointer"
                             onClick={() => navigate(`/statistics/series/${series.id}`)}
                           >

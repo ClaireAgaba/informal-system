@@ -45,6 +45,8 @@ import ComplaintDetail from '@modules/complaints/pages/ComplaintDetail';
 import CreateComplaint from '@modules/complaints/pages/CreateComplaint';
 import StatisticsDashboard from '@modules/statistics/pages/StatisticsDashboard';
 import SeriesStatistics from '@modules/statistics/pages/SeriesStatistics';
+import SeriesResults from '@modules/statistics/pages/SeriesResults';
+import SpecialNeedsAnalytics from '@modules/statistics/pages/SpecialNeedsAnalytics';
 
 function App() {
   return (
@@ -53,11 +55,11 @@ function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/candidate-login" element={<CandidateLogin />} />
       <Route path="/candidate-portal" element={<CandidatePortal />} />
-      
+
       {/* Dashboard - Full screen without sidebar */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="/dashboard" element={<Dashboard />} />
-      
+
       {/* Protected routes with sidebar layout */}
       <Route path="/" element={<DashboardLayout />}>
         {/* Candidate routes */}
@@ -65,7 +67,7 @@ function App() {
         <Route path="candidates/new" element={<CandidateCreate />} />
         <Route path="candidates/:id" element={<CandidateView />} />
         <Route path="candidates/:id/edit" element={<CandidateEdit />} />
-        
+
         {/* Occupation routes */}
         <Route path="occupations" element={<OccupationList />} />
         <Route path="occupations/new" element={<OccupationCreate />} />
@@ -75,7 +77,7 @@ function App() {
         <Route path="occupations/modules/:id/edit" element={<ModuleEdit />} />
         <Route path="occupations/:occupationId/papers/new" element={<PaperCreate />} />
         <Route path="occupations/papers/:id/edit" element={<PaperEdit />} />
-        
+
         {/* Assessment Center routes */}
         <Route path="assessment-centers" element={<AssessmentCenterList />} />
         <Route path="assessment-centers/new" element={<AssessmentCenterCreate />} />
@@ -83,13 +85,13 @@ function App() {
         <Route path="assessment-centers/:id/edit" element={<AssessmentCenterEdit />} />
         <Route path="assessment-centers/:centerId/branches/new" element={<BranchEdit />} />
         <Route path="assessment-centers/branches/:branchId/edit" element={<BranchEdit />} />
-        
+
         {/* Assessment Series routes */}
         <Route path="assessment-series" element={<AssessmentSeriesList />} />
         <Route path="assessment-series/new" element={<AssessmentSeriesCreate />} />
         <Route path="assessment-series/:id" element={<AssessmentSeriesView />} />
         <Route path="assessment-series/:id/edit" element={<AssessmentSeriesEdit />} />
-        
+
         {/* Users routes */}
         <Route path="users" element={<UsersIndex />} />
         <Route path="users/staff" element={<StaffList />} />
@@ -104,27 +106,30 @@ function App() {
         <Route path="users/center-representatives/create" element={<CenterRepresentativeEdit />} />
         <Route path="users/center-representatives/:id" element={<CenterRepresentativeView />} />
         <Route path="users/center-representatives/:id/edit" element={<CenterRepresentativeEdit />} />
-        
+
         {/* Reports routes */}
         <Route path="reports" element={<ReportsIndex />} />
         <Route path="reports/albums" element={<Albums />} />
         <Route path="reports/result-lists" element={<ResultLists />} />
-        
+
         {/* Fees routes */}
         <Route path="fees/*" element={<FeesModule />} />
-        
+
         {/* Marksheets routes */}
         <Route path="marksheets/*" element={<MarksheetsModule />} />
-        
+
         {/* Complaints routes */}
         <Route path="complaints" element={<ComplaintsList />} />
         <Route path="complaints/create" element={<CreateComplaint />} />
         <Route path="complaints/:id" element={<ComplaintDetail />} />
-        
+
         {/* Statistics routes */}
         <Route path="statistics" element={<StatisticsDashboard />} />
         <Route path="statistics/series/:id" element={<SeriesStatistics />} />
-        
+        <Route path="statistics/series-results" element={<SeriesResults />} />
+        <Route path="statistics/series-results/:seriesId" element={<SeriesResults />} />
+        <Route path="statistics/special-needs" element={<SpecialNeedsAnalytics />} />
+
         <Route path="*" element={<div className="p-6"><h1 className="text-2xl">404 - Page Not Found</h1></div>} />
       </Route>
     </Routes>
