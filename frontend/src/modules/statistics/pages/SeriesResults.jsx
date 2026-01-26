@@ -6,30 +6,38 @@ import statisticsApi from '../services/statisticsApi';
 const SeriesResults = () => {
     const { seriesId } = useParams();
     const navigate = useNavigate();
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [seriesList, setSeriesList] = useState([]);
-    const [selectedSeriesId, setSelectedSeriesId] = useState(seriesId || null);
+    const [selectedSeriesId, setSelectedSeriesId] = useState(seriesId || '');
     const [results, setResults] = useState(null);
+    const [loadingList, setLoadingList] = useState(true);
 
     useEffect(() => {
         fetchSeriesList();
+        if (seriesId) { // If seriesId is present in URL, fetch results for it
+            fetchSeriesResults(seriesId);
+        }
     }, []);
 
-    useEffect(() => {
-        if (selectedSeriesId) {
-            fetchSeriesResults(selectedSeriesId);
+    // Only fetch results when user explicitly selects a series
+    const handleSeriesChange = (id) => {
+        setSelectedSeriesId(id);
+        if (id) {
+            fetchSeriesResults(id);
+        } else {
+            setResults(null);
         }
-    }, [selectedSeriesId]);
+    };
 
     const fetchSeriesList = async () => {
         try {
+            setLoadingList(true);
             const response = await statisticsApi.getAssessmentSeriesList();
             setSeriesList(response.data);
-            if (!selectedSeriesId && response.data.length > 0) {
-                setSelectedSeriesId(response.data[0].id);
-            }
         } catch (error) {
             console.error('Error fetching series list:', error);
+        } finally {
+            setLoadingList(false);
         }
     };
 
@@ -50,7 +58,7 @@ const SeriesResults = () => {
         return ((value / total) * 100).toFixed(1);
     };
 
-    if (loading && !results) {
+    if (loadingList) {
         return (
             <div className="flex justify-center items-center h-screen">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -75,19 +83,34 @@ const SeriesResults = () => {
 
             {/* Series Selector */}
             <div className="bg-white p-4 rounded-lg shadow border border-gray-200 mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select Assessment Series</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Assessment Series to Analyze</label>
                 <select
-                    value={selectedSeriesId || ''}
-                    onChange={(e) => setSelectedSeriesId(Number(e.target.value))}
+                    value={selectedSeriesId}
+                    onChange={(e) => handleSeriesChange(e.target.value)}
                     className="w-full md:w-96 border border-gray-300 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
+                    <option value="">-- Select a series --</option>
                     {seriesList.map((series) => (
                         <option key={series.id} value={series.id}>
                             {series.name} ({series.year}) - {series.total_candidates} candidates
                         </option>
                     ))}
                 </select>
+                {!selectedSeriesId && (
+                    <p className="mt-2 text-sm text-gray-500">
+                        Please select an assessment series to view detailed results
+                    </p>
+                )}
             </div>
+
+            {loading && selectedSeriesId && (
+                <div className="flex justify-center items-center h-64">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                        <p className="text-gray-600">Loading results...</p>
+                    </div>
+                </div>
+            )}
 
             {results && (
                 <>
@@ -170,7 +193,7 @@ const SeriesResults = () => {
                                     <div className="w-full bg-gray-200 rounded-full h-3">
                                         <div
                                             className="bg-blue-500 h-3 rounded-full"
-                                            style={{ width: `${results.overview.male_pass_rate}%` }}
+                                            style={{ width: `${results.overview.male_pass_rate}% ` }}
                                         ></div>
                                     </div>
                                 </div>
@@ -188,7 +211,7 @@ const SeriesResults = () => {
                                     <div className="w-full bg-gray-200 rounded-full h-3">
                                         <div
                                             className="bg-pink-500 h-3 rounded-full"
-                                            style={{ width: `${results.overview.female_pass_rate}%` }}
+                                            style={{ width: `${results.overview.female_pass_rate}% ` }}
                                         ></div>
                                     </div>
                                 </div>
