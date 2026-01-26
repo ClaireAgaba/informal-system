@@ -60,7 +60,28 @@ class CandidateViewSet(viewsets.ModelViewSet):
             'created_by',
             'updated_by',
             'verified_by'
+        ).prefetch_related(
+            'enrollments'
         ).all()
+        
+        # Custom filters for is_enrolled and has_marks
+        is_enrolled = self.request.query_params.get('is_enrolled')
+        if is_enrolled is not None:
+            if is_enrolled.lower() == 'yes':
+                queryset = queryset.filter(enrollments__is_active=True).distinct()
+            elif is_enrolled.lower() == 'no':
+                queryset = queryset.exclude(enrollments__is_active=True)
+        
+        has_marks = self.request.query_params.get('has_marks')
+        if has_marks is not None:
+            if has_marks.lower() == 'yes':
+                queryset = queryset.filter(
+                    Q(formal_results__isnull=False) | Q(modular_results__isnull=False)
+                ).distinct()
+            elif has_marks.lower() == 'no':
+                queryset = queryset.exclude(
+                    Q(formal_results__isnull=False) | Q(modular_results__isnull=False)
+                )
         
         # Filter by center for center representatives
         if self.request.user.is_authenticated and self.request.user.user_type == 'center_representative':

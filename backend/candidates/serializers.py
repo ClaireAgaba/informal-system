@@ -5,6 +5,7 @@ from assessment_centers.models import AssessmentCenter, CenterBranch
 from occupations.models import Occupation, OccupationLevel, OccupationModule, OccupationPaper
 from assessment_series.models import AssessmentSeries
 from users.models import Staff
+from results.models import FormalResult, ModularResult
 
 
 class CandidateListSerializer(serializers.ModelSerializer):
@@ -16,6 +17,8 @@ class CandidateListSerializer(serializers.ModelSerializer):
     village_name = serializers.CharField(source='village.name', read_only=True)
     enrollments = serializers.SerializerMethodField()
     has_special_needs = serializers.SerializerMethodField()
+    is_enrolled = serializers.SerializerMethodField()
+    has_marks = serializers.SerializerMethodField()
     
     class Meta:
         model = Candidate
@@ -25,6 +28,7 @@ class CandidateListSerializer(serializers.ModelSerializer):
             'district_name', 'village_name', 'has_disability', 'has_special_needs',
             'assessment_center', 'registration_category', 'occupation', 'sector',
             'verification_status', 'status', 'passport_photo', 'enrollments',
+            'is_enrolled', 'has_marks',
             'created_at', 'updated_at'
         ]
     
@@ -66,6 +70,18 @@ class CandidateListSerializer(serializers.ModelSerializer):
     def get_has_special_needs(self, obj):
         """Check if candidate has special needs (disability)"""
         return obj.has_disability
+    
+    def get_is_enrolled(self, obj):
+        """Check if candidate has any active enrollments"""
+        return obj.enrollments.filter(is_active=True).exists()
+    
+    def get_has_marks(self, obj):
+        """Check if candidate has any marks/results"""
+        # Check for formal results
+        has_formal_results = FormalResult.objects.filter(candidate=obj).exists()
+        # Check for modular results
+        has_modular_results = ModularResult.objects.filter(candidate=obj).exists()
+        return has_formal_results or has_modular_results
 
 
 class CandidateDetailSerializer(serializers.ModelSerializer):

@@ -53,6 +53,8 @@ const CandidateList = () => {
     has_disability: '',
     is_refugee: '',
     verification_status: '',
+    is_enrolled: '',
+    has_marks: '',
   });
 
   // Fetch candidates
@@ -674,6 +676,28 @@ const CandidateList = () => {
                     <option value="declined">Declined</option>
                   </select>
                 </th>
+                <th className="px-2 py-2">
+                  <select
+                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    value={filters.is_enrolled}
+                    onChange={(e) => setFilters({ ...filters, is_enrolled: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </th>
+                <th className="px-2 py-2">
+                  <select
+                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    value={filters.has_marks}
+                    onChange={(e) => setFilters({ ...filters, has_marks: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </th>
                 <th className="px-2 py-2"></th>
               </tr>
               {/* Header Row */}
@@ -717,6 +741,12 @@ const CandidateList = () => {
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Is Enrolled
+                </th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Has Marks
+                </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -725,19 +755,19 @@ const CandidateList = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan="12" className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan="14" className="px-4 py-8 text-center text-gray-500">
                     Loading candidates...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan="12" className="px-4 py-8 text-center text-red-500">
+                  <td colSpan="14" className="px-4 py-8 text-center text-red-500">
                     Error loading candidates: {error.message}
                   </td>
                 </tr>
               ) : candidates.length === 0 ? (
                 <tr>
-                  <td colSpan="12" className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan="14" className="px-4 py-8 text-center text-gray-500">
                     No candidates found
                   </td>
                 </tr>
@@ -831,6 +861,24 @@ const CandidateList = () => {
                         {candidate.verification_status === 'verified' ? 'Verified' :
                          candidate.verification_status === 'declined' ? 'Declined' : 'Pending'}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {candidate.is_enrolled ? (
+                        <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                          Yes
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-sm">No</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {candidate.has_marks ? (
+                        <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                          Yes
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-sm">No</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end space-x-2">
