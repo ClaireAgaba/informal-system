@@ -4,7 +4,8 @@ Statistics API Views
 Provides aggregated statistics and analytics for the EMIS system
 """
 
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from django.db.models import Count, Q
 from candidates.models import Candidate
@@ -14,6 +15,7 @@ from results.models import ModularResult, FormalResult, WorkersPasResult
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def overall_statistics(request):
     """
     Get overall system statistics
@@ -39,6 +41,7 @@ def overall_statistics(request):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def candidates_by_gender(request):
     """
     Get candidates grouped by gender
@@ -53,6 +56,7 @@ def candidates_by_gender(request):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def candidates_by_category(request):
     """
     Get candidates grouped by registration category
@@ -67,6 +71,7 @@ def candidates_by_category(request):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def candidates_by_special_needs(request):
     """
     Get candidates grouped by special needs status
@@ -93,6 +98,7 @@ def candidates_by_special_needs(request):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def assessment_series_list(request):
     """
     Get all assessment series with basic statistics - OPTIMIZED VERSION
@@ -130,46 +136,44 @@ def assessment_series_list(request):
         elif gender == 'female':
             enrollment_stats[series_id]['female'] += enrollment['count']
     
-    # Fetch result counts by series in THREE queries (one per result type)
-    modular_counts = dict(
-        ModularResult.objects.filter(assessment_series_id__in=series_ids)
-        .values('assessment_series_id')
-        .annotate(
-            total=Count('id'),
-            passing=Count('id', filter=Q(mark__gte=65))
-        ).values_list('assessment_series_id', 'total', 'passing')
-    )
+    # Fetch result counts by series in FOUR queries (one per result type)
+    modular_counts = {}
+    for series_id, total, passing in ModularResult.objects.filter(
+        assessment_series_id__in=series_ids
+    ).values('assessment_series_id').annotate(
+        total=Count('id'),
+        passing=Count('id', filter=Q(mark__gte=65))
+    ).values_list('assessment_series_id', 'total', 'passing'):
+        modular_counts[series_id] = (total, passing)
     
-    formal_theory_counts = dict(
-        FormalResult.objects.filter(
-            assessment_series_id__in=series_ids,
-            type='theory'
-        ).values('assessment_series_id')
-        .annotate(
-            total=Count('id'),
-            passing=Count('id', filter=Q(mark__gte=50))
-        ).values_list('assessment_series_id', 'total', 'passing')
-    )
+    formal_theory_counts = {}
+    for series_id, total, passing in FormalResult.objects.filter(
+        assessment_series_id__in=series_ids,
+        type='theory'
+    ).values('assessment_series_id').annotate(
+        total=Count('id'),
+        passing=Count('id', filter=Q(mark__gte=50))
+    ).values_list('assessment_series_id', 'total', 'passing'):
+        formal_theory_counts[series_id] = (total, passing)
     
-    formal_practical_counts = dict(
-        FormalResult.objects.filter(
-            assessment_series_id__in=series_ids,
-            type='practical'
-        ).values('assessment_series_id')
-        .annotate(
-            total=Count('id'),
-            passing=Count('id', filter=Q(mark__gte=65))
-        ).values_list('assessment_series_id', 'total', 'passing')
-    )
+    formal_practical_counts = {}
+    for series_id, total, passing in FormalResult.objects.filter(
+        assessment_series_id__in=series_ids,
+        type='practical'
+    ).values('assessment_series_id').annotate(
+        total=Count('id'),
+        passing=Count('id', filter=Q(mark__gte=65))
+    ).values_list('assessment_series_id', 'total', 'passing'):
+        formal_practical_counts[series_id] = (total, passing)
     
-    workers_counts = dict(
-        WorkersPasResult.objects.filter(assessment_series_id__in=series_ids)
-        .values('assessment_series_id')
-        .annotate(
-            total=Count('id'),
-            passing=Count('id', filter=Q(mark__gte=65))
-        ).values_list('assessment_series_id', 'total', 'passing')
-    )
+    workers_counts = {}
+    for series_id, total, passing in WorkersPasResult.objects.filter(
+        assessment_series_id__in=series_ids
+    ).values('assessment_series_id').annotate(
+        total=Count('id'),
+        passing=Count('id', filter=Q(mark__gte=65))
+    ).values_list('assessment_series_id', 'total', 'passing'):
+        workers_counts[series_id] = (total, passing)
     
     # Build response
     series_stats = []
@@ -204,6 +208,7 @@ def assessment_series_list(request):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def assessment_series_results(request, series_id):
     """
     Detailed results for a specific assessment series with gender breakdown
@@ -341,6 +346,7 @@ def assessment_series_results(request, series_id):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def special_needs_analytics(request):
     """
     Analytics for special needs and refugee candidates

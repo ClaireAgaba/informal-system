@@ -32,10 +32,15 @@ const SeriesResults = () => {
     const fetchSeriesList = async () => {
         try {
             setLoadingList(true);
+            console.log('Fetching series list...');
             const response = await statisticsApi.getAssessmentSeriesList();
+            console.log('Series list response:', response);
+            console.log('Series data:', response.data);
             setSeriesList(response.data);
+            console.log('Series list set successfully, count:', response.data.length);
         } catch (error) {
             console.error('Error fetching series list:', error);
+            console.error('Error response:', error.response);
         } finally {
             setLoadingList(false);
         }
