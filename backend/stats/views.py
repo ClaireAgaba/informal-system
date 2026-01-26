@@ -574,104 +574,121 @@ def assessment_series_results(request, series_id):
 @permission_classes([AllowAny])
 def special_needs_analytics(request):
     """
-    Analytics for special needs and refugee candidates
+    Comprehensive analytics for special needs candidates with gender-based pass rates
     Optional query params: series_id
     """
     from assessment_series.models import AssessmentSeries
+    from configurations.models import NatureOfDisability
+    from results.models import ModularResult, FormalResult, WorkersPasResult
     
     series_id = request.query_params.get('series_id')
     
-    # Base querysets
-    special_needs_candidates = Candidate.objects.filter(has_disability=True)
-    refugee_candidates = Candidate.objects.filter(is_refugee=True)
-    
-    # Filter by series if provided
+    # Get all results (optionally filtered by series)
     if series_id:
-        special_needs_candidates = special_needs_candidates.filter(
-            enrollments__assessment_series_id=series_id
-        ).distinct()
-        refugee_candidates = refugee_candidates.filter(
-            enrollments__assessment_series_id=series_id
-        ).distinct()
+        all_results = list(ModularResult.objects.filter(assessment_series_id=series_id).select_related('candidate', 'candidate__nature_of_disability')) + \
+                      list(FormalResult.objects.filter(assessment_series_id=series_id).select_related('candidate', 'candidate__nature_of_disability')) + \
+                      list(WorkersPasResult.objects.filter(assessment_series_id=series_id).select_related('candidate', 'candidate__nature_of_disability'))
+    else:
+        all_results = list(ModularResult.objects.all().select_related('candidate', 'candidate__nature_of_disability')) + \
+                      list(FormalResult.objects.all().select_related('candidate', 'candidate__nature_of_disability')) + \
+                      list(WorkersPasResult.objects.all().select_related('candidate', 'candidate__nature_of_disability'))
     
-    # Special Needs Statistics
-    special_needs_male = special_needs_candidates.filter(gender='male').count()
-    special_needs_female = special_needs_candidates.filter(gender='female').count()
+    # Filter to only special needs candidates
+    special_needs_results = [r for r in all_results if r.candidate.has_disability]
     
-    # By disability type
+    # Calculate overall special needs statistics
+    special_needs_male = [r for r in special_needs_results if r.candidate.gender == 'male']
+    special_needs_female = [r for r in special_needs_results if r.candidate.gender == 'female']
+    
+    # Count passed results
+    def is_passed(result):
+        if isinstance(result, ModularResult):
+            return result.mark >= 65
+        elif isinstance(result, FormalResult):
+            return (result.type == 'theory' and result.mark >= 50) or (result.type == 'practical' and result.mark >= 65)
+        elif isinstance(result, WorkersPasResult):
+            return result.mark >= 65
+        return False
+    
+    male_passed = sum(1 for r in special_needs_male if is_passed(r))
+    female_passed = sum(1 for r in special_needs_female if is_passed(r))
+    total_passed = male_passed + female_passed
+    
+    overview = {
+        'total': len(special_needs_results),
+        'male': len(special_needs_male),
+        'female': len(special_needs_female),
+        'male_passed': male_passed,
+        'female_passed': female_passed,
+        'total_passed': total_passed,
+        'male_pass_rate': round((male_passed / len(special_needs_male) * 100), 2) if len(special_needs_male) > 0 else 0,
+        'female_pass_rate': round((female_passed / len(special_needs_female) * 100), 2) if len(special_needs_female) > 0 else 0,
+        'pass_rate': round((total_passed / len(special_needs_results) * 100), 2) if len(special_needs_results) > 0 else 0
+    }
+    
+    # By disability type with comprehensive metrics
     disability_breakdown = []
-    from configurations.models import NatureOfDisability
     for disability in NatureOfDisability.objects.all():
-        candidates_with = special_needs_candidates.filter(nature_of_disability=disability)
+        disability_results = [r for r in special_needs_results if r.candidate.nature_of_disability == disability]
+        
+        if not disability_results:
+            continue
+        
+        dis_male = [r for r in disability_results if r.candidate.gender == 'male']
+        dis_female = [r for r in disability_results if r.candidate.gender == 'female']
+        
+        dis_male_passed = sum(1 for r in dis_male if is_passed(r))
+        dis_female_passed = sum(1 for r in dis_female if is_passed(r))
+        dis_total_passed = dis_male_passed + dis_female_passed
+        
         disability_breakdown.append({
             'name': disability.name,
-            'count': candidates_with.count(),
-            'male': candidates_with.filter(gender='male').count(),
-            'female': candidates_with.filter(gender='female').count()
+            'total': len(disability_results),
+            'male': len(dis_male),
+            'female': len(dis_female),
+            'male_passed': dis_male_passed,
+            'female_passed': dis_female_passed,
+            'total_passed': dis_total_passed,
+            'male_pass_rate': round((dis_male_passed / len(dis_male) * 100), 2) if len(dis_male) > 0 else 0,
+            'female_pass_rate': round((dis_female_passed / len(dis_female) * 100), 2) if len(dis_female) > 0 else 0,
+            'pass_rate': round((dis_total_passed / len(disability_results) * 100), 2) if len(disability_results) > 0 else 0
         })
     
-    # By series for special needs
-    special_needs_by_series = []
-    for series in AssessmentSeries.objects.all().order_by('-start_date')[:10]:
-        series_candidates = special_needs_candidates.filter(
-            enrollments__assessment_series=series
-        ).distinct()
+    # By sector with comprehensive metrics
+    from occupations.models import Sector
+    special_needs_by_sector = []
+    for sector in Sector.objects.all():
+        # Get results where candidate's occupation belongs to this sector
+        sector_results = [r for r in special_needs_results if 
+                         r.candidate.occupation and r.candidate.occupation.sector == sector]
         
-        special_needs_by_series.append({
-            'series_id': series.id,
-            'series_name': series.name,
-            'total': series_candidates.count(),
-            'male': series_candidates.filter(gender='male').count(),
-            'female': series_candidates.filter(gender='female').count(),
-            'pass_rate': 0  # Simplified for now
-        })
-    
-    # Refugee Statistics
-    refugee_male = refugee_candidates.filter(gender='male').count()
-    refugee_female = refugee_candidates.filter(gender='female').count()
-    
-    # By nationality
-    nationality_breakdown = []
-    nationalities = refugee_candidates.values_list('nationality', flat=True).distinct()
-    for nat in nationalities:
-        nat_candidates = refugee_candidates.filter(nationality=nat)
-        nationality_breakdown.append({
-            'nationality': nat,
-            'count': nat_candidates.count(),
-            'male': nat_candidates.filter(gender='male').count(),
-            'female': nat_candidates.filter(gender='female').count()
-        })
-    
-    # By series for refugees
-    refugee_by_series = []
-    for series in AssessmentSeries.objects.all().order_by('-start_date')[:10]:
-        series_candidates = refugee_candidates.filter(
-            enrollments__assessment_series=series
-        ).distinct()
+        if not sector_results:
+            continue
         
-        refugee_by_series.append({
-            'series_id': series.id,
-            'series_name': series.name,
-            'total': series_candidates.count(),
-            'male': series_candidates.filter(gender='male').count(),
-            'female': series_candidates.filter(gender='female').count(),
-            'pass_rate': 0  # Simplified for now
+        sector_male = [r for r in sector_results if r.candidate.gender == 'male']
+        sector_female = [r for r in sector_results if r.candidate.gender == 'female']
+        
+        sector_male_passed = sum(1 for r in sector_male if is_passed(r))
+        sector_female_passed = sum(1 for r in sector_female if is_passed(r))
+        sector_total_passed = sector_male_passed + sector_female_passed
+        
+        special_needs_by_sector.append({
+            'sector_name': sector.name,
+            'total': len(sector_results),
+            'male': len(sector_male),
+            'female': len(sector_female),
+            'male_passed': sector_male_passed,
+            'female_passed': sector_female_passed,
+            'total_passed': sector_total_passed,
+            'male_pass_rate': round((sector_male_passed / len(sector_male) * 100), 2) if len(sector_male) > 0 else 0,
+            'female_pass_rate': round((sector_female_passed / len(sector_female) * 100), 2) if len(sector_female) > 0 else 0,
+            'pass_rate': round((sector_total_passed / len(sector_results) * 100), 2) if len(sector_results) > 0 else 0
         })
     
     return Response({
-        'special_needs': {
-            'total': special_needs_candidates.count(),
-            'male': special_needs_male,
-            'female': special_needs_female,
-            'by_disability_type': disability_breakdown,
-            'by_series': special_needs_by_series
-        },
-        'refugee': {
-            'total': refugee_candidates.count(),
-            'male': refugee_male,
-            'female': refugee_female,
-            'by_nationality': nationality_breakdown,
-            'by_series': refugee_by_series
-        }
+        'overview': overview,
+        'by_disability_type': disability_breakdown,
+        'by_sector': special_needs_by_sector
     })
+
 

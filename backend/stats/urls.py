@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from .excel_export import export_series_excel
+from .excel_export import export_series_excel, export_special_needs_excel
 
 urlpatterns = [
     path('overall/', views.overall_statistics, name='overall-statistics'),
@@ -15,5 +15,6 @@ urlpatterns = [
     
     # Special needs and refugee analytics
     path('special-needs/', views.special_needs_analytics, name='special-needs-analytics'),
+    path('special-needs/export-excel/', export_special_needs_excel, name='export-special-needs-excel'),
 ]
 

@@ -453,3 +453,323 @@ def export_series_excel(request, series_id):
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=500)
+
+
+def create_special_needs_excel(overview, disability_breakdown, sector_breakdown, series_filter=None):
+    """
+    Create a formatted Excel workbook for special needs statistics
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Special Needs Analytics"
+    
+    # Define styles
+    header_fill = PatternFill(start_color="C00000", end_color="C00000", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF", size=12)
+    subheader_fill = PatternFill(start_color="F2DCDB", end_color="F2DCDB", fill_type="solid")
+    subheader_font = Font(bold=True, size=11)
+    border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    center_alignment = Alignment(horizontal='center', vertical='center')
+    
+    current_row = 1
+    
+    # Title
+    ws.merge_cells(f'A{current_row}:K{current_row}')
+    title_cell = ws[f'A{current_row}']
+    title_cell.value = "Special Needs Candidates Analytics"
+    title_cell.font = Font(bold=True, size=16, color="FFFFFF")
+    title_cell.fill = PatternFill(start_color="C00000", end_color="C00000", fill_type="solid")
+    title_cell.alignment = center_alignment
+    current_row += 1
+    
+    # Filter info
+    if series_filter:
+        ws[f'A{current_row}'] = f"Filtered by: {series_filter}"
+        current_row += 1
+    else:
+        ws[f'A{current_row}'] = "Showing: All Assessment Series"
+        current_row += 1
+    current_row += 1
+    
+    # Overview Section
+    ws.merge_cells(f'A{current_row}:K{current_row}')
+    overview_header = ws[f'A{current_row}']
+    overview_header.value = "OVERALL STATISTICS"
+    overview_header.font = header_font
+    overview_header.fill = header_fill
+    overview_header.alignment = center_alignment
+    current_row += 1
+    
+    # Overview headers
+    overview_headers = ['Metric', 'Total', 'Male', 'Female', 'Male Passed', 'Female Passed', 
+                        'Total Passed', 'Male Pass %', 'Female Pass %', 'Overall Pass %']
+    for col_num, header in enumerate(overview_headers, 1):
+        cell = ws.cell(row=current_row, column=col_num)
+        cell.value = header
+        cell.font = subheader_font
+        cell.fill = subheader_fill
+        cell.alignment = center_alignment
+        cell.border = border
+    current_row += 1
+    
+    # Overview data
+    ws[f'A{current_row}'] = "Special Needs Candidates"
+    ws[f'B{current_row}'] = overview['total']
+    ws[f'C{current_row}'] = overview['male']
+    ws[f'D{current_row}'] = overview['female']
+    ws[f'E{current_row}'] = overview['male_passed']
+    ws[f'F{current_row}'] = overview['female_passed']
+    ws[f'G{current_row}'] = overview['total_passed']
+    ws[f'H{current_row}'] = f"{overview['male_pass_rate']}%"
+    ws[f'I{current_row}'] = f"{overview['female_pass_rate']}%"
+    ws[f'J{current_row}'] = f"{overview['pass_rate']}%"
+    
+    for col in range(1, 11):
+        ws.cell(row=current_row, column=col).border = border
+    current_row += 3
+    
+    # Performance by Disability Type
+    if disability_breakdown:
+        ws.merge_cells(f'A{current_row}:K{current_row}')
+        dis_header = ws[f'A{current_row}']
+        dis_header.value = "PERFORMANCE BY DISABILITY TYPE"
+        dis_header.font = header_font
+        dis_header.fill = header_fill
+        dis_header.alignment = center_alignment
+        current_row += 1
+        
+        # Disability headers
+        dis_headers = ['Disability Type', 'Total', 'Male', 'Female', 'Male Passed', 'Female Passed',
+                       'Total Passed', 'Male Pass %', 'Female Pass %', 'Overall Pass %']
+        for col_num, header in enumerate(dis_headers, 1):
+            cell = ws.cell(row=current_row, column=col_num)
+            cell.value = header
+            cell.font = subheader_font
+            cell.fill = subheader_fill
+            cell.alignment = center_alignment
+            cell.border = border
+        current_row += 1
+        
+        # Disability data
+        for disability in disability_breakdown:
+            ws[f'A{current_row}'] = disability['name']
+            ws[f'B{current_row}'] = disability['total']
+            ws[f'C{current_row}'] = disability['male']
+            ws[f'D{current_row}'] = disability['female']
+            ws[f'E{current_row}'] = disability['male_passed']
+            ws[f'F{current_row}'] = disability['female_passed']
+            ws[f'G{current_row}'] = disability['total_passed']
+            ws[f'H{current_row}'] = f"{disability['male_pass_rate']}%"
+            ws[f'I{current_row}'] = f"{disability['female_pass_rate']}%"
+            ws[f'J{current_row}'] = f"{disability['pass_rate']}%"
+            
+            for col in range(1, 11):
+                ws.cell(row=current_row, column=col).border = border
+            current_row += 1
+        current_row += 2
+    
+    # Performance by Sector
+    if sector_breakdown:
+        ws.merge_cells(f'A{current_row}:K{current_row}')
+        sector_header = ws[f'A{current_row}']
+        sector_header.value = "PERFORMANCE BY SECTOR"
+        sector_header.font = header_font
+        sector_header.fill = header_fill
+        sector_header.alignment = center_alignment
+        current_row += 1
+        
+        # Sector headers
+        sector_headers = ['Sector Name', 'Total', 'Male', 'Female', 'Male Passed', 'Female Passed',
+                         'Total Passed', 'Male Pass %', 'Female Pass %', 'Overall Pass %']
+        for col_num, header in enumerate(sector_headers, 1):
+            cell = ws.cell(row=current_row, column=col_num)
+            cell.value = header
+            cell.font = subheader_font
+            cell.fill = subheader_fill
+            cell.alignment = center_alignment
+            cell.border = border
+        current_row += 1
+        
+        # Sector data
+        for sector in sector_breakdown:
+            ws[f'A{current_row}'] = sector['sector_name']
+            ws[f'B{current_row}'] = sector['total']
+            ws[f'C{current_row}'] = sector['male']
+            ws[f'D{current_row}'] = sector['female']
+            ws[f'E{current_row}'] = sector['male_passed']
+            ws[f'F{current_row}'] = sector['female_passed']
+            ws[f'G{current_row}'] = sector['total_passed']
+            ws[f'H{current_row}'] = f"{sector['male_pass_rate']}%"
+            ws[f'I{current_row}'] = f"{sector['female_pass_rate']}%"
+            ws[f'J{current_row}'] = f"{sector['pass_rate']}%"
+            
+            for col in range(1, 11):
+                ws.cell(row=current_row, column=col).border = border
+            current_row += 1
+    
+    # Auto-size columns
+    for column in ws.columns:
+        max_length = 0
+        column_letter = get_column_letter(column[0].column)
+        for cell in column:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(cell.value)
+            except:
+                pass
+        adjusted_width = min(max_length + 2, 50)
+        ws.column_dimensions[column_letter].width = adjusted_width
+    
+    return wb
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def export_special_needs_excel(request):
+    """
+    Export special needs statistics to Excel file
+    """
+    try:
+        # We need to recreate the logic from special_needs_analytics to avoid request type issues
+        from results.models import ModularResult, FormalResult, WorkersPasResult
+        from configurations.models import NatureOfDisability
+        
+        series_id = request.query_params.get('series_id')
+        
+        # Get all results (optionally filtered by series)
+        if series_id:
+            all_results = list(ModularResult.objects.filter(assessment_series_id=series_id).select_related('candidate', 'candidate__nature_of_disability')) + \
+                          list(FormalResult.objects.filter(assessment_series_id=series_id).select_related('candidate', 'candidate__nature_of_disability')) + \
+                          list(WorkersPasResult.objects.filter(assessment_series_id=series_id).select_related('candidate', 'candidate__nature_of_disability'))
+            series = AssessmentSeries.objects.get(id=series_id)
+            series_filter = series.name
+        else:
+            all_results = list(ModularResult.objects.all().select_related('candidate', 'candidate__nature_of_disability')) + \
+                          list(FormalResult.objects.all().select_related('candidate', 'candidate__nature_of_disability')) + \
+                          list(WorkersPasResult.objects.all().select_related('candidate', 'candidate__nature_of_disability'))
+            series_filter = None
+        
+        # Filter to only special needs candidates
+        special_needs_results = [r for r in all_results if r.candidate.has_disability]
+        
+        # Calculate overview
+        special_needs_male = [r for r in special_needs_results if r.candidate.gender == 'male']
+        special_needs_female = [r for r in special_needs_results if r.candidate.gender == 'female']
+        
+        def is_passed(result):
+            if isinstance(result, ModularResult):
+                return result.mark >= 65
+            elif isinstance(result, FormalResult):
+                return (result.type == 'theory' and result.mark >= 50) or (result.type == 'practical' and result.mark >= 65)
+            elif isinstance(result, WorkersPasResult):
+                return result.mark >= 65
+            return False
+        
+        male_passed = sum(1 for r in special_needs_male if is_passed(r))
+        female_passed = sum(1 for r in special_needs_female if is_passed(r))
+        total_passed = male_passed + female_passed
+        
+        overview = {
+            'total': len(special_needs_results),
+            'male': len(special_needs_male),
+            'female': len(special_needs_female),
+            'male_passed': male_passed,
+            'female_passed': female_passed,
+            'total_passed': total_passed,
+            'male_pass_rate': round((male_passed / len(special_needs_male) * 100), 2) if len(special_needs_male) > 0 else 0,
+            'female_pass_rate': round((female_passed / len(special_needs_female) * 100), 2) if len(special_needs_female) > 0 else 0,
+            'pass_rate': round((total_passed / len(special_needs_results) * 100), 2) if len(special_needs_results) > 0 else 0
+        }
+        
+        # By disability type
+        disability_breakdown = []
+        for disability in NatureOfDisability.objects.all():
+            disability_results = [r for r in special_needs_results if r.candidate.nature_of_disability == disability]
+            
+            if not disability_results:
+                continue
+            
+            dis_male = [r for r in disability_results if r.candidate.gender == 'male']
+            dis_female = [r for r in disability_results if r.candidate.gender == 'female']
+            
+            dis_male_passed = sum(1 for r in dis_male if is_passed(r))
+            dis_female_passed = sum(1 for r in dis_female if is_passed(r))
+            dis_total_passed = dis_male_passed + dis_female_passed
+            
+            disability_breakdown.append({
+                'name': disability.name,
+                'total': len(disability_results),
+                'male': len(dis_male),
+                'female': len(dis_female),
+                'male_passed': dis_male_passed,
+                'female_passed': dis_female_passed,
+                'total_passed': dis_total_passed,
+                'male_pass_rate': round((dis_male_passed / len(dis_male) * 100), 2) if len(dis_male) > 0 else 0,
+                'female_pass_rate': round((dis_female_passed / len(dis_female) * 100), 2) if len(dis_female) > 0 else 0,
+                'pass_rate': round((dis_total_passed / len(disability_results) * 100), 2) if len(disability_results) > 0 else 0
+            })
+        
+        # By sector
+        from occupations.models import Sector
+        sector_breakdown = []
+        for sector in Sector.objects.all():
+            sector_results = [r for r in special_needs_results if 
+                             r.candidate.occupation and r.candidate.occupation.sector == sector]
+            
+            if not sector_results:
+                continue
+            
+            sector_male = [r for r in sector_results if r.candidate.gender == 'male']
+            sector_female = [r for r in sector_results if r.candidate.gender == 'female']
+            
+            sector_male_passed = sum(1 for r in sector_male if is_passed(r))
+            sector_female_passed = sum(1 for r in sector_female if is_passed(r))
+            sector_total_passed = sector_male_passed + sector_female_passed
+            
+            sector_breakdown.append({
+                'sector_name': sector.name,
+                'total': len(sector_results),
+                'male': len(sector_male),
+                'female': len(sector_female),
+                'male_passed': sector_male_passed,
+                'female_passed': sector_female_passed,
+                'total_passed': sector_total_passed,
+                'male_pass_rate': round((sector_male_passed / len(sector_male) * 100), 2) if len(sector_male) > 0 else 0,
+                'female_pass_rate': round((sector_female_passed / len(sector_female) * 100), 2) if len(sector_female) > 0 else 0,
+                'pass_rate': round((sector_total_passed / len(sector_results) * 100), 2) if len(sector_results) > 0 else 0
+            })
+        
+        # Create Excel workbook
+        wb = create_special_needs_excel(
+            overview=overview,
+            disability_breakdown=disability_breakdown,
+            sector_breakdown=sector_breakdown,
+            series_filter=series_filter
+        )
+        
+        # Save to BytesIO
+        excel_file = BytesIO()
+        wb.save(excel_file)
+        excel_file.seek(0)
+        
+        # Create response
+        response = HttpResponse(
+            excel_file.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        filename = f"Special_Needs_Analytics_{datetime.now().strftime('%Y%m%d')}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
+        
+    except AssessmentSeries.DoesNotExist:
+        return Response({'error': 'Series not found'}, status=404)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({'error': str(e)}, status=500)
