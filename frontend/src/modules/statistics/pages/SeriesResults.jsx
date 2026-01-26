@@ -6,11 +6,12 @@ import statisticsApi from '../services/statisticsApi';
 const SeriesResults = () => {
     const { seriesId } = useParams();
     const navigate = useNavigate();
-    const [loading, setLoading] = useState(false);
     const [seriesList, setSeriesList] = useState([]);
     const [selectedSeriesId, setSelectedSeriesId] = useState(seriesId || '');
     const [results, setResults] = useState(null);
     const [loadingList, setLoadingList] = useState(true);
+    const [loading, setLoading] = useState(false);
+    const [exportingExcel, setExportingExcel] = useState(false);
 
     useEffect(() => {
         fetchSeriesList();
@@ -19,13 +20,62 @@ const SeriesResults = () => {
         }
     }, []);
 
-    // Only fetch results when user explicitly selects a series
+    // Changed: Don't auto-fetch, wait for Generate button
     const handleSeriesChange = (id) => {
         setSelectedSeriesId(id);
-        if (id) {
-            fetchSeriesResults(id);
-        } else {
-            setResults(null);
+        setResults(null); // Clear previous results
+    };
+
+    const handleGenerateReport = async () => {
+        if (!selectedSeriesId) {
+            alert('Please select an assessment series first');
+            return;
+        }
+        fetchSeriesResults(selectedSeriesId);
+    };
+
+
+    const handleExportExcel = async () => {
+        if (!selectedSeriesId) {
+            alert('Please select an assessment series first');
+            return;
+        }
+
+        try {
+            setExportingExcel(true);
+            const response = await fetch(`http://localhost:8000/api/statistics/series/${selectedSeriesId}/export-excel/`, {
+                method: 'GET',
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to export to Excel');
+            }
+
+            // Get filename from Content-Disposition header
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = 'series_results.xlsx';
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+                if (filenameMatch) {
+                    filename = filenameMatch[1];
+                }
+            }
+
+            // Download the file
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error('Error exporting to Excel:', error);
+            alert('Failed to export to Excel. Please try again.');
+        } finally {
+            setExportingExcel(false);
         }
     };
 
@@ -101,22 +151,64 @@ const SeriesResults = () => {
                         </option>
                     ))}
                 </select>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 mt-4">
+                    <button
+                        onClick={handleGenerateReport}
+                        disabled={!selectedSeriesId || loading}
+                        className="px-6 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                    >
+                        {loading ? (
+                            <>
+                                <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Generating...
+                            </>
+                        ) : (
+                            <>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Generate Report
+                            </>
+                        )}
+                    </button>
+
+                    <button
+                        onClick={handleExportExcel}
+                        disabled={!selectedSeriesId || exportingExcel}
+                        className="px-6 py-2 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                    >
+                        {exportingExcel ? (
+                            <>
+                                <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Exporting...
+                            </>
+                        ) : (
+                            <>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Export to Excel
+                            </>
+                        )}
+                    </button>
+                </div>
+
                 {!selectedSeriesId && (
-                    <p className="mt-2 text-sm text-gray-500">
-                        Please select an assessment series to view detailed results
+                    <p className="mt-3 text-sm text-gray-500">
+                        Please select an assessment series above, then click "Generate Report" to view detailed results
                     </p>
                 )}
             </div>
 
-            {loading && selectedSeriesId && (
-                <div className="flex justify-center items-center h-64">
-                    <div className="text-center">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                        <p className="text-gray-600">Loading results...</p>
-                    </div>
-                </div>
-            )}
-
+            {/* Results section - only shows after Generate Report is clicked */}
             {results && (
                 <>
                     {/* Overview Cards */}
@@ -259,7 +351,12 @@ const SeriesResults = () => {
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pass Rate</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male Passed</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female Passed</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Passed</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male Pass %</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female Pass %</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Overall Pass %</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -273,7 +370,12 @@ const SeriesResults = () => {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{data.total}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">{data.male}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-600">{data.female}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-700 font-medium">{data.male_passed}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-700 font-medium">{data.female_passed}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{data.total_passed}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-800 font-semibold">{data.male_pass_rate}%</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-800 font-semibold">{data.female_pass_rate}%</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-green-700 font-bold">
                                                 {data.pass_rate}%
                                             </td>
                                         </tr>
@@ -282,6 +384,49 @@ const SeriesResults = () => {
                             </table>
                         </div>
                     </div>
+
+                    {/* Performance by Sector */}
+                    {results.by_sector && results.by_sector.length > 0 && (
+                        <div className="bg-white p-6 rounded-lg shadow border border-gray-200 mb-6">
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Performance by Sector</h2>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sector</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male Passed</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female Passed</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Passed</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male Pass %</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female Pass %</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Overall Pass %</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {results.by_sector.map((sector, index) => (
+                                            <tr key={index} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                    {sector.sector_name}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{sector.total}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">{sector.male}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-600">{sector.female}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-700 font-medium">{sector.male_passed}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-700 font-medium">{sector.female_passed}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{sector.total_passed}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-800 font-semibold">{sector.male_pass_rate}%</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-800 font-semibold">{sector.female_pass_rate}%</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-green-700 font-bold">{sector.pass_rate}%</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Performance by Occupation */}
                     <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
@@ -295,6 +440,12 @@ const SeriesResults = () => {
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male Passed</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female Passed</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Passed</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male Pass %</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female Pass %</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Overall Pass %</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -304,9 +455,15 @@ const SeriesResults = () => {
                                                 {occ.occupation_name}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{occ.occupation_code}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{occ.total_candidates}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{occ.total}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">{occ.male}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-600">{occ.female}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-700 font-medium">{occ.male_passed}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-700 font-medium">{occ.female_passed}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{occ.total_passed}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-800 font-semibold">{occ.male_pass_rate}%</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-808 font-semibold">{occ.female_pass_rate}%</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-green-700 font-bold">{occ.pass_rate}%</td>
                                         </tr>
                                     ))}
                                 </tbody>

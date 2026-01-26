@@ -229,60 +229,169 @@ def assessment_series_results(request, series_id):
     male_candidates = enrolled_candidates.filter(gender='male')
     female_candidates = enrolled_candidates.filter(gender='female')
     
-    # Calculate overall pass rates
-    def calc_pass_rate(queryset, result_model, is_theory=False):
-        total = result_model.objects.filter(
-            assessment_series=series,
-            candidate__in=queryset
-        )
-        if is_theory:
-            total = total.filter(type='theory')
-            passing = total.filter(mark__gte=50).count()
-        else:
-            if hasattr(result_model, 'type'):
-                total = total.filter(type='practical')
-            passing = total.filter(mark__gte=65).count()
-        
-        total_count = total.count()
-        return (passing / total_count * 100) if total_count > 0 else 0
+    # Get enrolled candidates with gender info
+    from candidates.models import CandidateEnrollment
+    enrollments = CandidateEnrollment.objects.filter(
+        assessment_series_id=series_id
+    ).select_related('candidate')
     
-    # Overall stats
-    total_results = (
-        ModularResult.objects.filter(assessment_series=series).count() +
-        FormalResult.objects.filter(assessment_series=series).count() +
-        WorkersPasResult.objects.filter(assessment_series=series).count()
-    )
+    total_candidates = enrollments.count()
+    male_candidates = enrollments.filter(candidate__gender='male').count()
+    female_candidates = enrollments.filter(candidate__gender='female').count()
     
-    # Calculate pass rates by gender
-    male_pass_rate = (
-        calc_pass_rate(male_candidates, ModularResult) +
-        calc_pass_rate(male_candidates, FormalResult, is_theory=True) +
-        calc_pass_rate(male_candidates, FormalResult, is_theory=False) +
-        calc_pass_rate(male_candidates, WorkersPasResult)
-    ) / 4
+    # Calculate overall pass rates by gender
+    # Get all results with candidate gender information
+    male_results_count = 0
+    male_passing_count = 0
+    female_results_count = 0
+    female_passing_count = 0
     
-    female_pass_rate = (
-        calc_pass_rate(female_candidates, ModularResult) +
-        calc_pass_rate(female_candidates, FormalResult, is_theory=True) +
-        calc_pass_rate(female_candidates, FormalResult, is_theory=False) +
-        calc_pass_rate(female_candidates, WorkersPasResult)
-    ) / 4
+    # Modular results by gender
+    for result in ModularResult.objects.filter(
+        assessment_series_id=series_id
+    ).select_related('candidate'):
+        gender = result.candidate.gender
+        if gender == 'male':
+            male_results_count += 1
+            if result.mark >= 65:
+                male_passing_count += 1
+        elif gender == 'female':
+            female_results_count += 1
+            if result.mark >= 65:
+                female_passing_count += 1
     
-    overall_pass_rate = (male_pass_rate + female_pass_rate) / 2
+    # Formal results by gender
+    for result in FormalResult.objects.filter(
+        assessment_series_id=series_id
+    ).select_related('candidate'):
+        gender = result.candidate.gender
+        passing_mark = 50 if result.type == 'theory' else 65
+        if gender == 'male':
+            male_results_count += 1
+            if result.mark >= passing_mark:
+                male_passing_count += 1
+        elif gender == 'female':
+            female_results_count += 1
+            if result.mark >= passing_mark:
+                female_passing_count += 1
     
-    # By category
+    # Workers PAS results by gender
+    for result in WorkersPasResult.objects.filter(
+        assessment_series_id=series_id
+    ).select_related('candidate'):
+        gender = result.candidate.gender
+        if gender == 'male':
+            male_results_count += 1
+            if result.mark >= 65:
+                male_passing_count += 1
+        elif gender == 'female':
+            female_results_count += 1
+            if result.mark >= 65:
+                female_passing_count += 1
+    
+    # Calculate pass rates
+    male_pass_rate = (male_passing_count / male_results_count * 100) if male_results_count > 0 else 0
+    female_pass_rate = (female_passing_count / female_results_count * 100) if female_results_count > 0 else 0
+    overall_pass_rate = ((male_passing_count + female_passing_count) / (male_results_count + female_results_count) * 100) if (male_results_count + female_results_count) > 0 else 0
+    
+    # Build overview statistics
+    overview = {
+        'total_candidates': total_candidates,
+        'male': male_candidates,
+        'female': female_candidates,
+        'total_results': male_results_count + female_results_count,
+        'pass_rate': round(overall_pass_rate, 2),
+        'male_pass_rate': round(male_pass_rate, 2),
+        'female_pass_rate': round(female_pass_rate, 2),
+    }
+    
+    # Get enrolled candidates for category/occupation stats
+    enrolled_candidates = Candidate.objects.filter(
+        enrollments__assessment_series=series
+    ).distinct()
+    
+    # By category - comprehensive gender-based metrics
     category_stats = {}
-    for cat in ['modular', 'formal', 'workers_pas']:
-        cat_candidates = enrolled_candidates.filter(registration_category=cat)
-        male_cat = cat_candidates.filter(gender='male').count()
-        female_cat = cat_candidates.filter(gender='female').count()
-        
-        category_stats[cat] = {
-            'total': cat_candidates.count(),
-            'male': male_cat,
-            'female': female_cat,
-            'pass_rate': 0  # Simplified for now
-        }
+    
+    # Modular category
+    modular_results = ModularResult.objects.filter(assessment_series_id=series_id).select_related('candidate')
+    modular_total = modular_results.count()
+    modular_male_results = modular_results.filter(candidate__gender='male')
+    modular_female_results = modular_results.filter(candidate__gender='female')
+    
+    modular_male = modular_male_results.count()
+    modular_female = modular_female_results.count()
+    modular_male_passed = modular_male_results.filter(mark__gte=65).count()
+    modular_female_passed = modular_female_results.filter(mark__gte=65).count()
+    modular_total_passed = modular_male_passed + modular_female_passed
+    
+    category_stats['modular'] = {
+        'total': modular_total,
+        'male': modular_male,
+        'female': modular_female,
+        'male_passed': modular_male_passed,
+        'female_passed': modular_female_passed,
+        'total_passed': modular_total_passed,
+        'male_pass_rate': round((modular_male_passed / modular_male * 100), 2) if modular_male > 0 else 0,
+        'female_pass_rate': round((modular_female_passed / modular_female * 100), 2) if modular_female > 0 else 0,
+        'pass_rate': round((modular_total_passed / modular_total * 100), 2) if modular_total > 0 else 0
+    }
+    
+    # Formal category (both theory and practical)
+    formal_results = FormalResult.objects.filter(assessment_series_id=series_id).select_related('candidate')
+    formal_total = formal_results.count()
+    formal_male_results = formal_results.filter(candidate__gender='male')
+    formal_female_results = formal_results.filter(candidate__gender='female')
+    
+    formal_male = formal_male_results.count()
+    formal_female = formal_female_results.count()
+    
+    # Calculate passing: theory ≥50, practical ≥65
+    formal_male_passed = (
+        formal_male_results.filter(type='theory', mark__gte=50).count() +
+        formal_male_results.filter(type='practical', mark__gte=65).count()
+    )
+    formal_female_passed = (
+        formal_female_results.filter(type='theory', mark__gte=50).count() +
+        formal_female_results.filter(type='practical', mark__gte=65).count()
+    )
+    formal_total_passed = formal_male_passed + formal_female_passed
+    
+    category_stats['formal'] = {
+        'total': formal_total,
+        'male': formal_male,
+        'female': formal_female,
+        'male_passed': formal_male_passed,
+        'female_passed': formal_female_passed,
+        'total_passed': formal_total_passed,
+        'male_pass_rate': round((formal_male_passed / formal_male * 100), 2) if formal_male > 0 else 0,
+        'female_pass_rate': round((formal_female_passed / formal_female * 100), 2) if formal_female > 0 else 0,
+        'pass_rate': round((formal_total_passed / formal_total * 100), 2) if formal_total > 0 else 0
+    }
+    
+    # Workers PAS category
+    workers_results = WorkersPasResult.objects.filter(assessment_series_id=series_id).select_related('candidate')
+    workers_total = workers_results.count()
+    workers_male_results = workers_results.filter(candidate__gender='male')
+    workers_female_results = workers_results.filter(candidate__gender='female')
+    
+    workers_male = workers_male_results.count()
+    workers_female = workers_female_results.count()
+    workers_male_passed = workers_male_results.filter(mark__gte=65).count()
+    workers_female_passed = workers_female_results.filter(mark__gte=65).count()
+    workers_total_passed = workers_male_passed + workers_female_passed
+    
+    category_stats['workers_pas'] = {
+        'total': workers_total,
+        'male': workers_male,
+        'female': workers_female,
+        'male_passed': workers_male_passed,
+        'female_passed': workers_female_passed,
+        'total_passed': workers_total_passed,
+        'male_pass_rate': round((workers_male_passed / workers_male * 100), 2) if workers_male > 0 else 0,
+        'female_pass_rate': round((workers_female_passed / workers_female * 100), 2) if workers_female > 0 else 0,
+        'pass_rate': round((workers_total_passed / workers_total * 100), 2) if workers_total > 0 else 0
+    }
     
     # Grade distribution (simplified - count all grades)
     grade_dist = {}
@@ -301,26 +410,149 @@ def assessment_series_results(request, series_id):
             elif result.candidate.gender == 'female':
                 grade_dist[grade]['female'] += 1
     
-    # By occupation
+    # By occupation - comprehensive metrics
     occupation_stats = []
-    occupations = Occupation.objects.filter(
-        candidates__in=enrolled_candidates
-    ).distinct()
+    
+    # Get all occupations that have results in this series
+    from occupations.models import Occupation
+    occupation_ids = set()
+    
+    # Collect occupation IDs from all result types
+    for result in all_results:
+        # Modular results: occupation via module
+        if hasattr(result, 'module') and result.module:
+            occupation_ids.add(result.module.occupation_id)
+        # Formal and Workers results: occupation via candidate
+        elif hasattr(result, 'candidate') and result.candidate and result.candidate.occupation:
+            occupation_ids.add(result.candidate.occupation_id)
+    
+    occupations = Occupation.objects.filter(id__in=occupation_ids)
     
     for occ in occupations:
-        occ_candidates = enrolled_candidates.filter(occupation=occ)
-        occ_male = occ_candidates.filter(gender='male').count()
-        occ_female = occ_candidates.filter(gender='female').count()
+        # Get all results for this occupation
+        occ_modular = ModularResult.objects.filter(
+            assessment_series_id=series_id,
+            module__occupation=occ
+        ).select_related('candidate')
+        
+        occ_formal = FormalResult.objects.filter(
+            assessment_series_id=series_id,
+            candidate__occupation=occ
+        ).select_related('candidate')
+        
+        occ_workers = WorkersPasResult.objects.filter(
+            assessment_series_id=series_id,
+            candidate__occupation=occ
+        ).select_related('candidate')
+        
+        # Combine all results for this occupation
+        occ_all_results = list(occ_modular) + list(occ_formal) + list(occ_workers)
+        
+        if len(occ_all_results) == 0:
+            continue
+        
+        # Calculate statistics
+        total = len(occ_all_results)
+        male_results = [r for r in occ_all_results if r.candidate.gender == 'male']
+        female_results = [r for r in occ_all_results if r.candidate.gender == 'female']
+        
+        male_count = len(male_results)
+        female_count = len(female_results)
+        
+        # Count passing (based on result type)
+        male_passed = sum(1 for r in male_results if (
+            (isinstance(r, ModularResult) and r.mark >= 65) or
+            (isinstance(r, FormalResult) and ((r.type == 'theory' and r.mark >= 50) or (r.type == 'practical' and r.mark >= 65))) or
+            (isinstance(r, WorkersPasResult) and r.mark >= 65)
+        ))
+        
+        female_passed = sum(1 for r in female_results if (
+            (isinstance(r, ModularResult) and r.mark >= 65) or
+            (isinstance(r, FormalResult) and ((r.type == 'theory' and r.mark >= 50) or (r.type == 'practical' and r.mark >= 65))) or
+            (isinstance(r, WorkersPasResult) and r.mark >= 65)
+        ))
+        
+        total_passed = male_passed + female_passed
         
         occupation_stats.append({
             'occupation_name': occ.occ_name,
             'occupation_code': occ.occ_code,
-            'total_candidates': occ_candidates.count(),
-            'male': occ_male,
-            'female': occ_female,
-            'pass_rate': 0,  # Simplified for now
-            'male_pass_rate': 0,
-            'female_pass_rate': 0
+            'total': total,
+            'male': male_count,
+            'female': female_count,
+            'male_passed': male_passed,
+            'female_passed': female_passed,
+            'total_passed': total_passed,
+            'male_pass_rate': round((male_passed / male_count * 100), 2) if male_count > 0 else 0,
+            'female_pass_rate': round((female_passed / female_count * 100), 2) if female_count > 0 else 0,
+            'pass_rate': round((total_passed / total * 100), 2) if total > 0 else 0
+        })
+    
+    # By sector - NEW comprehensive metrics
+    from occupations.models import Sector
+    sector_stats = []
+    
+    sectors = Sector.objects.all()
+    
+    for sector in sectors:
+        # Get all results for occupations in this sector
+        sector_occs = Occupation.objects.filter(sector=sector)
+        
+        sector_modular = ModularResult.objects.filter(
+            assessment_series_id=series_id,
+            module__occupation__in=sector_occs
+        ).select_related('candidate')
+        
+        sector_formal = FormalResult.objects.filter(
+            assessment_series_id=series_id,
+            candidate__occupation__in=sector_occs
+        ).select_related('candidate')
+        
+        sector_workers = WorkersPasResult.objects.filter(
+            assessment_series_id=series_id,
+            candidate__occupation__in=sector_occs
+        ).select_related('candidate')
+        
+        # Combine all results for this sector
+        sector_all_results = list(sector_modular) + list(sector_formal) + list(sector_workers)
+        
+        if len(sector_all_results) == 0:
+            continue
+        
+        # Calculate statistics
+        total = len(sector_all_results)
+        male_results = [r for r in sector_all_results if r.candidate.gender == 'male']
+        female_results = [r for r in sector_all_results if r.candidate.gender == 'female']
+        
+        male_count = len(male_results)
+        female_count = len(female_results)
+        
+        # Count passing
+        male_passed = sum(1 for r in male_results if (
+            (isinstance(r, ModularResult) and r.mark >= 65) or
+            (isinstance(r, FormalResult) and ((r.type == 'theory' and r.mark >= 50) or (r.type == 'practical' and r.mark >= 65))) or
+            (isinstance(r, WorkersPasResult) and r.mark >= 65)
+        ))
+        
+        female_passed = sum(1 for r in female_results if (
+            (isinstance(r, ModularResult) and r.mark >= 65) or
+            (isinstance(r, FormalResult) and ((r.type == 'theory' and r.mark >= 50) or (r.type == 'practical' and r.mark >= 65))) or
+            (isinstance(r, WorkersPasResult) and r.mark >= 65)
+        ))
+        
+        total_passed = male_passed + female_passed
+        
+        sector_stats.append({
+            'sector_name': sector.name,
+            'total': total,
+            'male': male_count,
+            'female': female_count,
+            'male_passed': male_passed,
+            'female_passed': female_passed,
+            'total_passed': total_passed,
+            'male_pass_rate': round((male_passed / male_count * 100), 2) if male_count > 0 else 0,
+            'female_pass_rate': round((female_passed / female_count * 100), 2) if female_count > 0 else 0,
+            'pass_rate': round((total_passed / total * 100), 2) if total > 0 else 0
         })
     
     return Response({
@@ -330,18 +562,11 @@ def assessment_series_results(request, series_id):
             'start_date': series.start_date,
             'end_date': series.end_date
         },
-        'overview': {
-            'total_candidates': enrolled_candidates.count(),
-            'male': male_candidates.count(),
-            'female': female_candidates.count(),
-            'total_results': total_results,
-            'pass_rate': round(overall_pass_rate, 2),
-            'male_pass_rate': round(male_pass_rate, 2),
-            'female_pass_rate': round(female_pass_rate, 2)
-        },
+        'overview': overview,
         'by_category': category_stats,
         'grade_distribution': grade_dist,
-        'by_occupation': occupation_stats
+        'by_occupation': occupation_stats,
+        'by_sector': sector_stats
     })
 
 
