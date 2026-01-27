@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, ArrowLeft } from 'lucide-react';
+import { Heart, Globe } from 'lucide-react';
 import statisticsApi from '../services/statisticsApi';
 
 const SpecialNeedsAnalytics = () => {
@@ -44,17 +44,10 @@ const SpecialNeedsAnalytics = () => {
     const handleExportExcel = async () => {
         try {
             setExportingExcel(true);
-            const params = selectedSeries !== 'all' ? `?series_id=${selectedSeries}` : '';
-            const response = await fetch(`http://localhost:8000/api/statistics/special-needs/export-excel/${params}`, {
-                method: 'GET',
-            });
+            const params = selectedSeries !== 'all' ? { series_id: selectedSeries } : {};
+            const response = await statisticsApi.exportSpecialNeedsExcel(params);
 
-            if (!response.ok) {
-                throw new Error('Failed to export to Excel');
-            }
-
-            // Get filename from Content-Disposition header
-            const contentDisposition = response.headers.get('Content-Disposition');
+            const contentDisposition = response.headers['content-disposition'];
             let filename = 'special_needs_analytics.xlsx';
             if (contentDisposition) {
                 const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
@@ -63,8 +56,9 @@ const SpecialNeedsAnalytics = () => {
                 }
             }
 
-            // Download the file
-            const blob = await response.blob();
+            const blob = new Blob([response.data], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -96,20 +90,11 @@ const SpecialNeedsAnalytics = () => {
 
     return (
         <div className="p-6">
-            {/* Header */}
             <div className="mb-6">
-                <button
-                    onClick={() => navigate('/statistics')}
-                    className="flex items-center text-gray-600 hover:text-gray-900 mb-4"
-                >
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    Back to Statistics
-                </button>
-                <h1 className="text-2xl font-bold text-gray-900">Special Needs Candidates Analytics</h1>
+                <h1 className="text-2xl font-bold text-gray-900">Special Needs & Refugee Analytics</h1>
                 <p className="text-gray-600 mt-1">Comprehensive analysis with gender-based performance metrics</p>
             </div>
 
-            {/* Filter Controls */}
             <div className="bg-white p-4 rounded-lg shadow border border-gray-200 mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Assessment Series</label>
                 <select
@@ -125,155 +110,174 @@ const SpecialNeedsAnalytics = () => {
                     ))}
                 </select>
 
-                {/* Action Buttons */}
                 <div className="flex gap-3">
                     <button
                         onClick={handleGenerateReport}
                         disabled={loading}
-                        className="px-6 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                        className="px-6 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                     >
-                        {loading ? (
-                            <>
-                                <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Generating...
-                            </>
-                        ) : (
-                            <>
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                Generate Report
-                            </>
-                        )}
+                        {loading ? 'Generating...' : 'Generate Report'}
                     </button>
 
                     <button
                         onClick={handleExportExcel}
                         disabled={exportingExcel}
-                        className="px-6 py-2 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                        className="px-6 py-2 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                     >
-                        {exportingExcel ? (
-                            <>
-                                <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Exporting...
-                            </>
-                        ) : (
-                            <>
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                Export to Excel
-                            </>
-                        )}
+                        {exportingExcel ? 'Exporting...' : 'Export to Excel'}
                     </button>
                 </div>
             </div>
 
             {analytics && (
                 <>
-                    {/* Summary Card */}
+                    {/* Special Needs Section */}
                     <div className="bg-white p-6 rounded-lg shadow border border-gray-200 mb-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <div className="flex items-center">
-                                <div className="bg-red-100 p-3 rounded-lg mr-4">
-                                    <Heart className="w-8 h-8 text-red-600" />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-600">Special Needs Candidates</p>
-                                    <p className="text-4xl font-bold text-gray-900">{analytics.overview.total}</p>
-                                </div>
+                        <div className="flex items-center mb-4">
+                            <Heart className="w-6 h-6 text-red-600 mr-2" />
+                            <h2 className="text-xl font-semibold text-gray-900">Special Needs Candidates</h2>
+                        </div>
+                        <div className="grid grid-cols-4 gap-4 mb-4">
+                            <div className="text-center p-3 bg-gray-50 rounded">
+                                <p className="text-sm text-gray-600">Total</p>
+                                <p className="text-2xl font-bold">{analytics.special_needs.overview.total}</p>
+                            </div>
+                            <div className="text-center p-3 bg-blue-50 rounded">
+                                <p className="text-sm text-gray-600">Male</p>
+                                <p className="text-2xl font-bold text-blue-600">{analytics.special_needs.overview.male}</p>
+                            </div>
+                            <div className="text-center p-3 bg-pink-50 rounded">
+                                <p className="text-sm text-gray-600">Female</p>
+                                <p className="text-2xl font-bold text-pink-600">{analytics.special_needs.overview.female}</p>
+                            </div>
+                            <div className="text-center p-3 bg-green-50 rounded">
+                                <p className="text-sm text-gray-600">Pass Rate</p>
+                                <p className="text-2xl font-bold text-green-600">{analytics.special_needs.overview.pass_rate}%</p>
                             </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-4">
-                            <div className="text-center p-4 bg-gray-50 rounded-lg">
-                                <p className="text-xs text-gray-600 mb-1">Male</p>
-                                <p className="text-2xl font-semibold text-blue-600">{analytics.overview.male}</p>
-                                <p className="text-xs text-gray-500">
-                                    ({getPercentage(analytics.overview.male, analytics.overview.total)}%)
-                                </p>
-                            </div>
-                            <div className="text-center p-4 bg-gray-50 rounded-lg">
-                                <p className="text-xs text-gray-600 mb-1">Female</p>
-                                <p className="text-2xl font-semibold text-pink-600">{analytics.overview.female}</p>
-                                <p className="text-xs text-gray-500">
-                                    ({getPercentage(analytics.overview.female, analytics.overview.total)}%)
-                                </p>
-                            </div>
-                            <div className="text-center p-4 bg-gray-50 rounded-lg">
-                                <p className="text-xs text-gray-600 mb-1">Pass Rate</p>
-                                <p className="text-2xl font-semibold text-green-600">{analytics.overview.pass_rate}%</p>
-                                <p className="text-xs text-gray-500">Overall</p>
-                            </div>
-                        </div>
-                    </div>
 
-                    {/* Disability Type Breakdown */}
-                    <div className="bg-white p-6 rounded-lg shadow border border-gray-200 mb-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Performance by Disability Type</h2>
-                        <div className="space-y-3">
-                            {analytics.by_disability_type && analytics.by_disability_type.length > 0 ? (
-                                analytics.by_disability_type.map((disability, index) => (
-                                    <div key={index}>
-                                        <div className="flex items-center justify-between mb-1">
-                                            <span className="text-sm font-medium text-gray-700">{disability.name}</span>
-                                            <span className="text-sm text-gray-600">
-                                                Total: {disability.total} (M: {disability.male}, F: {disability.female}) - Pass: {disability.pass_rate}%
-                                            </span>
+                        {/* Disability Types */}
+                        {analytics.special_needs.by_disability_type && analytics.special_needs.by_disability_type.length > 0 && (
+                            <div className="mt-4">
+                                <h3 className="font-semibold mb-2">By Disability Type</h3>
+                                {analytics.special_needs.by_disability_type.map((d, i) => (
+                                    <div key={i} className="mb-2">
+                                        <div className="flex justify-between text-sm mb-1">
+                                            <span>{d.name}</span>
+                                            <span>{d.total} (M:{d.male} F:{d.female}) - {d.pass_rate}%</span>
                                         </div>
-                                        <div className="w-full bg-gray-200 rounded-full h-2">
-                                            <div
-                                                className="bg-red-500 h-2 rounded-full"
-                                                style={{ width: `${getPercentage(disability.total, analytics.overview.total)}%` }}
-                                            ></div>
+                                        <div className="w-full bg-gray-200 rounded h-2">
+                                            <div className="bg-red-500 h-2 rounded" style={{ width: `${d.pass_rate}%` }}></div>
                                         </div>
                                     </div>
-                                ))
-                            ) : (
-                                <p className="text-gray-500 text-sm">No data available</p>
-                            )}
-                        </div>
-                    </div>
+                                ))}
+                            </div>
+                        )}
 
-                    {/* Sector Performance Table */}
-                    {analytics.by_sector && analytics.by_sector.length > 0 && (
-                        <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Performance by Sector</h2>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200">
+                        {/* Special Needs by Sector */}
+                        {analytics.special_needs.by_sector && analytics.special_needs.by_sector.length > 0 && (
+                            <div className="mt-4">
+                                <h3 className="font-semibold mb-2">By Sector</h3>
+                                <table className="min-w-full text-sm">
                                     <thead className="bg-gray-50">
                                         <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sector</th>
-                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Male</th>
-                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Female</th>
-                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Pass Rate</th>
+                                            <th className="px-4 py-2 text-left">Sector</th>
+                                            <th className="px-4 py-2 text-center">Total</th>
+                                            <th className="px-4 py-2 text-center">Male</th>
+                                            <th className="px-4 py-2 text-center">Female</th>
+                                            <th className="px-4 py-2 text-center">M Passed</th>
+                                            <th className="px-4 py-2 text-center">F Passed</th>
+                                            <th className="px-4 py-2 text-center">Total Passed</th>
+                                            <th className="px-4 py-2 text-center">M Pass %</th>
+                                            <th className="px-4 py-2 text-center">F Pass %</th>
+                                            <th className="px-4 py-2 text-center">Overall %</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {analytics.by_sector.map((sector, index) => (
-                                            <tr key={index} className="hover:bg-gray-50">
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                    {sector.sector_name}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">{sector.total}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-blue-600">{sector.male}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-pink-600">{sector.female}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">
-                                                    {sector.pass_rate}%
-                                                </td>
+                                    <tbody>
+                                        {analytics.special_needs.by_sector.map((s, i) => (
+                                            <tr key={i} className="border-t hover:bg-gray-50">
+                                                <td className="px-4 py-2">{s.sector_name}</td>
+                                                <td className="px-4 py-2 text-center">{s.total}</td>
+                                                <td className="px-4 py-2 text-center text-blue-600">{s.male}</td>
+                                                <td className="px-4 py-2 text-center text-pink-600">{s.female}</td>
+                                                <td className="px-4 py-2 text-center text-blue-700 font-medium">{s.male_passed}</td>
+                                                <td className="px-4 py-2 text-center text-pink-700 font-medium">{s.female_passed}</td>
+                                                <td className="px-4 py-2 text-center font-semibold">{s.total_passed}</td>
+                                                <td className="px-4 py-2 text-center text-blue-600">{s.male_pass_rate}%</td>
+                                                <td className="px-4 py-2 text-center text-pink-600">{s.female_pass_rate}%</td>
+                                                <td className="px-4 py-2 text-center font-bold text-green-600">{s.pass_rate}%</td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
                             </div>
+                        )}
+                    </div>
+
+                    {/* Refugee Section */}
+                    <div className="bg-gradient-to-r from-green-50 to-blue-50 p-6 rounded-lg shadow border border-green-200">
+                        <div className="flex items-center mb-4">
+                            <Globe className="w-6 h-6 text-green-600 mr-2" />
+                            <h2 className="text-xl font-semibold text-gray-900">Refugee Candidates</h2>
                         </div>
-                    )}
+                        <div className="grid grid-cols-4 gap-4 mb-4">
+                            <div className="text-center p-3 bg-white rounded">
+                                <p className="text-sm text-gray-600">Total</p>
+                                <p className="text-2xl font-bold">{analytics.refugee.overview.total}</p>
+                            </div>
+                            <div className="text-center p-3 bg-white rounded">
+                                <p className="text-sm text-gray-600">Male</p>
+                                <p className="text-2xl font-bold text-blue-600">{analytics.refugee.overview.male}</p>
+                            </div>
+                            <div className="text-center p-3 bg-white rounded">
+                                <p className="text-sm text-gray-600">Female</p>
+                                <p className="text-2xl font-bold text-pink-600">{analytics.refugee.overview.female}</p>
+                            </div>
+                            <div className="text-center p-3 bg-white rounded">
+                                <p className="text-sm text-gray-600">Pass Rate</p>
+                                <p className="text-2xl font-bold text-green-600">{analytics.refugee.overview.pass_rate}%</p>
+                            </div>
+                        </div>
+
+                        {/* Refugee by Sector */}
+                        {analytics.refugee.by_sector && analytics.refugee.by_sector.length > 0 && (
+                            <div className="mt-4 bg-white p-4 rounded">
+                                <h3 className="font-semibold mb-2">By Sector</h3>
+                                <table className="min-w-full text-sm">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-4 py-2 text-left">Sector</th>
+                                            <th className="px-4 py-2 text-center">Total</th>
+                                            <th className="px-4 py-2 text-center">Male</th>
+                                            <th className="px-4 py-2 text-center">Female</th>
+                                            <th className="px-4 py-2 text-center">M Passed</th>
+                                            <th className="px-4 py-2 text-center">F Passed</th>
+                                            <th className="px-4 py-2 text-center">Total Passed</th>
+                                            <th className="px-4 py-2 text-center">M Pass %</th>
+                                            <th className="px-4 py-2 text-center">F Pass %</th>
+                                            <th className="px-4 py-2 text-center">Overall %</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {analytics.refugee.by_sector.map((s, i) => (
+                                            <tr key={i} className="border-t hover:bg-gray-50">
+                                                <td className="px-4 py-2">{s.sector_name}</td>
+                                                <td className="px-4 py-2 text-center">{s.total}</td>
+                                                <td className="px-4 py-2 text-center text-blue-600">{s.male}</td>
+                                                <td className="px-4 py-2 text-center text-pink-600">{s.female}</td>
+                                                <td className="px-4 py-2 text-center text-blue-700 font-medium">{s.male_passed}</td>
+                                                <td className="px-4 py-2 text-center text-pink-700 font-medium">{s.female_passed}</td>
+                                                <td className="px-4 py-2 text-center font-semibold">{s.total_passed}</td>
+                                                <td className="px-4 py-2 text-center text-blue-600">{s.male_pass_rate}%</td>
+                                                <td className="px-4 py-2 text-center text-pink-600">{s.female_pass_rate}%</td>
+                                                <td className="px-4 py-2 text-center font-bold text-green-600">{s.pass_rate}%</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
                 </>
             )}
         </div>

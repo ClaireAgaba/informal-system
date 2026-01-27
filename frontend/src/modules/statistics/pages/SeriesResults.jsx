@@ -43,16 +43,10 @@ const SeriesResults = () => {
 
         try {
             setExportingExcel(true);
-            const response = await fetch(`http://localhost:8000/api/statistics/series/${selectedSeriesId}/export-excel/`, {
-                method: 'GET',
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to export to Excel');
-            }
+            const response = await statisticsApi.exportSeriesExcel(selectedSeriesId);
 
             // Get filename from Content-Disposition header
-            const contentDisposition = response.headers.get('Content-Disposition');
+            const contentDisposition = response.headers['content-disposition'];
             let filename = 'series_results.xlsx';
             if (contentDisposition) {
                 const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
@@ -62,7 +56,9 @@ const SeriesResults = () => {
             }
 
             // Download the file
-            const blob = await response.blob();
+            const blob = new Blob([response.data], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;

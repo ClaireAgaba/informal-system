@@ -455,7 +455,8 @@ def export_series_excel(request, series_id):
         return Response({'error': str(e)}, status=500)
 
 
-def create_special_needs_excel(overview, disability_breakdown, sector_breakdown, series_filter=None):
+def create_special_needs_excel(special_needs_overview, disability_breakdown, special_needs_sector, 
+                                refugee_overview, refugee_sector, series_filter=None):
     """
     Create a formatted Excel workbook for special needs statistics
     """
@@ -519,15 +520,15 @@ def create_special_needs_excel(overview, disability_breakdown, sector_breakdown,
     
     # Overview data
     ws[f'A{current_row}'] = "Special Needs Candidates"
-    ws[f'B{current_row}'] = overview['total']
-    ws[f'C{current_row}'] = overview['male']
-    ws[f'D{current_row}'] = overview['female']
-    ws[f'E{current_row}'] = overview['male_passed']
-    ws[f'F{current_row}'] = overview['female_passed']
-    ws[f'G{current_row}'] = overview['total_passed']
-    ws[f'H{current_row}'] = f"{overview['male_pass_rate']}%"
-    ws[f'I{current_row}'] = f"{overview['female_pass_rate']}%"
-    ws[f'J{current_row}'] = f"{overview['pass_rate']}%"
+    ws[f'B{current_row}'] = special_needs_overview['total']
+    ws[f'C{current_row}'] = special_needs_overview['male']
+    ws[f'D{current_row}'] = special_needs_overview['female']
+    ws[f'E{current_row}'] = special_needs_overview['male_passed']
+    ws[f'F{current_row}'] = special_needs_overview['female_passed']
+    ws[f'G{current_row}'] = special_needs_overview['total_passed']
+    ws[f'H{current_row}'] = f"{special_needs_overview['male_pass_rate']}%"
+    ws[f'I{current_row}'] = f"{special_needs_overview['female_pass_rate']}%"
+    ws[f'J{current_row}'] = f"{special_needs_overview['pass_rate']}%"
     
     for col in range(1, 11):
         ws.cell(row=current_row, column=col).border = border
@@ -573,8 +574,8 @@ def create_special_needs_excel(overview, disability_breakdown, sector_breakdown,
             current_row += 1
         current_row += 2
     
-    # Performance by Sector
-    if sector_breakdown:
+    # Performance by Sector - Special Needs
+    if special_needs_sector:
         ws.merge_cells(f'A{current_row}:K{current_row}')
         sector_header = ws[f'A{current_row}']
         sector_header.value = "PERFORMANCE BY SECTOR"
@@ -596,7 +597,84 @@ def create_special_needs_excel(overview, disability_breakdown, sector_breakdown,
         current_row += 1
         
         # Sector data
-        for sector in sector_breakdown:
+        for sector in special_needs_sector:
+            ws[f'A{current_row}'] = sector['sector_name']
+            ws[f'B{current_row}'] = sector['total']
+            ws[f'C{current_row}'] = sector['male']
+            ws[f'D{current_row}'] = sector['female']
+            ws[f'E{current_row}'] = sector['male_passed']
+            ws[f'F{current_row}'] = sector['female_passed']
+            ws[f'G{current_row}'] = sector['total_passed']
+            ws[f'H{current_row}'] = f"{sector['male_pass_rate']}%"
+            ws[f'I{current_row}'] = f"{sector['female_pass_rate']}%"
+            ws[f'J{current_row}'] = f"{sector['pass_rate']}%"
+            
+            for col in range(1, 11):
+                ws.cell(row=current_row, column=col).border = border
+            current_row += 1
+    
+    # REFUGEE STATISTICS SECTION
+    current_row += 2
+    
+    # Refugee Overview
+    ws.merge_cells(f'A{current_row}:K{current_row}')
+    refugee_header = ws[f'A{current_row}']
+    refugee_header.value = "REFUGEE CANDIDATES"
+    refugee_header.font = header_font
+    refugee_header.fill = header_fill
+    refugee_header.alignment = center_alignment
+    current_row += 1
+    
+    # Refugee overview headers (reuse same format)
+    for col_num, header in enumerate(overview_headers, 1):
+        cell = ws.cell(row=current_row, column=col_num)
+        cell.value = header
+        cell.font = subheader_font
+        cell.fill = subheader_fill
+        cell.alignment = center_alignment
+        cell.border = border
+    current_row += 1
+    
+    # Refugee overview data
+    ws[f'A{current_row}'] = "Refugee Candidates"
+    ws[f'B{current_row}'] = refugee_overview['total']
+    ws[f'C{current_row}'] = refugee_overview['male']
+    ws[f'D{current_row}'] = refugee_overview['female']
+    ws[f'E{current_row}'] = refugee_overview['male_passed']
+    ws[f'F{current_row}'] = refugee_overview['female_passed']
+    ws[f'G{current_row}'] = refugee_overview['total_passed']
+    ws[f'H{current_row}'] = f"{refugee_overview['male_pass_rate']}%"
+    ws[f'I{current_row}'] = f"{refugee_overview['female_pass_rate']}%"
+    ws[f'J{current_row}'] = f"{refugee_overview['pass_rate']}%"
+    
+    for col in range(1, 11):
+        ws.cell(row=current_row, column=col).border = border
+    current_row += 3
+    
+    # Performance by Sector - Refugee
+    if refugee_sector:
+        ws.merge_cells(f'A{current_row}:K{current_row}')
+        sector_header = ws[f'A{current_row}']
+        sector_header.value = "REFUGEE PERFORMANCE BY SECTOR"
+        sector_header.font = header_font
+        sector_header.fill = header_fill
+        sector_header.alignment = center_alignment
+        current_row += 1
+        
+        # Sector headers
+        sector_headers = ['Sector Name', 'Total', 'Male', 'Female', 'Male Passed', 'Female Passed',
+                         'Total Passed', 'Male Pass %', 'Female Pass %', 'Overall Pass %']
+        for col_num, header in enumerate(sector_headers, 1):
+            cell = ws.cell(row=current_row, column=col_num)
+            cell.value = header
+            cell.font = subheader_font
+            cell.fill = subheader_fill
+            cell.alignment = center_alignment
+            cell.border = border
+        current_row += 1
+        
+        # Refugee sector data
+        for sector in refugee_sector:
             ws[f'A{current_row}'] = sector['sector_name']
             ws[f'B{current_row}'] = sector['total']
             ws[f'C{current_row}'] = sector['male']
@@ -662,6 +740,10 @@ def export_special_needs_excel(request):
         special_needs_female = [r for r in special_needs_results if r.candidate.gender == 'female']
         
         def is_passed(result):
+            # Skip results without marks
+            if result.mark is None:
+                return False
+                
             if isinstance(result, ModularResult):
                 return result.mark >= 65
             elif isinstance(result, FormalResult):
@@ -744,11 +826,63 @@ def export_special_needs_excel(request):
                 'pass_rate': round((sector_total_passed / len(sector_results) * 100), 2) if len(sector_results) > 0 else 0
             })
         
-        # Create Excel workbook
+        # REFUGEE STATISTICS
+        refugee_results = [r for r in all_results if r.candidate.is_refugee]
+        refugee_male = [r for r in refugee_results if r.candidate.gender == 'male']
+        refugee_female = [r for r in refugee_results if r.candidate.gender == 'female']
+        
+        refugee_male_passed = sum(1 for r in refugee_male if is_passed(r))
+        refugee_female_passed = sum(1 for r in refugee_female if is_passed(r))
+        refugee_total_passed = refugee_male_passed + refugee_female_passed
+        
+        refugee_overview = {
+            'total': len(refugee_results),
+            'male': len(refugee_male),
+            'female': len(refugee_female),
+            'male_passed': refugee_male_passed,
+            'female_passed': refugee_female_passed,
+            'total_passed': refugee_total_passed,
+            'male_pass_rate': round((refugee_male_passed / len(refugee_male) * 100), 2) if len(refugee_male) > 0 else 0,
+            'female_pass_rate': round((refugee_female_passed / len(refugee_female) * 100), 2) if len(refugee_female) > 0 else 0,
+            'pass_rate': round((refugee_total_passed / len(refugee_results) * 100), 2) if len(refugee_results) > 0 else 0
+        }
+        
+        # Refugee by sector
+        refugee_sector = []
+        for sector in Sector.objects.all():
+            sector_results = [r for r in refugee_results if 
+                             r.candidate.occupation and r.candidate.occupation.sector == sector]
+            
+            if not sector_results:
+                continue
+            
+            sector_male = [r for r in sector_results if r.candidate.gender == 'male']
+            sector_female = [r for r in sector_results if r.candidate.gender == 'female']
+            
+            sector_male_passed = sum(1 for r in sector_male if is_passed(r))
+            sector_female_passed = sum(1 for r in sector_female if is_passed(r))
+            sector_total_passed = sector_male_passed + sector_female_passed
+            
+            refugee_sector.append({
+                'sector_name': sector.name,
+                'total': len(sector_results),
+                'male': len(sector_male),
+                'female': len(sector_female),
+                'male_passed': sector_male_passed,
+                'female_passed': sector_female_passed,
+                'total_passed': sector_total_passed,
+                'male_pass_rate': round((sector_male_passed / len(sector_male) * 100), 2) if len(sector_male) > 0 else 0,
+                'female_pass_rate': round((sector_female_passed / len(sector_female) * 100), 2) if len(sector_female) > 0 else 0,
+                'pass_rate': round((sector_total_passed / len(sector_results) * 100), 2) if len(sector_results) > 0 else 0
+            })
+        
+        # Create Excel workbook with both special needs and refugee data
         wb = create_special_needs_excel(
-            overview=overview,
+            special_needs_overview=overview,
             disability_breakdown=disability_breakdown,
-            sector_breakdown=sector_breakdown,
+            special_needs_sector=sector_breakdown,
+            refugee_overview=refugee_overview,
+            refugee_sector=refugee_sector,
             series_filter=series_filter
         )
         

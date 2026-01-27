@@ -600,8 +600,12 @@ def special_needs_analytics(request):
     special_needs_male = [r for r in special_needs_results if r.candidate.gender == 'male']
     special_needs_female = [r for r in special_needs_results if r.candidate.gender == 'female']
     
-    # Count passed results
+    # Count passed results (only count results with actual marks)
     def is_passed(result):
+        # Skip results without marks
+        if result.mark is None:
+            return False
+            
         if isinstance(result, ModularResult):
             return result.mark >= 65
         elif isinstance(result, FormalResult):
@@ -685,10 +689,70 @@ def special_needs_analytics(request):
             'pass_rate': round((sector_total_passed / len(sector_results) * 100), 2) if len(sector_results) > 0 else 0
         })
     
+    # REFUGEE STATISTICS
+    # Filter to only refugee candidates
+    refugee_results = [r for r in all_results if r.candidate.is_refugee]
+    
+    # Calculate overall refugee statistics
+    refugee_male = [r for r in refugee_results if r.candidate.gender == 'male']
+    refugee_female = [r for r in refugee_results if r.candidate.gender == 'female']
+    
+    refugee_male_passed = sum(1 for r in refugee_male if is_passed(r))
+    refugee_female_passed = sum(1 for r in refugee_female if is_passed(r))
+    refugee_total_passed = refugee_male_passed + refugee_female_passed
+    
+    refugee_overview = {
+        'total': len(refugee_results),
+        'male': len(refugee_male),
+        'female': len(refugee_female),
+        'male_passed': refugee_male_passed,
+        'female_passed': refugee_female_passed,
+        'total_passed': refugee_total_passed,
+        'male_pass_rate': round((refugee_male_passed / len(refugee_male) * 100), 2) if len(refugee_male) > 0 else 0,
+        'female_pass_rate': round((refugee_female_passed / len(refugee_female) * 100), 2) if len(refugee_female) > 0 else 0,
+        'pass_rate': round((refugee_total_passed / len(refugee_results) * 100), 2) if len(refugee_results) > 0 else 0
+    }
+    
+    # Refugee by sector
+    refugee_by_sector = []
+    for sector in Sector.objects.all():
+        # Get results where candidate's occupation belongs to this sector
+        sector_results = [r for r in refugee_results if 
+                         r.candidate.occupation and r.candidate.occupation.sector == sector]
+        
+        if not sector_results:
+            continue
+        
+        sector_male = [r for r in sector_results if r.candidate.gender == 'male']
+        sector_female = [r for r in sector_results if r.candidate.gender == 'female']
+        
+        sector_male_passed = sum(1 for r in sector_male if is_passed(r))
+        sector_female_passed = sum(1 for r in sector_female if is_passed(r))
+        sector_total_passed = sector_male_passed + sector_female_passed
+        
+        refugee_by_sector.append({
+            'sector_name': sector.name,
+            'total': len(sector_results),
+            'male': len(sector_male),
+            'female': len(sector_female),
+            'male_passed': sector_male_passed,
+            'female_passed': sector_female_passed,
+            'total_passed': sector_total_passed,
+            'male_pass_rate': round((sector_male_passed / len(sector_male) * 100), 2) if len(sector_male) > 0 else 0,
+            'female_pass_rate': round((sector_female_passed / len(sector_female) * 100), 2) if len(sector_female) > 0 else 0,
+            'pass_rate': round((sector_total_passed / len(sector_results) * 100), 2) if len(sector_results) > 0 else 0
+        })
+    
     return Response({
-        'overview': overview,
-        'by_disability_type': disability_breakdown,
-        'by_sector': special_needs_by_sector
+        'special_needs': {
+            'overview': overview,
+            'by_disability_type': disability_breakdown,
+            'by_sector': special_needs_by_sector
+        },
+        'refugee': {
+            'overview': refugee_overview,
+            'by_sector': refugee_by_sector
+        }
     })
 
 

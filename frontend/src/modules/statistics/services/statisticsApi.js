@@ -26,9 +26,11 @@ const statisticsApi = {
   // Assessment Series statistics
   getAssessmentSeriesList: () => apiClient.get('/statistics/series/'),
   getSeriesResults: (seriesId) => apiClient.get(`/statistics/series/${seriesId}/results/`),
+  exportSeriesExcel: (seriesId) => apiClient.get(`/statistics/series/${seriesId}/export-excel/`, { responseType: 'blob' }),
 
   // Special needs and refugee analytics  
   getSpecialNeedsAnalytics: (params = {}) => apiClient.get('/statistics/special-needs/', { params }),
+  exportSpecialNeedsExcel: (params = {}) => apiClient.get('/statistics/special-needs/export-excel/', { params, responseType: 'blob' }),
 };
 
 export default statisticsApi;
