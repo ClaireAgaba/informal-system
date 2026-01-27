@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Heart, Globe } from 'lucide-react';
 import statisticsApi from '../services/statisticsApi';
+import axios from 'axios';
 
 const SpecialNeedsAnalytics = () => {
     const navigate = useNavigate();
@@ -44,21 +45,28 @@ const SpecialNeedsAnalytics = () => {
     const handleExportExcel = async () => {
         try {
             setExportingExcel(true);
-            const params = selectedSeries !== 'all' ? { series_id: selectedSeries } : {};
-            const response = await statisticsApi.exportSpecialNeedsExcel(params);
+
+            // Build query params
+            const params = {};
+            if (selectedSeries !== 'all') {
+                params.series_id = selectedSeries;
+            }
+
+            const response = await axios.get('/api/statistics/special-needs/export-excel/', {
+                params,
+                responseType: 'blob', // Important for Excel file download
+            });
 
             const contentDisposition = response.headers['content-disposition'];
             let filename = 'special_needs_analytics.xlsx';
             if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
-                if (filenameMatch) {
-                    filename = filenameMatch[1];
+                const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                if (filenameMatch && filenameMatch[1]) {
+                    filename = filenameMatch[1].replace(/["']/g, '');
                 }
             }
 
-            const blob = new Blob([response.data], {
-                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            });
+            const blob = response.data;
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;

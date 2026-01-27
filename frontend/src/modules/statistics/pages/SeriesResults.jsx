@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Users, TrendingUp, FileText, Award, ChevronDown, ArrowLeft } from 'lucide-react';
 import statisticsApi from '../services/statisticsApi';
+import axios from 'axios';
 
 const SeriesResults = () => {
     const { seriesId } = useParams();
@@ -43,22 +44,23 @@ const SeriesResults = () => {
 
         try {
             setExportingExcel(true);
-            const response = await statisticsApi.exportSeriesExcel(selectedSeriesId);
+
+            const response = await axios.get(`/api/statistics/series/${selectedSeriesId}/export-excel/`, {
+                responseType: 'blob', // Important for Excel file download
+            });
 
             // Get filename from Content-Disposition header
             const contentDisposition = response.headers['content-disposition'];
             let filename = 'series_results.xlsx';
             if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
-                if (filenameMatch) {
-                    filename = filenameMatch[1];
+                const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                if (filenameMatch && filenameMatch[1]) {
+                    filename = filenameMatch[1].replace(/["']/g, '');
                 }
             }
 
             // Download the file
-            const blob = new Blob([response.data], {
-                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            });
+            const blob = response.data;
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
