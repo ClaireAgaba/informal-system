@@ -60,13 +60,16 @@ const SpecialNeedsAnalytics = () => {
             const contentDisposition = response.headers['content-disposition'];
             let filename = 'special_needs_analytics.xlsx';
             if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                // Match filename="value" or filename=value
+                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
                 if (filenameMatch && filenameMatch[1]) {
-                    filename = filenameMatch[1].replace(/["']/g, '');
+                    filename = filenameMatch[1];
                 }
             }
 
-            const blob = response.data;
+            const blob = new Blob([response.data], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -164,21 +167,44 @@ const SpecialNeedsAnalytics = () => {
                             </div>
                         </div>
 
-                        {/* Disability Types */}
+                        {/* Performance by Disability Type */}
                         {analytics.special_needs.by_disability_type && analytics.special_needs.by_disability_type.length > 0 && (
-                            <div className="mt-4">
-                                <h3 className="font-semibold mb-2">By Disability Type</h3>
-                                {analytics.special_needs.by_disability_type.map((d, i) => (
-                                    <div key={i} className="mb-2">
-                                        <div className="flex justify-between text-sm mb-1">
-                                            <span>{d.name}</span>
-                                            <span>{d.total} (M:{d.male} F:{d.female}) - {d.pass_rate}%</span>
-                                        </div>
-                                        <div className="w-full bg-gray-200 rounded h-2">
-                                            <div className="bg-red-500 h-2 rounded" style={{ width: `${d.pass_rate}%` }}></div>
-                                        </div>
-                                    </div>
-                                ))}
+                            <div className="mt-6">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance by Disability Type</h3>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Disability Type</th>
+                                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Male</th>
+                                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Female</th>
+                                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Male Passed</th>
+                                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Female Passed</th>
+                                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Total Passed</th>
+                                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Male Pass %</th>
+                                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Female Pass %</th>
+                                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Overall Pass %</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {analytics.special_needs.by_disability_type.map((disability, index) => (
+                                                <tr key={index} className="hover:bg-gray-50">
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{disability.name}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-center text-gray-900">{disability.total}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-center text-blue-600">{disability.male}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-center text-pink-600">{disability.female}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-center text-blue-700 font-medium">{disability.male_passed}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-center text-pink-700 font-medium">{disability.female_passed}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-center text-gray-900 font-semibold">{disability.total_passed}</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-center text-blue-800 font-semibold">{disability.male_pass_rate}%</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-center text-pink-808 font-semibold">{disability.female_pass_rate}%</td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-center text-green-700 font-bold">{disability.pass_rate}%</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         )}
 

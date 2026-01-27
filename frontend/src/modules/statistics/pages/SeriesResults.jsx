@@ -53,14 +53,17 @@ const SeriesResults = () => {
             const contentDisposition = response.headers['content-disposition'];
             let filename = 'series_results.xlsx';
             if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                // Match filename="value" or filename=value
+                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
                 if (filenameMatch && filenameMatch[1]) {
-                    filename = filenameMatch[1].replace(/["']/g, '');
+                    filename = filenameMatch[1];
                 }
             }
 
-            // Download the file
-            const blob = response.data;
+            // Download the file - create new blob with explicit type
+            const blob = new Blob([response.data], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -338,6 +341,41 @@ const SeriesResults = () => {
                         </div>
                     </div>
 
+                    {/* Centers by Sector */}
+                    {results.centers_by_sector && results.centers_by_sector.length > 0 && (
+                        <div className="bg-white p-6 rounded-lg shadow border border-gray-200 mb-6">
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Centers Registered by Sector</h2>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sector</th>
+                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Centers</th>
+                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Branches</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {results.centers_by_sector.map((sector, index) => (
+                                            <tr key={index} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{sector.sector_name}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-indigo-600 font-semibold">{sector.centers_count}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-purple-600 font-semibold">{sector.branches_count}</td>
+                                            </tr>
+                                        ))}
+                                        {/* Total Row */}
+                                        {results.centers_by_sector_summary && (
+                                            <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">TOTAL (Unique)</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-indigo-800">{results.centers_by_sector_summary.total_unique_centers}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-purple-800">{results.centers_by_sector_summary.total_unique_branches}</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Performance by Category */}
                     <div className="bg-white p-6 rounded-lg shadow border border-gray-200 mb-6">
                         <h2 className="text-lg font-semibold text-gray-900 mb-4">Performance by Registration Category</h2>
@@ -433,6 +471,7 @@ const SeriesResults = () => {
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sector</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Occupation</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
@@ -448,20 +487,26 @@ const SeriesResults = () => {
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
                                     {results.by_occupation.map((occ, index) => (
-                                        <tr key={index} className="hover:bg-gray-50">
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                        <tr
+                                            key={index}
+                                            className={occ.is_sector_summary ? 'bg-blue-50 font-semibold border-t-2 border-blue-200' : 'hover:bg-gray-50'}
+                                        >
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'text-gray-900 font-bold' : 'text-gray-600'}`}>
+                                                {occ.is_sector_summary ? '' : occ.sector_name}
+                                            </td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'text-gray-900 font-bold' : 'font-medium text-gray-900'}`}>
                                                 {occ.occupation_name}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{occ.occupation_code}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{occ.total}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">{occ.male}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-600">{occ.female}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-700 font-medium">{occ.male_passed}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-700 font-medium">{occ.female_passed}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{occ.total_passed}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-800 font-semibold">{occ.male_pass_rate}%</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-808 font-semibold">{occ.female_pass_rate}%</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-green-700 font-bold">{occ.pass_rate}%</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-gray-900' : 'text-gray-900'}`}>{occ.total}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-blue-700' : 'text-blue-600'}`}>{occ.male}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-pink-700' : 'text-pink-600'}`}>{occ.female}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-blue-800' : 'text-blue-700 font-medium'}`}>{occ.male_passed}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-pink-800' : 'text-pink-700 font-medium'}`}>{occ.female_passed}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-gray-900' : 'text-gray-900 font-medium'}`}>{occ.total_passed}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-blue-900' : 'text-blue-800 font-semibold'}`}>{occ.male_pass_rate}%</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-pink-900' : 'text-pink-808 font-semibold'}`}>{occ.female_pass_rate}%</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-green-800' : 'text-green-700 font-bold'}`}>{occ.pass_rate}%</td>
                                         </tr>
                                     ))}
                                 </tbody>

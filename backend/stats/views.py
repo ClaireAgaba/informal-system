@@ -426,70 +426,120 @@ def assessment_series_results(request, series_id):
         elif hasattr(result, 'candidate') and result.candidate and result.candidate.occupation:
             occupation_ids.add(result.candidate.occupation_id)
     
-    occupations = Occupation.objects.filter(id__in=occupation_ids)
+    # By occupation - now reorganized by sector with summaries
+    from occupations.models import Sector
+    occupation_stats = []
     
-    for occ in occupations:
-        # Get all results for this occupation
-        occ_modular = ModularResult.objects.filter(
-            assessment_series_id=series_id,
-            module__occupation=occ
-        ).select_related('candidate')
+    # Get all sectors
+    sectors = Sector.objects.all().order_by('name')
+    
+    for sector in sectors:
+        # Get occupations in this sector that have results
+        sector_occupations = Occupation.objects.filter(
+            id__in=occupation_ids,
+            sector=sector
+        ).order_by('occ_name')
         
-        occ_formal = FormalResult.objects.filter(
-            assessment_series_id=series_id,
-            candidate__occupation=occ
-        ).select_related('candidate')
-        
-        occ_workers = WorkersPasResult.objects.filter(
-            assessment_series_id=series_id,
-            candidate__occupation=occ
-        ).select_related('candidate')
-        
-        # Combine all results for this occupation
-        occ_all_results = list(occ_modular) + list(occ_formal) + list(occ_workers)
-        
-        if len(occ_all_results) == 0:
+        if not sector_occupations.exists():
             continue
         
-        # Calculate statistics
-        total = len(occ_all_results)
-        male_results = [r for r in occ_all_results if r.candidate.gender == 'male']
-        female_results = [r for r in occ_all_results if r.candidate.gender == 'female']
+        # Sector-level accumulators
+        sector_total = 0
+        sector_male = 0
+        sector_female = 0
+        sector_male_passed = 0
+        sector_female_passed = 0
+        sector_total_passed = 0
         
-        male_count = len(male_results)
-        female_count = len(female_results)
+        for occ in sector_occupations:
+            # Get all results for this occupation
+            occ_modular = ModularResult.objects.filter(
+                assessment_series_id=series_id,
+                module__occupation=occ
+            ).select_related('candidate')
+            
+            occ_formal = FormalResult.objects.filter(
+                assessment_series_id=series_id,
+                candidate__occupation=occ
+            ).select_related('candidate')
+            
+            occ_workers = WorkersPasResult.objects.filter(
+                assessment_series_id=series_id,
+                candidate__occupation=occ
+            ).select_related('candidate')
+            
+            # Combine all results for this occupation
+            occ_all_results = list(occ_modular) + list(occ_formal) + list(occ_workers)
+            
+            if len(occ_all_results) == 0:
+                continue
+            
+            # Calculate statistics
+            total = len(occ_all_results)
+            male_results = [r for r in occ_all_results if r.candidate.gender == 'male']
+            female_results = [r for r in occ_all_results if r.candidate.gender == 'female']
+            
+            male_count = len(male_results)
+            female_count = len(female_results)
+            
+            # Count passing (based on result type)
+            male_passed = sum(1 for r in male_results if (
+                (isinstance(r, ModularResult) and r.mark >= 65) or
+                (isinstance(r, FormalResult) and ((r.type == 'theory' and r.mark >= 50) or (r.type == 'practical' and r.mark >= 65))) or
+                (isinstance(r, WorkersPasResult) and r.mark >= 65)
+            ))
+            
+            female_passed = sum(1 for r in female_results if (
+                (isinstance(r, ModularResult) and r.mark >= 65) or
+                (isinstance(r, FormalResult) and ((r.type == 'theory' and r.mark >= 50) or (r.type == 'practical' and r.mark >= 65))) or
+                (isinstance(r, WorkersPasResult) and r.mark >= 65)
+            ))
+            
+            total_passed = male_passed + female_passed
+            
+            # Add to sector totals
+            sector_total += total
+            sector_male += male_count
+            sector_female += female_count
+            sector_male_passed += male_passed
+            sector_female_passed += female_passed
+            sector_total_passed += total_passed
+            
+            occupation_stats.append({
+                'occupation_name': occ.occ_name,
+                'occupation_code': occ.occ_code,
+                'sector_name': sector.name,
+                'total': total,
+                'male': male_count,
+                'female': female_count,
+                'male_passed': male_passed,
+                'female_passed': female_passed,
+                'total_passed': total_passed,
+                'male_pass_rate': round((male_passed / male_count * 100), 2) if male_count > 0 else 0,
+                'female_pass_rate': round((female_passed / female_count * 100), 2) if female_count > 0 else 0,
+                'pass_rate': round((total_passed / total * 100), 2) if total > 0 else 0,
+                'is_sector_summary': False
+            })
         
-        # Count passing (based on result type)
-        male_passed = sum(1 for r in male_results if (
-            (isinstance(r, ModularResult) and r.mark >= 65) or
-            (isinstance(r, FormalResult) and ((r.type == 'theory' and r.mark >= 50) or (r.type == 'practical' and r.mark >= 65))) or
-            (isinstance(r, WorkersPasResult) and r.mark >= 65)
-        ))
-        
-        female_passed = sum(1 for r in female_results if (
-            (isinstance(r, ModularResult) and r.mark >= 65) or
-            (isinstance(r, FormalResult) and ((r.type == 'theory' and r.mark >= 50) or (r.type == 'practical' and r.mark >= 65))) or
-            (isinstance(r, WorkersPasResult) and r.mark >= 65)
-        ))
-        
-        total_passed = male_passed + female_passed
-        
-        occupation_stats.append({
-            'occupation_name': occ.occ_name,
-            'occupation_code': occ.occ_code,
-            'total': total,
-            'male': male_count,
-            'female': female_count,
-            'male_passed': male_passed,
-            'female_passed': female_passed,
-            'total_passed': total_passed,
-            'male_pass_rate': round((male_passed / male_count * 100), 2) if male_count > 0 else 0,
-            'female_pass_rate': round((female_passed / female_count * 100), 2) if female_count > 0 else 0,
-            'pass_rate': round((total_passed / total * 100), 2) if total > 0 else 0
-        })
+        # Add sector summary row
+        if sector_total > 0:
+            occupation_stats.append({
+                'occupation_name': f'{sector.name} - TOTAL',
+                'occupation_code': '',
+                'sector_name': sector.name,
+                'total': sector_total,
+                'male': sector_male,
+                'female': sector_female,
+                'male_passed': sector_male_passed,
+                'female_passed': sector_female_passed,
+                'total_passed': sector_total_passed,
+                'male_pass_rate': round((sector_male_passed / sector_male * 100), 2) if sector_male > 0 else 0,
+                'female_pass_rate': round((sector_female_passed / sector_female * 100), 2) if sector_female > 0 else 0,
+                'pass_rate': round((sector_total_passed / sector_total * 100), 2) if sector_total > 0 else 0,
+                'is_sector_summary': True
+            })
     
     # By sector - NEW comprehensive metrics
-    from occupations.models import Sector
     sector_stats = []
     
     sectors = Sector.objects.all()
@@ -555,6 +605,50 @@ def assessment_series_results(request, series_id):
             'pass_rate': round((total_passed / total * 100), 2) if total > 0 else 0
         })
     
+    # Centers by Sector - count unique centers and branches per sector
+    from assessment_centers.models import AssessmentCenter, CenterBranch
+    centers_by_sector = []
+    
+    # Track unique centers and branches across the entire series
+    series_unique_centers = set()
+    series_unique_branches = set()
+    
+    for sector in Sector.objects.all().order_by('name'):
+        # Filter results for this sector - matching Excel export logic to ensure consistency
+        sector_results = [r for r in all_results if 
+                         (hasattr(r, 'module') and r.module and r.module.occupation.sector == sector) or
+                         (hasattr(r, 'candidate') and r.candidate.occupation and r.candidate.occupation.sector == sector)]
+        
+        # Get unique centers (parents) and branches for this sector
+        sector_centers = set()
+        sector_branches = set()
+        
+        for r in sector_results:
+            cand = r.candidate
+            
+            # Use assessment_center_id (Parent) for Centers count
+            if cand.assessment_center_id:
+                sector_centers.add(cand.assessment_center_id)
+                series_unique_centers.add(cand.assessment_center_id)
+            
+            # Use assessment_center_branch_id for Branches count
+            if cand.assessment_center_branch_id:
+                sector_branches.add(cand.assessment_center_branch_id)
+                series_unique_branches.add(cand.assessment_center_branch_id)
+        
+        if len(sector_centers) > 0 or len(sector_branches) > 0:
+            centers_by_sector.append({
+                'sector_name': sector.name,
+                'centers_count': len(sector_centers),
+                'branches_count': len(sector_branches)
+            })
+            
+    # Add total summary row
+    centers_by_sector_summary = {
+        'total_unique_centers': len(series_unique_centers),
+        'total_unique_branches': len(series_unique_branches)
+    }
+    
     return Response({
         'series': {
             'id': series.id,
@@ -563,6 +657,8 @@ def assessment_series_results(request, series_id):
             'end_date': series.end_date
         },
         'overview': overview,
+        'centers_by_sector': centers_by_sector,
+        'centers_by_sector_summary': centers_by_sector_summary,
         'by_category': category_stats,
         'grade_distribution': grade_dist,
         'by_occupation': occupation_stats,

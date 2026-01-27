@@ -13,9 +13,10 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from assessment_series.models import AssessmentSeries
+from occupations.models import Sector
 
 
-def create_formatted_excel(series, overview, category_stats, sector_stats, occupation_stats, grade_dist):
+def create_formatted_excel(series, overview, category_stats, sector_stats, occupation_stats, grade_dist, centers_by_sector, centers_summary):
     """
     Create a formatted Excel workbook with assessment series statistics
     """
@@ -77,9 +78,9 @@ def create_formatted_excel(series, overview, category_stats, sector_stats, occup
     ws[f'B{current_row}'] = overview['total_candidates']
     ws[f'C{current_row}'] = overview['male']
     ws[f'D{current_row}'] = overview['female']
-    ws[f'E{current_row}'] = "-"
-    ws[f'F{current_row}'] = "-"
-    ws[f'G{current_row}'] = "-"
+    ws[f'E{current_row}'] = overview['male_passed']
+    ws[f'F{current_row}'] = overview['female_passed']
+    ws[f'G{current_row}'] = overview['total_passed']
     ws[f'H{current_row}'] = f"{overview['male_pass_rate']}%"
     ws[f'I{current_row}'] = f"{overview['female_pass_rate']}%"
     ws[f'J{current_row}'] = f"{overview['pass_rate']}%"
@@ -88,6 +89,65 @@ def create_formatted_excel(series, overview, category_stats, sector_stats, occup
         ws.cell(row=current_row, column=col).border = border
     current_row += 3
     
+    
+    # Centers Registered by Sector
+    ws.merge_cells(f'A{current_row}:K{current_row}')
+    center_header = ws[f'A{current_row}']
+    center_header.value = "CENTERS REGISTERED BY SECTOR"
+    center_header.font = header_font
+    center_header.fill = header_fill
+    center_header.alignment = center_alignment
+    current_row += 1
+    
+    # Centers headers
+    ws[f'A{current_row}'] = "Sector"
+    ws[f'B{current_row}'] = "Centers"
+    ws[f'C{current_row}'] = "Branches"
+    
+    # Style headers
+    for col in ['A', 'B', 'C']:
+        cell = ws[f'{col}{current_row}']
+        cell.font = subheader_font
+        cell.fill = subheader_fill
+        cell.alignment = center_alignment
+        cell.border = border
+    current_row += 1
+    
+    # Write data
+    for sector in centers_by_sector:
+        ws[f'A{current_row}'] = sector['name']
+        ws[f'B{current_row}'] = sector['centers_count']
+        ws[f'C{current_row}'] = sector['branch_count']
+        
+        # Style row
+        for col in range(1, 12): # Apply border to row (A-K)
+             ws.cell(row=current_row, column=col).border = border
+             
+        # Center align count
+        ws[f'B{current_row}'].alignment = center_alignment
+        ws[f'C{current_row}'].alignment = center_alignment
+        
+        current_row += 1
+        
+    # Stats Summary Row
+    ws[f'A{current_row}'] = "TOTAL (Unique)"
+    ws[f'B{current_row}'] = centers_summary['total_centers']
+    ws[f'C{current_row}'] = centers_summary['total_branches']
+    
+    # Style summary row (Bold, lighter fill maybe)
+    for col in ['A', 'B', 'C']:
+        cell = ws[f'{col}{current_row}']
+        cell.font = Font(name='Calibri', size=11, bold=True)
+        cell.fill = PatternFill(start_color="E0E0E0", end_color="E0E0E0", fill_type="solid")
+        cell.alignment = center_alignment
+        cell.border = border
+    
+    # Border for rest of row
+    for col in range(4, 12):
+        ws.cell(row=current_row, column=col).border = border
+        
+    current_row += 2
+
     # Performance by Category
     ws.merge_cells(f'A{current_row}:K{current_row}')
     cat_header = ws[f'A{current_row}']
@@ -174,7 +234,7 @@ def create_formatted_excel(series, overview, category_stats, sector_stats, occup
     
     # Performance by Occupation
     if occupation_stats:
-        ws.merge_cells(f'A{current_row}:K{current_row}')
+        ws.merge_cells(f'A{current_row}:L{current_row}')
         occ_header = ws[f'A{current_row}']
         occ_header.value = "PERFORMANCE BY OCCUPATION"
         occ_header.font = header_font
@@ -182,8 +242,8 @@ def create_formatted_excel(series, overview, category_stats, sector_stats, occup
         occ_header.alignment = center_alignment
         current_row += 1
         
-        # Occupation headers
-        occ_headers = ['Occupation', 'Code', 'Total', 'Male', 'Female', 'Male Passed', 'Female Passed',
+        # Occupation headers - now with Sector column
+        occ_headers = ['Sector', 'Occupation', 'Code', 'Total', 'Male', 'Female', 'Male Passed', 'Female Passed',
                       'Total Passed', 'Male Pass %', 'Female Pass %', 'Overall Pass %']
         for col_num, header in enumerate(occ_headers, 1):
             cell = ws.cell(row=current_row, column=col_num)
@@ -194,22 +254,34 @@ def create_formatted_excel(series, overview, category_stats, sector_stats, occup
             cell.border = border
         current_row += 1
         
-        # Occupation data
+        # Occupation data - grouped by sector with summaries
+        summary_fill = PatternFill(start_color="B4C7E7", end_color="B4C7E7", fill_type="solid")
+        summary_font = Font(bold=True, size=11)
+        
         for occ in occupation_stats:
-            ws[f'A{current_row}'] = occ['occupation_name']
-            ws[f'B{current_row}'] = occ['occupation_code']
-            ws[f'C{current_row}'] = occ['total']
-            ws[f'D{current_row}'] = occ['male']
-            ws[f'E{current_row}'] = occ['female']
-            ws[f'F{current_row}'] = occ['male_passed']
-            ws[f'G{current_row}'] = occ['female_passed']
-            ws[f'H{current_row}'] = occ['total_passed']
-            ws[f'I{current_row}'] = f"{occ['male_pass_rate']}%"
-            ws[f'J{current_row}'] = f"{occ['female_pass_rate']}%"
-            ws[f'K{current_row}'] = f"{occ['pass_rate']}%"
+            # Special styling for sector summary rows
+            is_summary = occ.get('is_sector_summary', False)
             
-            for col in range(1, 12):
-                ws.cell(row=current_row, column=col).border = border
+            ws[f'A{current_row}'] = '' if is_summary else occ['sector_name']
+            ws[f'B{current_row}'] = occ['occupation_name']
+            ws[f'C{current_row}'] = occ['occupation_code']
+            ws[f'D{current_row}'] = occ['total']
+            ws[f'E{current_row}'] = occ['male']
+            ws[f'F{current_row}'] = occ['female']
+            ws[f'G{current_row}'] = occ['male_passed']
+            ws[f'H{current_row}'] = occ['female_passed']
+            ws[f'I{current_row}'] = occ['total_passed']
+            ws[f'J{current_row}'] = f"{occ['male_pass_rate']}%"
+            ws[f'K{current_row}'] = f"{occ['female_pass_rate']}%"
+            ws[f'L{current_row}'] = f"{occ['pass_rate']}%"
+            
+            # Apply formatting
+            for col in range(1, 13):
+                cell = ws.cell(row=current_row, column=col)
+                cell.border = border
+                if is_summary:
+                    cell.fill = summary_fill
+                    cell.font = summary_font
             current_row += 1
     
     # Auto-size columns
@@ -271,6 +343,9 @@ def export_series_excel(request, series_id):
             'total_candidates':total_candidates,
             'male': male_count,
             'female': female_count,
+            'male_passed': male_passed,
+            'female_passed': female_passed,
+            'total_passed': total_passed,
             'male_pass_rate': round((male_passed / male_count * 100), 2) if male_count > 0 else 0,
             'female_pass_rate': round((female_passed / female_count * 100), 2) if female_count > 0 else 0,
             'pass_rate': round((total_passed / total_candidates * 100), 2) if total_candidates > 0 else 0
@@ -373,7 +448,7 @@ def export_series_excel(request, series_id):
                 'pass_rate': round((sector_total_passed / len(sector_results) * 100), 2) if len(sector_results) > 0 else 0
             })
         
-        # Occupation stats - simplified
+        # Occupation stats - grouped by sector with summaries
         occupation_stats = []
         occupation_ids = set()
         for result in all_results:
@@ -382,46 +457,129 @@ def export_series_excel(request, series_id):
             elif hasattr(result, 'candidate') and result.candidate and result.candidate.occupation:
                 occupation_ids.add(result.candidate.occupation_id)
         
-        occupations = Occupation.objects.filter(id__in=occupation_ids)
-        for occ in occupations:
-            occ_results = [r for r in all_results if 
-                          (hasattr(r, 'module') and r.module and r.module.occupation == occ) or
-                          (hasattr(r, 'candidate') and r.candidate.occupation == occ)]
-            
-            if not occ_results:
-                continue
-                
-            occ_male = [r for r in occ_results if r.candidate.gender == 'male']
-            occ_female = [r for r in occ_results if r.candidate.gender == 'female']
-            
-            occ_male_passed = sum(1 for r in occ_male if (
-                (isinstance(r, ModularResult) and r.mark >= 65) or
-                (isinstance(r, FormalResult) and ((r.type == 'theory' and r.mark >= 50) or (r.type == 'practical' and r.mark >= 65))) or
-                (isinstance(r, WorkersPasResult) and r.mark >= 65)
-            ))
-            
-            occ_female_passed = sum(1 for r in occ_female if (
-                (isinstance(r, ModularResult) and r.mark >= 65) or
-                (isinstance(r, FormalResult) and ((r.type == 'theory' and r.mark >= 50) or (r.type == 'practical' and r.mark >= 65))) or
-                (isinstance(r, WorkersPasResult) and r.mark >= 65)
-            ))
-            
-            occ_total_passed = occ_male_passed + occ_female_passed
-            
-            occupation_stats.append({
-                'occupation_name': occ.occ_name,
-                'occupation_code': occ.occ_code,
-                'total': len(occ_results),
-                'male': len(occ_male),
-                'female': len(occ_female),
-                'male_passed': occ_male_passed,
-                'female_passed': occ_female_passed,
-                'total_passed': occ_total_passed,
-                'male_pass_rate': round((occ_male_passed / len(occ_male) * 100), 2) if len(occ_male) > 0 else 0,
-                'female_pass_rate': round((occ_female_passed / len(occ_female) * 100), 2) if len(occ_female) > 0 else 0,
-                'pass_rate': round((occ_total_passed / len(occ_results) * 100), 2) if len(occ_results) > 0 else 0
-            })
+        # Group by sector
+        from occupations.models import Sector
+        sectors = Sector.objects.all().order_by('name')
         
+        for sector in sectors:
+            sector_occupations = Occupation.objects.filter(
+                id__in=occupation_ids,
+                sector=sector
+            ).order_by('occ_name')
+            
+            if not sector_occupations.exists():
+                continue
+            
+            # Sector totals
+            sector_total = 0
+            sector_male = 0
+            sector_female = 0
+            sector_male_passed = 0
+            sector_female_passed = 0
+            sector_total_passed = 0
+            
+            for occ in sector_occupations:
+                occ_results = [r for r in all_results if 
+                              (hasattr(r, 'module') and r.module and r.module.occupation == occ) or
+                              (hasattr(r, 'candidate') and r.candidate.occupation == occ)]
+                
+                if not occ_results:
+                    continue
+                    
+                occ_male = [r for r in occ_results if r.candidate.gender == 'male']
+                occ_female = [r for r in occ_results if r.candidate.gender == 'female']
+                
+                occ_male_passed = sum(1 for r in occ_male if (
+                    (isinstance(r, ModularResult) and r.mark >= 65) or
+                    (isinstance(r, FormalResult) and ((r.type == 'theory' and r.mark >= 50) or (r.type == 'practical' and r.mark >= 65))) or
+                    (isinstance(r, WorkersPasResult) and r.mark >= 65)
+                ))
+                
+                occ_female_passed = sum(1 for r in occ_female if (
+                    (isinstance(r, ModularResult) and r.mark >= 65) or
+                    (isinstance(r, FormalResult) and ((r.type == 'theory' and r.mark >= 50) or (r.type == 'practical' and r.mark >= 65))) or
+                    (isinstance(r, WorkersPasResult) and r.mark >= 65)
+                ))
+                
+                occ_total_passed = occ_male_passed + occ_female_passed
+                
+                # Add to sector totals
+                sector_total += len(occ_results)
+                sector_male += len(occ_male)
+                sector_female += len(occ_female)
+                sector_male_passed += occ_male_passed
+                sector_female_passed += occ_female_passed
+                sector_total_passed += occ_total_passed
+                
+                occupation_stats.append({
+                    'occupation_name': occ.occ_name,
+                    'occupation_code': occ.occ_code,
+                    'sector_name': sector.name,
+                    'total': len(occ_results),
+                    'male': len(occ_male),
+                    'female': len(occ_female),
+                    'male_passed': occ_male_passed,
+                    'female_passed': occ_female_passed,
+                    'total_passed': occ_total_passed,
+                    'male_pass_rate': round((occ_male_passed / len(occ_male) * 100), 2) if len(occ_male) > 0 else 0,
+                    'female_pass_rate': round((occ_female_passed / len(occ_female) * 100), 2) if len(occ_female) > 0 else 0,
+                    'pass_rate': round((occ_total_passed / len(occ_results) * 100), 2) if len(occ_results) > 0 else 0,
+                    'is_sector_summary': False
+                })
+            
+            # Add sector summary
+            if sector_total > 0:
+                occupation_stats.append({
+                    'occupation_name': f'{sector.name} - TOTAL',
+                    'occupation_code': '',
+                    'sector_name': sector.name,
+                    'total': sector_total,
+                    'male': sector_male,
+                    'female': sector_female,
+                    'male_passed': sector_male_passed,
+                    'female_passed': sector_female_passed,
+                    'total_passed': sector_total_passed,
+                    'male_pass_rate': round((sector_male_passed / sector_male * 100), 2) if sector_male > 0 else 0,
+                    'female_pass_rate': round((sector_female_passed / sector_female * 100), 2) if sector_female > 0 else 0,
+                    'pass_rate': round((sector_total_passed / sector_total * 100), 2) if sector_total > 0 else 0,
+                    'is_sector_summary': True
+                })
+        
+        # Calculate Centers by Sector
+        centers_by_sector = []
+        series_unique_centers = set()
+        series_unique_branches = set()
+        
+        for sector in Sector.objects.all().order_by('name'):
+            # Filter results for this sector
+            sector_results = [r for r in all_results if 
+                             (hasattr(r, 'module') and r.module and r.module.occupation.sector == sector) or
+                             (hasattr(r, 'candidate') and r.candidate.occupation and r.candidate.occupation.sector == sector)]
+            
+            sector_centers = set()
+            sector_branches = set()
+            
+            for r in sector_results:
+                cand = r.candidate
+                if cand.assessment_center:
+                    sector_centers.add(cand.assessment_center.id)
+                    series_unique_centers.add(cand.assessment_center.id)
+                if cand.assessment_center_branch:
+                    sector_branches.add(cand.assessment_center_branch.id)
+                    series_unique_branches.add(cand.assessment_center_branch.id)
+            
+            if len(sector_centers) > 0 or len(sector_branches) > 0:
+                centers_by_sector.append({
+                    'name': sector.name,
+                    'centers_count': len(sector_centers),
+                    'branch_count': len(sector_branches)
+                })
+        
+        centers_by_sector_summary = {
+            'total_centers': len(series_unique_centers),
+            'total_branches': len(series_unique_branches)
+        }
+
         # Create Excel workbook
         wb = create_formatted_excel(
             series=series,
@@ -429,7 +587,9 @@ def export_series_excel(request, series_id):
             category_stats=category_stats,
             sector_stats=sector_stats,
             occupation_stats=occupation_stats,
-            grade_dist={}
+            grade_dist={},
+            centers_by_sector=centers_by_sector,
+            centers_summary=centers_by_sector_summary
         )
         
         # Save to BytesIO
