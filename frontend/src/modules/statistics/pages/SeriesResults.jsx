@@ -3,12 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Users, TrendingUp, FileText, Award, ChevronDown, ArrowLeft } from 'lucide-react';
 import statisticsApi from '../services/statisticsApi';
 import axios from 'axios';
+import CenterMultiSelect from '../../../components/common/CenterMultiSelect';
 
 const SeriesResults = () => {
     const { seriesId } = useParams();
     const navigate = useNavigate();
     const [seriesList, setSeriesList] = useState([]);
     const [selectedSeriesId, setSelectedSeriesId] = useState(seriesId || '');
+    const [selectedCenters, setSelectedCenters] = useState([]);
     const [results, setResults] = useState(null);
     const [loadingList, setLoadingList] = useState(true);
     const [loading, setLoading] = useState(false);
@@ -45,8 +47,14 @@ const SeriesResults = () => {
         try {
             setExportingExcel(true);
 
+            const params = {};
+            if (selectedCenters.length > 0) {
+                params.center_ids = selectedCenters.map(c => c.id).join(',');
+            }
+
             const response = await axios.get(`/api/statistics/series/${selectedSeriesId}/export-excel/`, {
                 responseType: 'blob', // Important for Excel file download
+                params: params
             });
 
             // Get filename from Content-Disposition header
@@ -100,7 +108,11 @@ const SeriesResults = () => {
     const fetchSeriesResults = async (id) => {
         try {
             setLoading(true);
-            const response = await statisticsApi.getSeriesResults(id);
+            const params = {};
+            if (selectedCenters.length > 0) {
+                params.center_ids = selectedCenters.map(c => c.id).join(',');
+            }
+            const response = await statisticsApi.getSeriesResults(id, params);
             setResults(response.data);
         } catch (error) {
             console.error('Error fetching series results:', error);
@@ -152,6 +164,14 @@ const SeriesResults = () => {
                         </option>
                     ))}
                 </select>
+
+                {/* Center Filter */}
+                <div className="mt-4">
+                    <CenterMultiSelect
+                        selectedCenters={selectedCenters}
+                        onChange={setSelectedCenters}
+                    />
+                </div>
 
                 {/* Action Buttons */}
                 <div className="flex gap-3 mt-4">

@@ -313,11 +313,23 @@ def export_series_excel(request, series_id):
         from django.db.models import Count
         
         series = AssessmentSeries.objects.get(id=series_id)
+
+        # Filter by Centers if provided
+        center_ids_param = request.GET.get('center_ids') or request.query_params.get('center_ids')
+        center_ids = [int(id) for id in center_ids_param.split(',')] if center_ids_param else []
+        
+        # Base QuerySets
+        modular_qs = ModularResult.objects.filter(assessment_series=series).select_related('candidate')
+        formal_qs = FormalResult.objects.filter(assessment_series=series).select_related('candidate')
+        workers_qs = WorkersPasResult.objects.filter(assessment_series=series).select_related('candidate')
+        
+        if center_ids:
+            modular_qs = modular_qs.filter(candidate__assessment_center_id__in=center_ids)
+            formal_qs = formal_qs.filter(candidate__assessment_center_id__in=center_ids)
+            workers_qs = workers_qs.filter(candidate__assessment_center_id__in=center_ids)
         
         # Get all results for this series
-        all_results = list(ModularResult.objects.filter(assessment_series=series).select_related('candidate')) + \
-                      list(FormalResult.objects.filter(assessment_series=series).select_related('candidate')) + \
-                      list(WorkersPasResult.objects.filter(assessment_series=series).select_related('candidate'))
+        all_results = list(modular_qs) + list(formal_qs) + list(workers_qs)
         
         # Calculate overview statistics
         male_count = sum(1 for r in all_results if r.candidate.gender == 'male')

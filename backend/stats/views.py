@@ -221,19 +221,28 @@ def assessment_series_results(request, series_id):
     except AssessmentSeries.DoesNotExist:
         return Response({'error': 'Series not found'}, status=404)
     
-    # Get all candidates enrolled in this series
-    enrolled_candidates = Candidate.objects.filter(
-        enrollments__assessment_series=series
-    ).distinct()
+    # Filter by Centers if provided
+    center_ids_param = request.query_params.get('center_ids')
+    center_ids = [int(id) for id in center_ids_param.split(',')] if center_ids_param else []
     
-    male_candidates = enrolled_candidates.filter(gender='male')
-    female_candidates = enrolled_candidates.filter(gender='female')
+    # Base QuerySets for Results
+    modular_qs = ModularResult.objects.filter(assessment_series_id=series_id).select_related('candidate', 'module__occupation__sector')
+    formal_qs = FormalResult.objects.filter(assessment_series_id=series_id).select_related('candidate', 'candidate__occupation__sector')
+    workers_qs = WorkersPasResult.objects.filter(assessment_series_id=series_id).select_related('candidate', 'candidate__occupation__sector')
     
+    if center_ids:
+        modular_qs = modular_qs.filter(candidate__assessment_center_id__in=center_ids)
+        formal_qs = formal_qs.filter(candidate__assessment_center_id__in=center_ids)
+        workers_qs = workers_qs.filter(candidate__assessment_center_id__in=center_ids)
+
     # Get enrolled candidates with gender info
     from candidates.models import CandidateEnrollment
     enrollments = CandidateEnrollment.objects.filter(
         assessment_series_id=series_id
     ).select_related('candidate')
+    
+    if center_ids:
+        enrollments = enrollments.filter(candidate__assessment_center_id__in=center_ids)
     
     total_candidates = enrollments.count()
     male_candidates = enrollments.filter(candidate__gender='male').count()
@@ -247,9 +256,7 @@ def assessment_series_results(request, series_id):
     female_passing_count = 0
     
     # Modular results by gender
-    for result in ModularResult.objects.filter(
-        assessment_series_id=series_id
-    ).select_related('candidate'):
+    for result in modular_qs:
         gender = result.candidate.gender
         if gender == 'male':
             male_results_count += 1
@@ -261,9 +268,7 @@ def assessment_series_results(request, series_id):
                 female_passing_count += 1
     
     # Formal results by gender
-    for result in FormalResult.objects.filter(
-        assessment_series_id=series_id
-    ).select_related('candidate'):
+    for result in formal_qs:
         gender = result.candidate.gender
         passing_mark = 50 if result.type == 'theory' else 65
         if gender == 'male':
@@ -276,9 +281,7 @@ def assessment_series_results(request, series_id):
                 female_passing_count += 1
     
     # Workers PAS results by gender
-    for result in WorkersPasResult.objects.filter(
-        assessment_series_id=series_id
-    ).select_related('candidate'):
+    for result in workers_qs:
         gender = result.candidate.gender
         if gender == 'male':
             male_results_count += 1
@@ -314,7 +317,7 @@ def assessment_series_results(request, series_id):
     category_stats = {}
     
     # Modular category
-    modular_results = ModularResult.objects.filter(assessment_series_id=series_id).select_related('candidate')
+    modular_results = modular_qs
     modular_total = modular_results.count()
     modular_male_results = modular_results.filter(candidate__gender='male')
     modular_female_results = modular_results.filter(candidate__gender='female')
@@ -338,7 +341,7 @@ def assessment_series_results(request, series_id):
     }
     
     # Formal category (both theory and practical)
-    formal_results = FormalResult.objects.filter(assessment_series_id=series_id).select_related('candidate')
+    formal_results = formal_qs
     formal_total = formal_results.count()
     formal_male_results = formal_results.filter(candidate__gender='male')
     formal_female_results = formal_results.filter(candidate__gender='female')
@@ -370,7 +373,7 @@ def assessment_series_results(request, series_id):
     }
     
     # Workers PAS category
-    workers_results = WorkersPasResult.objects.filter(assessment_series_id=series_id).select_related('candidate')
+    workers_results = workers_qs
     workers_total = workers_results.count()
     workers_male_results = workers_results.filter(candidate__gender='male')
     workers_female_results = workers_results.filter(candidate__gender='female')
@@ -395,9 +398,9 @@ def assessment_series_results(request, series_id):
     
     # Grade distribution (simplified - count all grades)
     grade_dist = {}
-    all_results = list(ModularResult.objects.filter(assessment_series=series)) + \
-                  list(FormalResult.objects.filter(assessment_series=series)) + \
-                  list(WorkersPasResult.objects.filter(assessment_series=series))
+    all_results = list(modular_qs) + \
+                  list(formal_qs) + \
+                  list(workers_qs)
     
     for result in all_results:
         grade = result.grade

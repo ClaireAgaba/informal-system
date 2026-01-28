@@ -25,7 +25,7 @@ const statisticsApi = {
 
   // Assessment Series statistics
   getAssessmentSeriesList: () => apiClient.get('/statistics/series/'),
-  getSeriesResults: (seriesId) => apiClient.get(`/statistics/series/${seriesId}/results/`),
+  getSeriesResults: (seriesId, params = {}) => apiClient.get(`/statistics/series/${seriesId}/results/`, { params }),
 
   // Special needs and refugee analytics  
   getSpecialNeedsAnalytics: (params = {}) => apiClient.get('/statistics/special-needs/', { params }),
