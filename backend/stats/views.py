@@ -456,20 +456,17 @@ def assessment_series_results(request, series_id):
         
         for occ in sector_occupations:
             # Get all results for this occupation
-            occ_modular = ModularResult.objects.filter(
-                assessment_series_id=series_id,
+            occ_modular = modular_qs.filter(
                 module__occupation=occ
-            ).select_related('candidate')
+            )
             
-            occ_formal = FormalResult.objects.filter(
-                assessment_series_id=series_id,
+            occ_formal = formal_qs.filter(
                 candidate__occupation=occ
-            ).select_related('candidate')
+            )
             
-            occ_workers = WorkersPasResult.objects.filter(
-                assessment_series_id=series_id,
+            occ_workers = workers_qs.filter(
                 candidate__occupation=occ
-            ).select_related('candidate')
+            )
             
             # Combine all results for this occupation
             occ_all_results = list(occ_modular) + list(occ_formal) + list(occ_workers)
@@ -551,20 +548,17 @@ def assessment_series_results(request, series_id):
         # Get all results for occupations in this sector
         sector_occs = Occupation.objects.filter(sector=sector)
         
-        sector_modular = ModularResult.objects.filter(
-            assessment_series_id=series_id,
+        sector_modular = modular_qs.filter(
             module__occupation__in=sector_occs
-        ).select_related('candidate')
+        )
         
-        sector_formal = FormalResult.objects.filter(
-            assessment_series_id=series_id,
+        sector_formal = formal_qs.filter(
             candidate__occupation__in=sector_occs
-        ).select_related('candidate')
+        )
         
-        sector_workers = WorkersPasResult.objects.filter(
-            assessment_series_id=series_id,
+        sector_workers = workers_qs.filter(
             candidate__occupation__in=sector_occs
-        ).select_related('candidate')
+        )
         
         # Combine all results for this sector
         sector_all_results = list(sector_modular) + list(sector_formal) + list(sector_workers)
