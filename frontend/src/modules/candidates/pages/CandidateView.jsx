@@ -134,12 +134,12 @@ const CandidateView = () => {
   });
 
   const handleVerify = () => {
-    const message = candidate.verification_status === 'verified' 
+    const message = candidate.verification_status === 'verified'
       ? 'This candidate is already verified. Do you want to re-verify them?'
       : candidate.verification_status === 'declined'
-      ? 'This candidate was previously declined. Are you sure you want to verify them now?'
-      : 'Are you sure you want to verify this candidate?';
-    
+        ? 'This candidate was previously declined. Are you sure you want to verify them now?'
+        : 'Are you sure you want to verify this candidate?';
+
     if (window.confirm(message)) {
       verifyMutation.mutate();
     }
@@ -298,13 +298,21 @@ const CandidateView = () => {
         </div>
 
         <div className="flex items-center space-x-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="md"
             onClick={() => window.open(candidateApi.getVerifiedResultsPDF(id, candidate?.registration_category), '_blank')}
           >
             <Download className="w-4 h-4 mr-2" />
             Verified Results
+          </Button>
+          <Button
+            variant="outline"
+            size="md"
+            onClick={() => window.open(candidateApi.getTranscriptPDF(id, candidate?.registration_category), '_blank')}
+          >
+            <span className="mr-2">📄</span>
+            Transcript
           </Button>
           <Button
             variant="primary"
@@ -314,7 +322,7 @@ const CandidateView = () => {
             <Edit className="w-4 h-4 mr-2" />
             Edit
           </Button>
-          
+
           {/* Actions Dropdown */}
           <div className="relative">
             <Button
@@ -325,15 +333,15 @@ const CandidateView = () => {
               Actions
               <ChevronDown className="w-4 h-4 ml-2" />
             </Button>
-            
+
             {showActionsDropdown && (
               <>
                 {/* Backdrop to close dropdown */}
-                <div 
-                  className="fixed inset-0 z-10" 
+                <div
+                  className="fixed inset-0 z-10"
                   onClick={() => setShowActionsDropdown(false)}
                 />
-                
+
                 {/* Dropdown Menu */}
                 <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
                   <button
@@ -508,9 +516,9 @@ const CandidateView = () => {
               <div className="mt-6 pt-6 border-t space-y-2">
                 {/* Submit button - only for draft candidates */}
                 {!candidate.is_submitted && (
-                  <Button 
-                    variant="primary" 
-                    size="md" 
+                  <Button
+                    variant="primary"
+                    size="md"
                     className="w-full"
                     onClick={handleSubmit}
                     loading={submitMutation.isPending}
@@ -523,9 +531,9 @@ const CandidateView = () => {
 
                 {/* Verify button - only for submitted candidates and NOT for center representatives */}
                 {candidate.is_submitted && currentUser?.user_type !== 'center_representative' && (
-                  <Button 
-                    variant="success" 
-                    size="md" 
+                  <Button
+                    variant="success"
+                    size="md"
                     className="w-full"
                     onClick={handleVerify}
                     loading={verifyMutation.isPending}
@@ -535,12 +543,12 @@ const CandidateView = () => {
                     {candidate.verification_status === 'verified' ? 'Re-verify Candidate' : 'Verify Candidate'}
                   </Button>
                 )}
-                
+
                 {/* Decline button - NOT available for center representatives */}
                 {currentUser?.user_type !== 'center_representative' && (
-                  <Button 
-                    variant="danger" 
-                    size="md" 
+                  <Button
+                    variant="danger"
+                    size="md"
                     className="w-full"
                     onClick={() => setShowDeclineModal(true)}
                     disabled={declineMutation.isPending}
@@ -557,12 +565,12 @@ const CandidateView = () => {
                     Clear Payment
                   </Button>
                 )}
-                
+
                 {/* Generate Payment Code button - only for submitted candidates without payment code */}
                 {candidate.is_submitted && candidate.registration_number && !candidate.payment_code && (
-                  <Button 
-                    variant="primary" 
-                    size="md" 
+                  <Button
+                    variant="primary"
+                    size="md"
                     className="w-full"
                     onClick={handleGeneratePaymentCode}
                     loading={generatePaymentCodeMutation.isPending}
@@ -572,7 +580,7 @@ const CandidateView = () => {
                     Generate Payment Code
                   </Button>
                 )}
-                
+
                 <Button variant="outline" size="md" className="w-full">
                   <Upload className="w-4 h-4 mr-2" />
                   Upload Photo
@@ -659,11 +667,10 @@ const CandidateView = () => {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                      activeTab === tab.id
+                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id
                         ? 'border-primary-600 text-primary-600'
                         : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
-                    }`}
+                      }`}
                   >
                     {tab.label}
                   </button>
@@ -686,13 +693,13 @@ const CandidateView = () => {
                       <InfoItem label="Date of Birth" value={formatDate(candidate.date_of_birth)} />
                       <InfoItem label="Age" value={`${candidate.age || 'N/A'} years`} />
                       <InfoItem label="Nationality" value={candidate.nationality} />
-                      <InfoItem 
-                        label="Candidate Fees" 
+                      <InfoItem
+                        label="Candidate Fees"
                         value={
                           <span className={enrollments.length > 0 ? 'text-green-600 font-semibold' : 'text-gray-600'}>
                             UGX {enrollments.reduce((sum, e) => sum + parseFloat(e.total_amount || 0), 0).toLocaleString()}
                           </span>
-                        } 
+                        }
                       />
                       <InfoItem label="Contact" value={candidate.contact} />
                     </div>
@@ -713,30 +720,30 @@ const CandidateView = () => {
                       Special Considerations
                     </h3>
                     <div className="grid grid-cols-2 gap-4">
-                      <InfoItem 
-                        label="Refugee Status" 
-                        value={candidate.is_refugee ? 'Yes' : 'No'} 
+                      <InfoItem
+                        label="Refugee Status"
+                        value={candidate.is_refugee ? 'Yes' : 'No'}
                       />
                       {candidate.is_refugee && (
                         <InfoItem label="Refugee Number" value={candidate.refugee_number} />
                       )}
-                      <InfoItem 
-                        label="Has Disability" 
-                        value={candidate.has_disability ? 'Yes' : 'No'} 
+                      <InfoItem
+                        label="Has Disability"
+                        value={candidate.has_disability ? 'Yes' : 'No'}
                       />
                       {candidate.has_disability && (
-                        <InfoItem 
-                          label="Nature of Disability" 
-                          value={candidate.nature_of_disability_detail?.name} 
+                        <InfoItem
+                          label="Nature of Disability"
+                          value={candidate.nature_of_disability_detail?.name}
                         />
                       )}
                     </div>
                     {candidate.disability_specification && (
                       <div className="mt-4">
-                        <InfoItem 
-                          label="Disability Specification" 
-                          value={candidate.disability_specification} 
-                          fullWidth 
+                        <InfoItem
+                          label="Disability Specification"
+                          value={candidate.disability_specification}
+                          fullWidth
                         />
                       </div>
                     )}
@@ -752,27 +759,27 @@ const CandidateView = () => {
                       Registration Details
                     </h3>
                     <div className="grid grid-cols-2 gap-4">
-                      <InfoItem 
-                        label="Registration Number" 
-                        value={candidate.registration_number} 
+                      <InfoItem
+                        label="Registration Number"
+                        value={candidate.registration_number}
                       />
-                      <InfoItem 
-                        label="Payment Code" 
-                        value={candidate.payment_code} 
+                      <InfoItem
+                        label="Payment Code"
+                        value={candidate.payment_code}
                       />
-                      <InfoItem 
-                        label="Registration Category" 
-                        value={candidate.registration_category} 
+                      <InfoItem
+                        label="Registration Category"
+                        value={candidate.registration_category}
                       />
                       <InfoItem label="Entry Year" value={candidate.entry_year} />
-                      <InfoItem 
-                        label="Intake" 
-                        value={candidate.intake === 'M' ? 'March' : candidate.intake === 'A' ? 'August' : candidate.intake} 
+                      <InfoItem
+                        label="Intake"
+                        value={candidate.intake === 'M' ? 'March' : candidate.intake === 'A' ? 'August' : candidate.intake}
                       />
                       <InfoItem label="Status" value={candidate.status} />
-                      <InfoItem 
-                        label="Verification Status" 
-                        value={candidate.verification_status} 
+                      <InfoItem
+                        label="Verification Status"
+                        value={candidate.verification_status}
                       />
                     </div>
                   </div>
@@ -782,21 +789,21 @@ const CandidateView = () => {
                       Assessment Center
                     </h3>
                     <div className="grid grid-cols-2 gap-4">
-                      <InfoItem 
-                        label="Center Name" 
-                        value={candidate.assessment_center_detail?.center_name} 
+                      <InfoItem
+                        label="Center Name"
+                        value={candidate.assessment_center_detail?.center_name}
                       />
-                      <InfoItem 
-                        label="Center Number" 
-                        value={candidate.assessment_center_detail?.center_number} 
+                      <InfoItem
+                        label="Center Number"
+                        value={candidate.assessment_center_detail?.center_number}
                       />
-                      <InfoItem 
-                        label="Branch" 
-                        value={candidate.assessment_center_branch_detail?.branch_name} 
+                      <InfoItem
+                        label="Branch"
+                        value={candidate.assessment_center_branch_detail?.branch_name}
                       />
-                      <InfoItem 
-                        label="Category" 
-                        value={candidate.assessment_center_detail?.assessment_category} 
+                      <InfoItem
+                        label="Category"
+                        value={candidate.assessment_center_detail?.assessment_category}
                       />
                     </div>
                   </div>
@@ -829,21 +836,21 @@ const CandidateView = () => {
                       Occupation Details
                     </h3>
                     <div className="grid grid-cols-2 gap-4">
-                      <InfoItem 
-                        label="Occupation Code" 
-                        value={candidate.occupation_detail?.occ_code} 
+                      <InfoItem
+                        label="Occupation Code"
+                        value={candidate.occupation_detail?.occ_code}
                       />
-                      <InfoItem 
-                        label="Occupation Name" 
-                        value={candidate.occupation_detail?.occ_name} 
+                      <InfoItem
+                        label="Occupation Name"
+                        value={candidate.occupation_detail?.occ_name}
                       />
-                      <InfoItem 
-                        label="Sector" 
-                        value={candidate.occupation_detail?.sector?.name} 
+                      <InfoItem
+                        label="Sector"
+                        value={candidate.occupation_detail?.sector?.name}
                       />
-                      <InfoItem 
-                        label="Enrollment Level" 
-                        value={candidate.enrollment_level} 
+                      <InfoItem
+                        label="Enrollment Level"
+                        value={candidate.enrollment_level}
                       />
                     </div>
                   </div>
@@ -856,9 +863,9 @@ const CandidateView = () => {
                       <InfoItem label="Start Date" value={formatDate(candidate.start_date)} />
                       <InfoItem label="Finish Date" value={formatDate(candidate.finish_date)} />
                       <InfoItem label="Assessment Date" value={formatDate(candidate.assessment_date)} />
-                      <InfoItem 
-                        label="Preferred Language" 
-                        value={candidate.preferred_assessment_language} 
+                      <InfoItem
+                        label="Preferred Language"
+                        value={candidate.preferred_assessment_language}
                       />
                     </div>
                   </div>
@@ -869,13 +876,13 @@ const CandidateView = () => {
                         Modular Information
                       </h3>
                       <div className="grid grid-cols-2 gap-4">
-                        <InfoItem 
-                          label="Module Count" 
-                          value={candidate.modular_module_count} 
+                        <InfoItem
+                          label="Module Count"
+                          value={candidate.modular_module_count}
                         />
-                        <InfoItem 
-                          label="Billing Amount" 
-                          value={candidate.modular_billing_amount ? `UGX ${candidate.modular_billing_amount}` : 'N/A'} 
+                        <InfoItem
+                          label="Billing Amount"
+                          value={candidate.modular_billing_amount ? `UGX ${candidate.modular_billing_amount}` : 'N/A'}
                         />
                       </div>
                     </div>
@@ -924,11 +931,10 @@ const CandidateView = () => {
                                   <h4 className="font-semibold text-gray-900">
                                     {enrollment.assessment_series_name}
                                   </h4>
-                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                    enrollment.is_active
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${enrollment.is_active
                                       ? 'bg-green-100 text-green-800'
                                       : 'bg-gray-100 text-gray-800'
-                                  }`}>
+                                    }`}>
                                     {enrollment.is_active ? 'Active' : 'Inactive'}
                                   </span>
                                 </div>
@@ -988,7 +994,7 @@ const CandidateView = () => {
                                   </div>
                                 )}
                               </div>
-                              
+
                               {/* De-enroll Button */}
                               <div className="ml-4">
                                 <Button
@@ -1013,8 +1019,8 @@ const CandidateView = () => {
 
               {/* Results Tab */}
               {activeTab === 'results' && (
-                <CandidateResults 
-                  candidateId={id} 
+                <CandidateResults
+                  candidateId={id}
                   registrationCategory={candidate.registration_category}
                   hasEnrollments={enrollments && enrollments.length > 0}
                   enrollments={enrollments}
@@ -1027,7 +1033,7 @@ const CandidateView = () => {
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">
                     Uploaded Documents
                   </h3>
-                  
+
                   <DocumentItem
                     label="Passport Photo"
                     file={candidate.passport_photo}
@@ -1064,21 +1070,21 @@ const CandidateView = () => {
                         {enrollments.map((enrollment) => (
                           <div key={enrollment.id} className="p-4 border border-gray-200 rounded-lg bg-gray-50">
                             <div className="grid grid-cols-2 gap-4">
-                              <InfoItem 
-                                label="Assessment Series" 
-                                value={enrollment.assessment_series_name} 
+                              <InfoItem
+                                label="Assessment Series"
+                                value={enrollment.assessment_series_name}
                               />
-                              <InfoItem 
-                                label="Level Enrolled" 
-                                value={enrollment.level_name} 
+                              <InfoItem
+                                label="Level Enrolled"
+                                value={enrollment.level_name}
                               />
-                              <InfoItem 
-                                label="Amount" 
-                                value={`UGX ${parseFloat(enrollment.total_amount).toLocaleString()}`} 
+                              <InfoItem
+                                label="Amount"
+                                value={`UGX ${parseFloat(enrollment.total_amount).toLocaleString()}`}
                               />
-                              <InfoItem 
-                                label="Enrolled Date" 
-                                value={formatDate(enrollment.enrolled_at)} 
+                              <InfoItem
+                                label="Enrolled Date"
+                                value={formatDate(enrollment.enrolled_at)}
                               />
                             </div>
                           </div>
@@ -1091,7 +1097,7 @@ const CandidateView = () => {
                               UGX {enrollments.reduce((sum, e) => sum + parseFloat(e.total_amount || 0), 0).toLocaleString()}
                             </span>
                           </div>
-                          
+
                           {candidate.payment_amount_cleared > 0 && (
                             <div className="flex justify-between items-center">
                               <span className="text-lg font-semibold text-gray-900">Amount Paid:</span>
@@ -1100,14 +1106,13 @@ const CandidateView = () => {
                               </span>
                             </div>
                           )}
-                          
+
                           <div className="flex justify-between items-center pt-2 border-t border-gray-200">
                             <span className="text-lg font-semibold text-gray-900">Amount Due:</span>
-                            <span className={`text-xl font-bold ${
-                              candidate.payment_cleared ? 'text-green-600' : 'text-red-600'
-                            }`}>
+                            <span className={`text-xl font-bold ${candidate.payment_cleared ? 'text-green-600' : 'text-red-600'
+                              }`}>
                               UGX {(
-                                enrollments.reduce((sum, e) => sum + parseFloat(e.total_amount || 0), 0) - 
+                                enrollments.reduce((sum, e) => sum + parseFloat(e.total_amount || 0), 0) -
                                 parseFloat(candidate.payment_amount_cleared || 0)
                               ).toLocaleString()}
                             </span>
@@ -1139,27 +1144,27 @@ const CandidateView = () => {
                       )}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                      <InfoItem 
-                        label="Payment Cleared" 
-                        value={candidate.payment_cleared ? 'Yes' : 'No'} 
+                      <InfoItem
+                        label="Payment Cleared"
+                        value={candidate.payment_cleared ? 'Yes' : 'No'}
                       />
                       {candidate.payment_cleared && (
                         <>
-                          <InfoItem 
-                            label="Amount Cleared" 
-                            value={candidate.payment_amount_cleared ? `UGX ${parseFloat(candidate.payment_amount_cleared).toLocaleString()}` : 'N/A'} 
+                          <InfoItem
+                            label="Amount Cleared"
+                            value={candidate.payment_amount_cleared ? `UGX ${parseFloat(candidate.payment_amount_cleared).toLocaleString()}` : 'N/A'}
                           />
-                          <InfoItem 
-                            label="Cleared Date" 
-                            value={formatDate(candidate.payment_cleared_date)} 
+                          <InfoItem
+                            label="Cleared Date"
+                            value={formatDate(candidate.payment_cleared_date)}
                           />
-                          <InfoItem 
-                            label="Cleared By" 
-                            value={candidate.payment_cleared_by} 
+                          <InfoItem
+                            label="Cleared By"
+                            value={candidate.payment_cleared_by}
                           />
-                          <InfoItem 
-                            label="Reference" 
-                            value={candidate.payment_center_series_ref} 
+                          <InfoItem
+                            label="Reference"
+                            value={candidate.payment_center_series_ref}
                           />
                         </>
                       )}
@@ -1204,7 +1209,7 @@ const CandidateView = () => {
             </div>
 
             <p className="text-sm text-gray-600 mb-4">
-              {candidate.verification_status === 'declined' 
+              {candidate.verification_status === 'declined'
                 ? 'Update the decline reason. This will be visible to the candidate so they can rectify the issues.'
                 : 'Please provide a reason for declining this candidate. This will be visible to the candidate so they can rectify the issues.'
               }

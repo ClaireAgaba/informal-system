@@ -104,7 +104,7 @@ export const candidateApi = {
 
   // Submit a draft candidate
   submit: (id) => apiClient.post(`${CANDIDATES_BASE}/${id}/submit/`),
-  
+
   // Upload passport photo
   uploadPhoto: (id, photoFile) => {
     const formData = new FormData();
@@ -115,7 +115,7 @@ export const candidateApi = {
       },
     });
   },
-  
+
   // Upload document (identification or qualification)
   uploadDocument: (id, documentFile, documentType) => {
     const formData = new FormData();
@@ -127,31 +127,31 @@ export const candidateApi = {
       },
     });
   },
-  
+
   // Generate payment code
   generatePaymentCode: (id) => apiClient.post(`${CANDIDATES_BASE}/${id}/generate_payment_code/`),
-  
+
   // Mark payment as cleared
   markPaymentCleared: (id) => apiClient.post(`${CANDIDATES_BASE}/${id}/mark_payment_cleared/`),
-  
+
   // Get candidate results
   getResults: (id) => apiClient.get(`${CANDIDATES_BASE}/${id}/results/`),
-  
+
   // Add modular results (moved to results app)
-  addResults: (candidateId, data) => apiClient.post(`/results/modular/add/`, { 
-    candidate_id: candidateId, 
-    ...data 
+  addResults: (candidateId, data) => apiClient.post(`/results/modular/add/`, {
+    candidate_id: candidateId,
+    ...data
   }),
-  
+
   // Get enrollment modules for a candidate and series (moved to results app)
   getEnrollmentModules: (candidateId, seriesId) => apiClient.get(`/results/modular/enrollment-modules/?candidate_id=${candidateId}&series_id=${seriesId}`),
-  
+
   // Update modular results (moved to results app)
-  updateResults: (candidateId, data) => apiClient.put(`/results/modular/update/`, { 
-    candidate_id: candidateId, 
-    ...data 
+  updateResults: (candidateId, data) => apiClient.put(`/results/modular/update/`, {
+    candidate_id: candidateId,
+    ...data
   }),
-  
+
   // Get verified results PDF (moved to results app)
   getVerifiedResultsPDF: (candidateId, registrationCategory = 'modular') => {
     if (registrationCategory === 'workers_pas') {
@@ -160,18 +160,28 @@ export const candidateApi = {
     // Both modular and formal use the same endpoint
     return `/api/results/modular/verified-pdf/?candidate_id=${candidateId}`;
   },
-  
+
+  getTranscriptPDF: (candidateId, registrationCategory = 'modular') => {
+    if (registrationCategory === 'workers_pas') {
+      return `/api/results/workers-pas/transcript-pdf/?candidate_id=${candidateId}`;
+    }
+    if (registrationCategory === 'formal') {
+      return `/api/results/formal/transcript-pdf/?candidate_id=${candidateId}`;
+    }
+    return `/api/results/modular/transcript-pdf/?candidate_id=${candidateId}`;
+  },
+
   // Formal results endpoints
   addFormalResults: (candidateId, data) => apiClient.post(`/results/formal/add/`, {
     candidate_id: candidateId,
     ...data
   }),
-  
+
   updateFormalResults: (candidateId, data) => apiClient.put(`/results/formal/update/`, {
     candidate_id: candidateId,
     ...data
   }),
-  
+
   listFormalResults: (candidateId, seriesId) => {
     const params = new URLSearchParams({ candidate_id: candidateId });
     if (seriesId) params.append('series_id', seriesId);
@@ -222,9 +232,9 @@ export const candidateApi = {
 
   // Bulk change occupation for multiple candidates
   bulkChangeOccupation: (candidateIds, newOccupationId) => {
-    return apiClient.post(`${CANDIDATES_BASE}/bulk-change-occupation/`, { 
-      candidate_ids: candidateIds, 
-      new_occupation_id: newOccupationId 
+    return apiClient.post(`${CANDIDATES_BASE}/bulk-change-occupation/`, {
+      candidate_ids: candidateIds,
+      new_occupation_id: newOccupationId
     });
   },
 
@@ -235,17 +245,17 @@ export const candidateApi = {
 
   // Bulk change registration category for multiple candidates
   bulkChangeRegistrationCategory: (candidateIds, newRegCategory) => {
-    return apiClient.post(`${CANDIDATES_BASE}/bulk-change-registration-category/`, { 
-      candidate_ids: candidateIds, 
-      new_registration_category: newRegCategory 
+    return apiClient.post(`${CANDIDATES_BASE}/bulk-change-registration-category/`, {
+      candidate_ids: candidateIds,
+      new_registration_category: newRegCategory
     });
   },
 
   // Bulk change assessment series for multiple candidates
   bulkChangeSeries: (candidateIds, newSeriesId) => {
-    return apiClient.post(`${CANDIDATES_BASE}/bulk-change-series/`, { 
-      candidate_ids: candidateIds, 
-      new_series_id: newSeriesId 
+    return apiClient.post(`${CANDIDATES_BASE}/bulk-change-series/`, {
+      candidate_ids: candidateIds,
+      new_series_id: newSeriesId
     });
   },
 };

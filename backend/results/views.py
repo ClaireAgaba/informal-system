@@ -814,6 +814,307 @@ class ModularResultViewSet(viewsets.ViewSet):
         
         return response
 
+    @action(detail=False, methods=['get'], url_path='transcript-pdf')
+    def transcript_pdf(self, request):
+        """Generate official transcript PDF for candidate"""
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib import colors
+        from reportlab.lib.units import cm, inch
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak, Frame, PageTemplate, NextPageTemplate
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
+        from io import BytesIO
+        from datetime import datetime
+        from django.conf import settings
+        import os
+        
+        candidate_id = request.query_params.get('candidate_id')
+        
+        if not candidate_id:
+            return Response(
+                {'error': 'candidate_id parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            candidate = Candidate.objects.get(id=candidate_id)
+        except Candidate.DoesNotExist:
+            return Response(
+                {'error': 'Candidate not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Create PDF buffer
+        buffer = BytesIO()
+        
+        # Define Page Templates for mixed orientation
+        def onFirstPage(canvas, doc):
+            canvas.saveState()
+            # Signature at absolute bottom
+            signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
+            if os.path.exists(signature_path):
+                try:
+                    # Draw signature image
+                    canvas.drawImage(signature_path, A4[0] - 6*cm, 2*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
+                except:
+                    pass
+            
+            # Draw "EXECUTIVE SECRETARY" text centered under signature
+            canvas.setFont("Times-Bold", 10)
+            canvas.drawCentredString(A4[0] - 4*cm, 1.8*cm, "EXECUTIVE SECRETARY")
+            canvas.restoreState()
+
+        def onLaterPages(canvas, doc):
+            pass
+
+        def onPortraitBack(canvas, doc):
+            # Rotate content -90 degrees (Clockwise)
+            canvas.translate(0, A4[1])
+            canvas.rotate(-90)
+
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=3*cm, leftMargin=1.5*cm, rightMargin=1.5*cm)
+        
+        # Create Frames
+        frame_portrait = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='portrait')
+        frame_landscape = Frame(doc.leftMargin, doc.bottomMargin, landscape(A4)[0]-2*doc.leftMargin, landscape(A4)[1]-2*doc.bottomMargin, id='landscape')
+        
+        doc.addPageTemplates([
+            PageTemplate(id='portrait', frames=frame_portrait, onPage=onFirstPage),
+            # Landscape content frame on Portrait page with -90 rotation
+            PageTemplate(id='portrait_back', frames=frame_landscape, onPage=onPortraitBack, pagesize=A4)
+        ])
+
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # Custom styles with Serif font (Times-Roman)
+        title_style = ParagraphStyle(
+            'TranscriptTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            textColor=colors.black,
+            spaceAfter=20,
+            spaceBefore=0,
+            alignment=TA_CENTER,
+            fontName='Times-Bold'
+        )
+        
+        info_label_style = ParagraphStyle(
+            'InfoLabel',
+            parent=styles['Normal'],
+            fontSize=11,
+            fontName='Times-Bold',
+            alignment=TA_LEFT
+        )
+        
+        info_value_style = ParagraphStyle(
+            'InfoValue',
+            parent=styles['Normal'],
+            fontSize=11,
+            fontName='Times-Roman',
+            alignment=TA_LEFT
+        )
+
+        section_heading_style = ParagraphStyle(
+            'SectionHeading',
+            parent=styles['Heading2'],
+            fontSize=14,
+            textColor=colors.black,
+            spaceAfter=10,
+            spaceBefore=15,
+            alignment=TA_CENTER,
+            fontName='Times-Bold'
+        )
+
+        # Content - Page 1
+        elements.append(Spacer(1, 9*cm))
+        elements.append(Paragraph("TRANSCRIPT", title_style))
+        elements.append(Spacer(1, 0.5*cm))
+
+        # Candidate Info
+        candidate_photo = None
+        if candidate.passport_photo:
+            photo_path = os.path.join(settings.MEDIA_ROOT, str(candidate.passport_photo))
+            if os.path.exists(photo_path):
+                try:
+                    from PIL import Image as PILImage
+                    from PIL import ImageOps
+                    pil_image = PILImage.open(photo_path)
+                    pil_image = ImageOps.exif_transpose(pil_image)
+                    img_buffer = BytesIO()
+                    pil_image.save(img_buffer, format='PNG')
+                    img_buffer.seek(0)
+                    candidate_photo = Image(img_buffer, width=3.5*cm, height=4.5*cm)
+                except Exception as e:
+                    print(f"Error loading photo: {e}")
+                    candidate_photo = None
+
+        info_data = [
+            [Paragraph("NAME:", info_label_style), Paragraph(candidate.full_name or "", info_value_style), 
+             Paragraph("NATIONALITY:", info_label_style), Paragraph(candidate.nationality or "Uganda", info_value_style)],
+            [Paragraph("REG NO:", info_label_style), Paragraph(candidate.registration_number or "", info_value_style),
+             Paragraph("BIRTHDATE:", info_label_style), Paragraph(candidate.date_of_birth.strftime("%d %b, %Y") if candidate.date_of_birth else "", info_value_style)],
+            [Paragraph("GENDER:", info_label_style), Paragraph(candidate.gender.capitalize() if candidate.gender else "", info_value_style),
+             Paragraph("PRINTDATE:", info_label_style), Paragraph(datetime.now().strftime("%d-%b-%Y"), info_value_style)],
+            [Paragraph("CENTER:", info_label_style), Paragraph(candidate.assessment_center.center_name if candidate.assessment_center else "", info_value_style), "", ""],
+            [Paragraph("OCCUPATION:", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
+        ]
+
+        info_table = Table(info_data, colWidths=[2.5*cm, 6*cm, 3*cm, 4*cm])
+        info_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('SPAN', (1, 3), (3, 3)), # Span center name
+            ('SPAN', (1, 4), (3, 4)), # Span occupation
+        ]))
+
+        if candidate_photo:
+            combined_data = [[candidate_photo, info_table]]
+            combined_table = Table(combined_data, colWidths=[4*cm, 14*cm])
+            combined_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            elements.append(combined_table)
+        else:
+            elements.append(info_table)
+
+        elements.append(Spacer(1, 0.5*cm))
+        elements.append(Paragraph("ASSESSMENT RESULTS", section_heading_style))
+        elements.append(Spacer(1, 0.2*cm))
+
+        # Results Table
+        results = ModularResult.objects.filter(candidate=candidate).select_related('module', 'assessment_series')
+        
+        if results.exists():
+            results_data = [[
+                Paragraph("MODULE CODE", info_label_style),
+                Paragraph("MODULE NAME", info_label_style),
+                Paragraph("TYPE", info_label_style),
+                Paragraph("GRADE", info_label_style)
+            ]]
+            
+            for result in results:
+                results_data.append([
+                    Paragraph(result.module.module_code if result.module else "", info_value_style),
+                    Paragraph(result.module.module_name if result.module else "", info_value_style),
+                    Paragraph(result.get_type_display().capitalize(), info_value_style),
+                    Paragraph(result.grade or "-", info_value_style)
+                ])
+            
+            t = Table(results_data, colWidths=[3*cm, 8*cm, 3*cm, 2.5*cm], repeatRows=1)
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+            ]))
+            elements.append(t)
+        else:
+            elements.append(Paragraph("No results found.", info_value_style))
+
+        # LWAs
+        if candidate.registration_category == 'modular':
+            elements.append(Spacer(1, 0.5*cm))
+            enrollment_modules = EnrollmentModule.objects.filter(
+                enrollment__candidate=candidate
+            ).select_related('module').distinct()
+            
+            if enrollment_modules.exists():
+                elements.append(Paragraph("Candidate Trained in the following:", ParagraphStyle('SubHeading', parent=styles['Normal'], fontName='Times-Bold', fontSize=11)))
+                elements.append(Spacer(1, 0.1*cm))
+                
+                lwa_list = []
+                for em in enrollment_modules:
+                    lwas = ModuleLWA.objects.filter(module=em.module).order_by('lwa_name')
+                    for lwa in lwas:
+                        lwa_list.append(f"• {lwa.lwa_name}")
+                
+                for lwa_text in lwa_list:
+                    elements.append(Paragraph(lwa_text, ParagraphStyle('LWA', parent=styles['Normal'], fontName='Times-Roman', leftIndent=10, fontSize=10)))
+
+        # Footer (Signature) - Removed from here as it is now in onFirstPage
+        elements.append(Spacer(1, 1*cm)) # Just a small spacer before page break
+
+        # Page Break (Starts using portrait_back template)
+        elements.append(NextPageTemplate('portrait_back'))
+        elements.append(PageBreak())
+        
+        # Page 2 - Header (Logo + Title)
+        logo_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'uvtab-logo.png')
+        if os.path.exists(logo_path):
+            try:
+                logo = Image(logo_path, width=1.5*cm, height=1.5*cm)
+                elements.append(logo)
+                elements.append(Spacer(1, 0.2*cm))
+            except:
+                pass
+        
+        elements.append(Paragraph("UGANDA VOCATIONAL AND TECHNICAL ASSESSMENT BOARD", ParagraphStyle(
+            'Page2Title', parent=styles['Heading1'], fontSize=12, alignment=TA_CENTER, fontName='Times-Bold', spaceAfter=10
+        )))
+
+        # Key to Grades Title
+        heading2_style = ParagraphStyle(
+            'Heading2Center', 
+            parent=styles['Heading2'], 
+            alignment=TA_CENTER, 
+            fontName='Times-Bold',
+            fontSize=16,
+            spaceAfter=15
+        )
+        
+        elements.append(Paragraph("KEY TO GRADES and QUALIFICATIONS AWARD", heading2_style))
+        elements.append(Spacer(1, 0.5*cm))
+
+        # Grading Table (Fitted for Portrait - 4.25cm * 4 = 17cm)
+        grading_data = [
+            [Paragraph("<b>THEORY SCORES</b>", info_label_style), "", 
+             Paragraph("<b>PRACTICAL SCORES</b>", info_label_style), ""],
+            ["Grade", "Scores%", "Grade", "Scores%"],
+            ["A+", "85-100", "A+", "90-100"],
+            ["A", "80-84", "A", "85-89"],
+            ["B", "70-79", "B+", "75-84"],
+            ["B-", "60-69", "B", "65-74"],
+            ["C", "50-59", "B-", "60-64"],
+            ["C-", "40-49", "C", "55-59"],
+            ["D", "30-39", "C-", "50-54"],
+            ["E", "0-29", "D", "40-49"],
+            ["", "", "D-", "30-39"],
+            ["", "", "E", "0-29"],
+        ]
+        
+        # Widths adjusted for Portrait (Max ~18cm)
+        grading_table = Table(grading_data, colWidths=[4.2*cm, 4.2*cm, 4.2*cm, 4.2*cm])
+        grading_table.setStyle(TableStyle([
+            ('SPAN', (0, 0), (1, 0)),
+            ('SPAN', (2, 0), (3, 0)),
+            ('BACKGROUND', (0, 0), (3, 0), colors.lightgrey),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+            ('FONTNAME', (0, 1), (-1, 1), 'Times-Bold'), # Header row
+        ]))
+        
+        elements.append(grading_table)
+        elements.append(Spacer(1, 1*cm))
+        elements.append(Paragraph("Pass mark is 50% in theory and 65% in practical assessment", ParagraphStyle('PassMark', parent=styles['Normal'], alignment=TA_CENTER, fontName='Times-Bold', fontSize=12)))
+
+        doc.build(elements)
+        pdf = buffer.getvalue()
+        buffer.close()
+        
+        response = HttpResponse(content_type='application/pdf')
+        filename = f"Transcript_{candidate.full_name.replace(' ', '_')}.pdf"
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        response.write(pdf)
+        
+        return response
+
 
 class FormalResultViewSet(viewsets.ViewSet):
     """
@@ -1147,6 +1448,297 @@ class FormalResultViewSet(viewsets.ViewSet):
             })
         
         return Response(results_data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='transcript-pdf')
+    def transcript_pdf(self, request):
+        """Generate official transcript PDF for formal candidate"""
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib import colors
+        from reportlab.lib.units import cm, inch
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak, Frame, PageTemplate, NextPageTemplate
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
+        from io import BytesIO
+        from datetime import datetime
+        from django.conf import settings
+        import os
+        from .models import FormalResult
+        
+        candidate_id = request.query_params.get('candidate_id')
+        
+        if not candidate_id:
+            return Response(
+                {'error': 'candidate_id parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            candidate = Candidate.objects.get(id=candidate_id)
+        except Candidate.DoesNotExist:
+            return Response(
+                {'error': 'Candidate not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Create PDF buffer
+        buffer = BytesIO()
+        
+        # Define Page Templates for mixed orientation
+        def onFirstPage(canvas, doc):
+            canvas.saveState()
+            # Signature at absolute bottom
+            signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
+            if os.path.exists(signature_path):
+                try:
+                    # Draw signature image
+                    canvas.drawImage(signature_path, A4[0] - 6*cm, 2*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
+                except:
+                    pass
+            
+            # Draw "EXECUTIVE SECRETARY" text centered under signature
+            canvas.setFont("Times-Bold", 10)
+            canvas.drawCentredString(A4[0] - 4*cm, 1.8*cm, "EXECUTIVE SECRETARY")
+            canvas.restoreState()
+
+        def onLaterPages(canvas, doc):
+            pass
+
+        def onPortraitBack(canvas, doc):
+            # Rotate content -90 degrees (Clockwise)
+            canvas.translate(0, A4[1])
+            canvas.rotate(-90)
+
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=3*cm, leftMargin=1.5*cm, rightMargin=1.5*cm)
+        
+        # Create Frames
+        frame_portrait = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='portrait')
+        frame_landscape = Frame(doc.leftMargin, doc.bottomMargin, landscape(A4)[0]-2*doc.leftMargin, landscape(A4)[1]-2*doc.bottomMargin, id='landscape')
+        
+        doc.addPageTemplates([
+            PageTemplate(id='portrait', frames=frame_portrait, onPage=onFirstPage),
+            # Landscape content frame on Portrait page with -90 rotation
+            PageTemplate(id='portrait_back', frames=frame_landscape, onPage=onPortraitBack, pagesize=A4)
+        ])
+
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # Custom styles
+        title_style = ParagraphStyle(
+            'TranscriptTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            textColor=colors.black,
+            spaceAfter=20,
+            spaceBefore=0,
+            alignment=TA_CENTER,
+            fontName='Times-Bold'
+        )
+        
+        info_label_style = ParagraphStyle(
+            'InfoLabel',
+            parent=styles['Normal'],
+            fontSize=11,
+            fontName='Times-Bold',
+            alignment=TA_LEFT
+        )
+        
+        info_value_style = ParagraphStyle(
+            'InfoValue',
+            parent=styles['Normal'],
+            fontSize=11,
+            fontName='Times-Roman',
+            alignment=TA_LEFT
+        )
+
+        section_heading_style = ParagraphStyle(
+            'SectionHeading',
+            parent=styles['Heading2'],
+            fontSize=14,
+            textColor=colors.black,
+            spaceAfter=10,
+            spaceBefore=15,
+            alignment=TA_CENTER,
+            fontName='Times-Bold'
+        )
+
+        # Content - Page 1
+        elements.append(Spacer(1, 9*cm))
+        elements.append(Paragraph("TRANSCRIPT", title_style))
+        elements.append(Spacer(1, 0.5*cm))
+
+        # Candidate Info
+        candidate_photo = None
+        if candidate.passport_photo:
+            photo_path = os.path.join(settings.MEDIA_ROOT, str(candidate.passport_photo))
+            if os.path.exists(photo_path):
+                try:
+                    from PIL import Image as PILImage
+                    from PIL import ImageOps
+                    pil_image = PILImage.open(photo_path)
+                    pil_image = ImageOps.exif_transpose(pil_image)
+                    img_buffer = BytesIO()
+                    pil_image.save(img_buffer, format='PNG')
+                    img_buffer.seek(0)
+                    candidate_photo = Image(img_buffer, width=3.5*cm, height=4.5*cm)
+                except Exception as e:
+                    print(f"Error loading photo: {e}")
+                    candidate_photo = None
+
+        info_data = [
+            [Paragraph("NAME:", info_label_style), Paragraph(candidate.full_name or "", info_value_style), 
+             Paragraph("NATIONALITY:", info_label_style), Paragraph(candidate.nationality or "Uganda", info_value_style)],
+            [Paragraph("REG NO:", info_label_style), Paragraph(candidate.registration_number or "", info_value_style),
+             Paragraph("BIRTHDATE:", info_label_style), Paragraph(candidate.date_of_birth.strftime("%d %b, %Y") if candidate.date_of_birth else "", info_value_style)],
+            [Paragraph("GENDER:", info_label_style), Paragraph(candidate.gender.capitalize() if candidate.gender else "", info_value_style),
+             Paragraph("PRINTDATE:", info_label_style), Paragraph(datetime.now().strftime("%d-%b-%Y"), info_value_style)],
+            [Paragraph("CENTER:", info_label_style), Paragraph(candidate.assessment_center.center_name if candidate.assessment_center else "", info_value_style), "", ""],
+            [Paragraph("OCCUPATION:", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
+        ]
+
+        info_table = Table(info_data, colWidths=[2.5*cm, 6*cm, 3*cm, 4*cm])
+        info_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('SPAN', (1, 3), (3, 3)), # Span center name
+            ('SPAN', (1, 4), (3, 4)), # Span occupation
+        ]))
+
+        if candidate_photo:
+            combined_data = [[candidate_photo, info_table]]
+            combined_table = Table(combined_data, colWidths=[4*cm, 14*cm])
+            combined_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            elements.append(combined_table)
+        else:
+            elements.append(info_table)
+
+        elements.append(Spacer(1, 0.5*cm))
+        elements.append(Paragraph("ASSESSMENT RESULTS", section_heading_style))
+        elements.append(Spacer(1, 0.2*cm))
+
+        # Formal Results
+        results = FormalResult.objects.filter(candidate=candidate).select_related(
+            'level', 'exam', 'paper', 'assessment_series'
+        ).order_by('level', 'exam', 'paper')
+        
+        if results.exists():
+            results_data = [[
+                Paragraph("LEVEL", info_label_style),
+                Paragraph("MODULE/PAPER", info_label_style),
+                Paragraph("TYPE", info_label_style),
+                Paragraph("GRADE", info_label_style)
+            ]]
+            
+            for result in results:
+                name = ""
+                if result.exam:
+                    name = result.exam.module_name
+                elif result.paper:
+                    name = result.paper.paper_name
+                    
+                results_data.append([
+                    Paragraph(result.level.level_name if result.level else "-", info_value_style),
+                    Paragraph(name, info_value_style),
+                    Paragraph(result.get_type_display().capitalize(), info_value_style),
+                    Paragraph(result.grade or "-", info_value_style)
+                ])
+            
+            t = Table(results_data, colWidths=[3*cm, 8*cm, 3*cm, 2.5*cm], repeatRows=1)
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+            ]))
+            elements.append(t)
+        else:
+            elements.append(Paragraph("No results found.", info_value_style))
+            
+        # Footer and Layout for Page 2
+        elements.append(Spacer(1, 1*cm))
+
+        # Page Break (Stays Portrait but uses portrait_back template with rotation)
+        elements.append(NextPageTemplate('portrait_back'))
+        elements.append(PageBreak())
+        
+        # Page 2 - Header (Logo + Title)
+        logo_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'uvtab-logo.png')
+        if os.path.exists(logo_path):
+            try:
+                logo = Image(logo_path, width=1.5*cm, height=1.5*cm)
+                elements.append(logo)
+                elements.append(Spacer(1, 0.2*cm))
+            except:
+                pass
+        
+        elements.append(Paragraph("UGANDA VOCATIONAL AND TECHNICAL ASSESSMENT BOARD", ParagraphStyle(
+            'Page2Title', parent=styles['Heading1'], fontSize=12, alignment=TA_CENTER, fontName='Times-Bold', spaceAfter=10
+        )))
+
+        # Key to Grades Title
+        heading2_style = ParagraphStyle(
+            'Heading2Center', 
+            parent=styles['Heading2'], 
+            alignment=TA_CENTER, 
+            fontName='Times-Bold',
+            fontSize=16,
+            spaceAfter=15
+        )
+        
+        elements.append(Paragraph("KEY TO GRADES and QUALIFICATIONS AWARD", heading2_style))
+        elements.append(Spacer(1, 0.5*cm))
+
+        # Grading Table
+        grading_data = [
+            [Paragraph("<b>THEORY SCORES</b>", info_label_style), "", 
+             Paragraph("<b>PRACTICAL SCORES</b>", info_label_style), ""],
+            ["Grade", "Scores%", "Grade", "Scores%"],
+            ["A+", "85-100", "A+", "90-100"],
+            ["A", "80-84", "A", "85-89"],
+            ["B", "70-79", "B+", "75-84"],
+            ["B-", "60-69", "B", "65-74"],
+            ["C", "50-59", "B-", "60-64"],
+            ["C-", "40-49", "C", "55-59"],
+            ["D", "30-39", "C-", "50-54"],
+            ["E", "0-29", "D", "40-49"],
+            ["", "", "D-", "30-39"],
+            ["", "", "E", "0-29"],
+        ]
+        
+        grading_table = Table(grading_data, colWidths=[4.2*cm, 4.2*cm, 4.2*cm, 4.2*cm])
+        grading_table.setStyle(TableStyle([
+            ('SPAN', (0, 0), (1, 0)),
+            ('SPAN', (2, 0), (3, 0)),
+            ('BACKGROUND', (0, 0), (3, 0), colors.lightgrey),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+            ('FONTNAME', (0, 1), (-1, 1), 'Times-Bold'), # Header row
+        ]))
+        
+        elements.append(grading_table)
+        elements.append(Spacer(1, 1*cm))
+        elements.append(Paragraph("Pass mark is 50% in theory and 65% in practical assessment", ParagraphStyle('PassMark', parent=styles['Normal'], alignment=TA_CENTER, fontName='Times-Bold', fontSize=12)))
+
+        doc.build(elements)
+        pdf = buffer.getvalue()
+        buffer.close()
+        
+        response = HttpResponse(content_type='application/pdf')
+        filename = f"Transcript_{candidate.full_name.replace(' ', '_')}.pdf"
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        response.write(pdf)
+        
+        return response
+
+
 
 
 class WorkersPasResultViewSet(viewsets.ViewSet):
@@ -1771,6 +2363,289 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         response = HttpResponse(content_type='application/pdf')
         filename = f"Verifiedresults_{candidate.full_name.replace(' ', '_')}.pdf"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        response.write(pdf)
+        
+        return response
+
+    @action(detail=False, methods=['get'], url_path='transcript-pdf')
+    def transcript_pdf(self, request):
+        """Generate official transcript PDF for Workers PAS candidate"""
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib import colors
+        from reportlab.lib.units import cm, inch
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak, Frame, PageTemplate, NextPageTemplate
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+        from io import BytesIO
+        from datetime import datetime
+        from django.conf import settings
+        import os
+        
+        candidate_id = request.query_params.get('candidate_id')
+        
+        if not candidate_id:
+            return Response(
+                {'error': 'candidate_id parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            candidate = Candidate.objects.get(id=candidate_id)
+        except Candidate.DoesNotExist:
+            return Response(
+                {'error': 'Candidate not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Create PDF buffer
+        buffer = BytesIO()
+        
+        # Define Page Templates for mixed orientation
+        def onFirstPage(canvas, doc):
+            canvas.saveState()
+            # Signature at absolute bottom
+            signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
+            if os.path.exists(signature_path):
+                try:
+                    # Draw signature image
+                    canvas.drawImage(signature_path, A4[0] - 6*cm, 2*cm, width=4*cm, height=2*cm, mask='auto')
+                except:
+                    pass
+            
+            # Draw "EXECUTIVE SECRETARY" text centered under signature
+            canvas.setFont("Times-Bold", 10)
+            canvas.drawCentredString(A4[0] - 4*cm, 1.8*cm, "EXECUTIVE SECRETARY")
+            canvas.restoreState()
+
+        def onLaterPages(canvas, doc):
+            pass
+
+        def onPortraitBack(canvas, doc):
+            # Rotate content -90 degrees (Clockwise)
+            canvas.translate(0, A4[1])
+            canvas.rotate(-90)
+
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=3*cm, leftMargin=1.5*cm, rightMargin=1.5*cm)
+        
+        # Create Frames
+        frame_portrait = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='portrait')
+        frame_landscape = Frame(doc.leftMargin, doc.bottomMargin, landscape(A4)[0]-2*doc.leftMargin, landscape(A4)[1]-2*doc.bottomMargin, id='landscape')
+        
+        doc.addPageTemplates([
+            PageTemplate(id='portrait', frames=frame_portrait, onPage=onFirstPage),
+            # Landscape content frame on Portrait page with -90 rotation
+            PageTemplate(id='portrait_back', frames=frame_landscape, onPage=onPortraitBack, pagesize=A4)
+        ])
+
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # Custom styles
+        title_style = ParagraphStyle(
+            'TranscriptTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            textColor=colors.black,
+            spaceAfter=20,
+            spaceBefore=0,
+            alignment=TA_CENTER,
+            fontName='Times-Bold'
+        )
+        
+        info_label_style = ParagraphStyle(
+            'InfoLabel',
+            parent=styles['Normal'],
+            fontSize=11,
+            fontName='Times-Bold',
+            alignment=TA_LEFT
+        )
+        
+        info_value_style = ParagraphStyle(
+            'InfoValue',
+            parent=styles['Normal'],
+            fontSize=11,
+            fontName='Times-Roman',
+            alignment=TA_LEFT
+        )
+
+        section_heading_style = ParagraphStyle(
+            'SectionHeading',
+            parent=styles['Heading2'],
+            fontSize=14,
+            textColor=colors.black,
+            spaceAfter=10,
+            spaceBefore=15,
+            alignment=TA_CENTER,
+            fontName='Times-Bold'
+        )
+
+        # Content - Page 1
+        elements.append(Spacer(1, 9*cm))
+        elements.append(Paragraph("TRANSCRIPT", title_style))
+        elements.append(Spacer(1, 0.5*cm))
+
+        # Candidate Info
+        candidate_photo = None
+        if candidate.passport_photo:
+            photo_path = os.path.join(settings.MEDIA_ROOT, str(candidate.passport_photo))
+            if os.path.exists(photo_path):
+                try:
+                    from PIL import Image as PILImage
+                    from PIL import ImageOps
+                    pil_image = PILImage.open(photo_path)
+                    pil_image = ImageOps.exif_transpose(pil_image)
+                    img_buffer = BytesIO()
+                    pil_image.save(img_buffer, format='PNG')
+                    img_buffer.seek(0)
+                    candidate_photo = Image(img_buffer, width=3.5*cm, height=4.5*cm)
+                except Exception as e:
+                    print(f"Error loading photo: {e}")
+                    candidate_photo = None
+
+        info_data = [
+            [Paragraph("NAME:", info_label_style), Paragraph(candidate.full_name or "", info_value_style), 
+             Paragraph("NATIONALITY:", info_label_style), Paragraph(candidate.nationality or "Uganda", info_value_style)],
+            [Paragraph("REG NO:", info_label_style), Paragraph(candidate.registration_number or "", info_value_style),
+             Paragraph("BIRTHDATE:", info_label_style), Paragraph(candidate.date_of_birth.strftime("%d %b, %Y") if candidate.date_of_birth else "", info_value_style)],
+            [Paragraph("GENDER:", info_label_style), Paragraph(candidate.gender.capitalize() if candidate.gender else "", info_value_style),
+             Paragraph("PRINTDATE:", info_label_style), Paragraph(datetime.now().strftime("%d-%b-%Y"), info_value_style)],
+            [Paragraph("CENTER:", info_label_style), Paragraph(candidate.assessment_center.center_name if candidate.assessment_center else "", info_value_style), "", ""],
+            [Paragraph("OCCUPATION:", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
+        ]
+
+        info_table = Table(info_data, colWidths=[2.5*cm, 6*cm, 3*cm, 4*cm])
+        info_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('SPAN', (1, 3), (3, 3)), # Span center name
+            ('SPAN', (1, 4), (3, 4)), # Span occupation
+        ]))
+
+        if candidate_photo:
+            combined_data = [[candidate_photo, info_table]]
+            combined_table = Table(combined_data, colWidths=[4*cm, 14*cm])
+            combined_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            elements.append(combined_table)
+        else:
+            elements.append(info_table)
+
+        elements.append(Spacer(1, 0.5*cm))
+        elements.append(Paragraph("ASSESSMENT RESULTS", section_heading_style))
+        elements.append(Spacer(1, 0.2*cm))
+        
+        # Workers PAS Results
+        results = WorkersPasResult.objects.filter(candidate=candidate).select_related(
+            'level', 'module', 'paper', 'assessment_series'
+        ).order_by('level', 'module', 'paper')
+        
+        if results.exists():
+            results_data = [[
+                Paragraph("LEVEL", info_label_style),
+                Paragraph("MODULE CODE", info_label_style),
+                Paragraph("MODULE NAME", info_label_style),
+                Paragraph("PAPER", info_label_style),
+                Paragraph("GRADE", info_label_style)
+            ]]
+            
+            for result in results:
+                results_data.append([
+                    Paragraph(result.level.level_name if result.level else "-", info_value_style),
+                    Paragraph(result.module.module_code if result.module else "-", info_value_style),
+                    Paragraph(result.module.module_name if result.module else "-", info_value_style),
+                    Paragraph(result.paper.paper_code if result.paper else "-", info_value_style),
+                    Paragraph(result.grade or "-", info_value_style)
+                ])
+            
+            t = Table(results_data, colWidths=[2*cm, 3*cm, 5*cm, 3*cm, 2*cm], repeatRows=1)
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+            ]))
+            elements.append(t)
+        else:
+            elements.append(Paragraph("No results found.", info_value_style))
+            
+        # Footer - Removed (handled in onFirstPage)
+        elements.append(Spacer(1, 1*cm))
+
+        # Page Break (Stays Portrait)
+        elements.append(NextPageTemplate('portrait_back'))
+        elements.append(PageBreak())
+
+        # Page 2 - Header (Logo + Title)
+        logo_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'uvtab-logo.png')
+        if os.path.exists(logo_path):
+            try:
+                logo = Image(logo_path, width=1.5*cm, height=1.5*cm)
+                elements.append(logo)
+                elements.append(Spacer(1, 0.2*cm))
+            except:
+                pass
+        
+        elements.append(Paragraph("UGANDA VOCATIONAL AND TECHNICAL ASSESSMENT BOARD", ParagraphStyle(
+            'Page2Title', parent=styles['Heading1'], fontSize=12, alignment=TA_CENTER, fontName='Times-Bold', spaceAfter=10
+        )))
+
+        # Page 2 - Key to Grades
+        heading2_style = ParagraphStyle(
+            'Heading2Center', 
+            parent=styles['Heading2'], 
+            alignment=TA_CENTER, 
+            fontName='Times-Bold',
+            fontSize=16,
+            spaceAfter=15
+        )
+        
+        elements.append(Paragraph("KEY TO GRADES and QUALIFICATIONS AWARD", heading2_style))
+        elements.append(Spacer(1, 0.5*cm))
+
+        grading_data = [
+            [Paragraph("<b>THEORY SCORES</b>", info_label_style), "", 
+             Paragraph("<b>PRACTICAL SCORES</b>", info_label_style), ""],
+            ["Grade", "Scores%", "Grade", "Scores%"],
+            ["A+", "85-100", "A+", "90-100"],
+            ["A", "80-84", "A", "85-89"],
+            ["B", "70-79", "B+", "75-84"],
+            ["B-", "60-69", "B", "65-74"],
+            ["C", "50-59", "B-", "60-64"],
+            ["C-", "40-49", "C", "55-59"],
+            ["D", "30-39", "C-", "50-54"],
+            ["E", "0-29", "D", "40-49"],
+            ["", "", "D-", "30-39"],
+            ["", "", "E", "0-29"],
+        ]
+        
+        grading_table = Table(grading_data, colWidths=[4.2*cm, 4.2*cm, 4.2*cm, 4.2*cm])
+        grading_table.setStyle(TableStyle([
+            ('SPAN', (0, 0), (1, 0)),
+            ('SPAN', (2, 0), (3, 0)),
+            ('BACKGROUND', (0, 0), (3, 0), colors.lightgrey),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+            ('FONTNAME', (0, 1), (-1, 1), 'Times-Bold'),
+        ]))
+        
+        elements.append(grading_table)
+        elements.append(Spacer(1, 1*cm))
+        elements.append(Paragraph("Pass mark is 50% in theory and 65% in practical assessment", ParagraphStyle('PassMark', parent=styles['Normal'], alignment=TA_CENTER, fontName='Times-Bold', fontSize=12)))
+
+        doc.build(elements)
+        pdf = buffer.getvalue()
+        buffer.close()
+        
+        response = HttpResponse(content_type='application/pdf')
+        filename = f"Transcript_{candidate.full_name.replace(' ', '_')}.pdf"
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
         response.write(pdf)
         
         return response
