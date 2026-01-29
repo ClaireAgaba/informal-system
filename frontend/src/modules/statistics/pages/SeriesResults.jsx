@@ -237,10 +237,10 @@ const SeriesResults = () => {
                         <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm text-gray-600">Total Candidates</p>
-                                    <p className="text-3xl font-bold text-gray-900">{results.overview.total_candidates}</p>
+                                    <p className="text-sm text-gray-600">Enrolled Candidates</p>
+                                    <p className="text-3xl font-bold text-gray-900">{results.overview.enrolled}</p>
                                     <p className="text-xs text-gray-500">
-                                        Male: {results.overview.male} | Female: {results.overview.female}
+                                        Male: {results.overview.male_enrolled} | Female: {results.overview.female_enrolled}
                                     </p>
                                 </div>
                                 <div className="bg-blue-100 p-3 rounded-lg">
@@ -252,10 +252,25 @@ const SeriesResults = () => {
                         <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm text-gray-600">Overall Pass Rate</p>
-                                    <p className="text-3xl font-bold text-gray-900">{results.overview.pass_rate}%</p>
+                                    <p className="text-sm text-gray-600">Candidates Sat</p>
+                                    <p className="text-3xl font-bold text-indigo-900">{results.overview.sat}</p>
                                     <p className="text-xs text-gray-500">
-                                        M: {results.overview.male_pass_rate}% | F: {results.overview.female_pass_rate}%
+                                        Missing: {results.overview.missing} ({getPercentage(results.overview.missing, results.overview.enrolled)}%)
+                                    </p>
+                                </div>
+                                <div className="bg-indigo-100 p-3 rounded-lg">
+                                    <FileText className="w-8 h-8 text-indigo-600" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-gray-600">Overall Pass Rate</p>
+                                    <p className="text-3xl font-bold text-green-600">{results.overview.pass_rate}%</p>
+                                    <p className="text-xs text-gray-500">
+                                        Failed: {results.overview.failed} ({results.overview.fail_rate}%)
                                     </p>
                                 </div>
                                 <div className="bg-green-100 p-3 rounded-lg">
@@ -267,24 +282,17 @@ const SeriesResults = () => {
                         <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm text-gray-600">Total Results</p>
-                                    <p className="text-3xl font-bold text-gray-900">{results.overview.total_results}</p>
-                                    <p className="text-xs text-gray-500">All assessments</p>
-                                </div>
-                                <div className="bg-yellow-100 p-3 rounded-lg">
-                                    <FileText className="w-8 h-8 text-yellow-600" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-                            <div className="flex items-center justify-between">
-                                <div>
                                     <p className="text-sm text-gray-600">Series Period</p>
-                                    <p className="text-lg font-bold text-gray-900">{results.series.name}</p>
-                                    <p className="text-xs text-gray-500">
-                                        {new Date(results.series.start_date).toLocaleDateString()} - {new Date(results.series.end_date).toLocaleDateString()}
-                                    </p>
+                                    {results.series ? (
+                                        <>
+                                            <p className="text-lg font-bold text-gray-900">{results.series.name}</p>
+                                            <p className="text-xs text-gray-500">
+                                                {new Date(results.series.start_date).toLocaleDateString()} - {new Date(results.series.end_date).toLocaleDateString()}
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <p className="text-lg font-bold text-gray-900">Current Series</p>
+                                    )}
                                 </div>
                                 <div className="bg-purple-100 p-3 rounded-lg">
                                     <Award className="w-8 h-8 text-purple-600" />
@@ -302,7 +310,7 @@ const SeriesResults = () => {
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center">
                                             <div className="w-3 h-3 rounded-full bg-blue-500 mr-2"></div>
-                                            <span className="text-sm text-gray-700">Male</span>
+                                            <span className="text-sm text-gray-700">Male (Passed: {results.overview.male_passed}/{results.overview.male_sat})</span>
                                         </div>
                                         <span className="text-sm font-medium text-blue-600">
                                             {results.overview.male_pass_rate}%
@@ -320,7 +328,7 @@ const SeriesResults = () => {
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center">
                                             <div className="w-3 h-3 rounded-full bg-pink-500 mr-2"></div>
-                                            <span className="text-sm text-gray-700">Female</span>
+                                            <span className="text-sm text-gray-700">Female (Passed: {results.overview.female_passed}/{results.overview.female_sat})</span>
                                         </div>
                                         <span className="text-sm font-medium text-pink-600">
                                             {results.overview.female_pass_rate}%
@@ -336,27 +344,30 @@ const SeriesResults = () => {
                             </div>
                         </div>
 
-                        {/* Grade Distribution */}
+                        {/* Funnel Chart / Stats */}
                         <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Grade Distribution</h2>
-                            <div className="space-y-2">
-                                {Object.entries(results.grade_distribution).length > 0 ? (
-                                    Object.entries(results.grade_distribution)
-                                        .sort((a, b) => b[1].total - a[1].total)
-                                        .slice(0, 5)
-                                        .map(([grade, data]) => (
-                                            <div key={grade} className="flex items-center justify-between text-sm">
-                                                <span className="font-medium text-gray-700">{grade}</span>
-                                                <div className="flex items-center space-x-4">
-                                                    <span className="text-blue-600">M: {data.male}</span>
-                                                    <span className="text-pink-600">F: {data.female}</span>
-                                                    <span className="font-semibold text-gray-900">Total: {data.total}</span>
-                                                </div>
-                                            </div>
-                                        ))
-                                ) : (
-                                    <p className="text-gray-500 text-sm">No grade data available</p>
-                                )}
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Candidate Flow</h2>
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                                    <span className="font-medium text-gray-700">Enrolled</span>
+                                    <span className="font-bold text-gray-900">{results.overview.enrolled}</span>
+                                </div>
+                                <div className="flex justify-center text-gray-400"><ChevronDown className="w-5 h-5" /></div>
+                                <div className="flex justify-between items-center p-3 bg-indigo-50 rounded">
+                                    <span className="font-medium text-indigo-700">Sat Exams</span>
+                                    <span className="font-bold text-indigo-900">{results.overview.sat}</span>
+                                </div>
+                                <div className="flex justify-center text-gray-400"><ChevronDown className="w-5 h-5" /></div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="flex justify-between items-center p-3 bg-green-50 rounded border border-green-100">
+                                        <span className="font-medium text-green-700">Passed</span>
+                                        <span className="font-bold text-green-900">{results.overview.passed}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-red-50 rounded border border-red-100">
+                                        <span className="font-medium text-red-700">Failed</span>
+                                        <span className="font-bold text-red-900">{results.overview.failed}</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -377,17 +388,17 @@ const SeriesResults = () => {
                                     <tbody className="bg-white divide-y divide-gray-200">
                                         {results.centers_by_sector.map((sector, index) => (
                                             <tr key={index} className="hover:bg-gray-50">
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{sector.sector_name}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{sector.name}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-indigo-600 font-semibold">{sector.centers_count}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-purple-600 font-semibold">{sector.branches_count}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-purple-600 font-semibold">{sector.branch_count}</td>
                                             </tr>
                                         ))}
                                         {/* Total Row */}
                                         {results.centers_by_sector_summary && (
                                             <tr className="bg-gray-100 font-bold border-t-2 border-gray-300">
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">TOTAL (Unique)</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-indigo-800">{results.centers_by_sector_summary.total_unique_centers}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-purple-800">{results.centers_by_sector_summary.total_unique_branches}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-indigo-800">{results.centers_by_sector_summary.total_centers}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-purple-800">{results.centers_by_sector_summary.total_branches}</td>
                                             </tr>
                                         )}
                                     </tbody>
@@ -404,35 +415,57 @@ const SeriesResults = () => {
                                 <thead className="bg-gray-50">
                                     <tr>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male Passed</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female Passed</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Passed</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male Pass %</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female Pass %</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Overall Pass %</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolled (M)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolled (F)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolled (T)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Missing (M)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Missing (F)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Missing (T)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">% Miss</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sat (M)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sat (F)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sat (T)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">% Sat</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Passed (M)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Passed (F)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Passed (T)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pass %</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Failed (M)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Failed (F)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Failed (T)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fail %</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {Object.entries(results.by_category).map(([category, data]) => (
-                                        <tr key={category} className="hover:bg-gray-50">
+                                    {results.category_stats.map((data, index) => (
+                                        <tr key={index} className={data.name === 'Total' ? 'bg-gray-100 font-bold border-t-2 border-gray-300' : 'hover:bg-gray-50'}>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className="text-sm font-medium text-gray-900 capitalize">
-                                                    {category === 'workers_pas' ? "Worker's PAS" : category}
+                                                <span className={`text-sm ${data.name === 'Total' ? 'font-bold text-gray-900' : 'font-medium text-gray-900 capitalize'}`}>
+                                                    {data.name}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{data.total}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">{data.male}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-600">{data.female}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{data.male_enrolled}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{data.female_enrolled}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">{data.enrolled}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{data.male_missing}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{data.female_missing}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-bold">{data.missing}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{data.missing_rate}%</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">{data.male_sat}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-600">{data.female_sat}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{data.sat}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-indigo-600 font-medium">{data.sat_rate}%</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-700 font-medium">{data.male_passed}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-700 font-medium">{data.female_passed}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{data.total_passed}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-800 font-semibold">{data.male_pass_rate}%</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-800 font-semibold">{data.female_pass_rate}%</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-green-700 font-bold">{data.passed}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-green-700 font-bold">
                                                 {data.pass_rate}%
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500 font-medium">{data.male_failed}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500 font-medium">{data.female_failed}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-red-700 font-bold">{data.failed}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-red-700 font-bold">
+                                                {data.fail_rate}%
                                             </td>
                                         </tr>
                                     ))}
@@ -442,7 +475,7 @@ const SeriesResults = () => {
                     </div>
 
                     {/* Performance by Sector */}
-                    {results.by_sector && results.by_sector.length > 0 && (
+                    {results.sector_stats && results.sector_stats.length > 0 && (
                         <div className="bg-white p-6 rounded-lg shadow border border-gray-200 mb-6">
                             <h2 className="text-lg font-semibold text-gray-900 mb-4">Performance by Sector</h2>
                             <div className="overflow-x-auto">
@@ -450,32 +483,52 @@ const SeriesResults = () => {
                                     <thead className="bg-gray-50">
                                         <tr>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sector</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male Passed</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female Passed</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Passed</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male Pass %</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female Pass %</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Overall Pass %</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolled (M)</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolled (F)</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolled (T)</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Missing (M)</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Missing (F)</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Missing (T)</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">% Miss</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sat (M)</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sat (F)</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sat (T)</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">% Sat</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Passed (M)</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Passed (F)</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Passed (T)</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pass %</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Failed (M)</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Failed (F)</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Failed (T)</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fail %</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
-                                        {results.by_sector.map((sector, index) => (
-                                            <tr key={index} className="hover:bg-gray-50">
+                                        {results.sector_stats.map((sector, index) => (
+                                            <tr key={index} className={sector.name === 'Total' ? 'bg-gray-100 font-bold border-t-2 border-gray-300' : 'hover:bg-gray-50'}>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                    {sector.sector_name}
+                                                    {sector.name}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{sector.total}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">{sector.male}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-600">{sector.female}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{sector.male_enrolled}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{sector.female_enrolled}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">{sector.enrolled}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{sector.male_missing}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{sector.female_missing}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-bold">{sector.missing}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{sector.missing_rate}%</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600">{sector.male_sat}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-600">{sector.female_sat}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{sector.sat}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-indigo-600 font-medium">{sector.sat_rate}%</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-700 font-medium">{sector.male_passed}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-700 font-medium">{sector.female_passed}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{sector.total_passed}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-800 font-semibold">{sector.male_pass_rate}%</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-pink-800 font-semibold">{sector.female_pass_rate}%</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-green-700 font-medium">{sector.passed}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-green-700 font-bold">{sector.pass_rate}%</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500 font-medium">{sector.male_failed}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500 font-medium">{sector.female_failed}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-red-700 font-medium">{sector.failed}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-red-700 font-bold">{sector.fail_rate}%</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -494,19 +547,29 @@ const SeriesResults = () => {
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sector</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Occupation</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male Passed</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female Passed</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Passed</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Male Pass %</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Female Pass %</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Overall Pass %</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolled (M)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolled (F)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolled (T)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Missing (M)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Missing (F)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Missing (T)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">% Miss</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sat (M)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sat (F)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sat (T)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">% Sat</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Passed (M)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Passed (F)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Passed (T)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pass %</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Failed (M)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Failed (F)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Failed (T)</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fail %</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {results.by_occupation.map((occ, index) => (
+                                    {results.occupation_stats.map((occ, index) => (
                                         <tr
                                             key={index}
                                             className={occ.is_sector_summary ? 'bg-blue-50 font-semibold border-t-2 border-blue-200' : 'hover:bg-gray-50'}
@@ -518,15 +581,25 @@ const SeriesResults = () => {
                                                 {occ.occupation_name}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{occ.occupation_code}</td>
-                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-gray-900' : 'text-gray-900'}`}>{occ.total}</td>
-                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-blue-700' : 'text-blue-600'}`}>{occ.male}</td>
-                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-pink-700' : 'text-pink-600'}`}>{occ.female}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-gray-900' : 'text-gray-900'}`}>{occ.male_enrolled}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-gray-900' : 'text-gray-900'}`}>{occ.female_enrolled}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-gray-900' : 'text-gray-900'} font-bold`}>{occ.enrolled}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-gray-500' : 'text-gray-500'}`}>{occ.male_missing}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-gray-500' : 'text-gray-500'}`}>{occ.female_missing}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-gray-500' : 'text-gray-500'} font-bold`}>{occ.missing}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-gray-500' : 'text-gray-500'}`}>{occ.missing_rate}%</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-blue-700' : 'text-blue-600'}`}>{occ.male_sat}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-pink-700' : 'text-pink-600'}`}>{occ.female_sat}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-gray-900' : 'text-gray-900'}`}>{occ.sat}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-indigo-700' : 'text-indigo-600'}`}>{occ.sat_rate}%</td>
                                             <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-blue-800' : 'text-blue-700 font-medium'}`}>{occ.male_passed}</td>
                                             <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-pink-800' : 'text-pink-700 font-medium'}`}>{occ.female_passed}</td>
-                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-gray-900' : 'text-gray-900 font-medium'}`}>{occ.total_passed}</td>
-                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-blue-900' : 'text-blue-800 font-semibold'}`}>{occ.male_pass_rate}%</td>
-                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-pink-900' : 'text-pink-808 font-semibold'}`}>{occ.female_pass_rate}%</td>
-                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-green-800' : 'text-green-700 font-bold'}`}>{occ.pass_rate}%</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-green-800' : 'text-green-700 font-medium'}`}>{occ.passed}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-green-900' : 'text-green-800 font-bold'}`}>{occ.pass_rate}%</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-red-800' : 'text-red-600 font-medium'}`}>{occ.male_failed}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-red-800' : 'text-red-600 font-medium'}`}>{occ.female_failed}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-red-800' : 'text-red-700 font-medium'}`}>{occ.failed}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${occ.is_sector_summary ? 'font-bold text-red-900' : 'text-red-800 font-bold'}`}>{occ.fail_rate}%</td>
                                         </tr>
                                     ))}
                                 </tbody>
