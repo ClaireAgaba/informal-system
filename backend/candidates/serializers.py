@@ -312,6 +312,77 @@ class CandidateEnrollmentSerializer(serializers.ModelSerializer):
         read_only_fields = ['enrolled_at', 'updated_at']
 
 
+class EnrollmentListSerializer(serializers.ModelSerializer):
+    """Serializer for listing all enrollments with candidate details"""
+    registration_number = serializers.CharField(source='candidate.registration_number', read_only=True)
+    candidate_name = serializers.CharField(source='candidate.full_name', read_only=True)
+    candidate_id = serializers.IntegerField(source='candidate.id', read_only=True)
+    registration_category = serializers.CharField(source='candidate.registration_category', read_only=True)
+    occupation_name = serializers.SerializerMethodField()
+    occupation_code = serializers.SerializerMethodField()
+    assessment_series_name = serializers.CharField(source='assessment_series.name', read_only=True)
+    assessment_series_id = serializers.IntegerField(source='assessment_series.id', read_only=True)
+    level_name = serializers.SerializerMethodField()
+    modules_display = serializers.SerializerMethodField()
+    center_name = serializers.CharField(source='candidate.assessment_center.center_name', read_only=True)
+    center_number = serializers.CharField(source='candidate.assessment_center.center_number', read_only=True)
+    
+    def get_occupation_name(self, obj):
+        if obj.occupation_level:
+            return obj.occupation_level.occupation.occ_name
+        if obj.modules.exists():
+            first_module = obj.modules.first()
+            if first_module and first_module.module:
+                return first_module.module.occupation.occ_name
+        if obj.papers.exists():
+            first_paper = obj.papers.first()
+            if first_paper and first_paper.paper:
+                return first_paper.paper.occupation.occ_name
+        return obj.candidate.occupation.occ_name if obj.candidate.occupation else None
+    
+    def get_occupation_code(self, obj):
+        if obj.occupation_level:
+            return obj.occupation_level.occupation.occ_code
+        if obj.modules.exists():
+            first_module = obj.modules.first()
+            if first_module and first_module.module:
+                return first_module.module.occupation.occ_code
+        if obj.papers.exists():
+            first_paper = obj.papers.first()
+            if first_paper and first_paper.paper:
+                return first_paper.paper.occupation.occ_code
+        return obj.candidate.occupation.occ_code if obj.candidate.occupation else None
+    
+    def get_level_name(self, obj):
+        """Get level name(s) - for formal candidates"""
+        if obj.occupation_level:
+            return obj.occupation_level.level_name
+        # For Worker's PAS, get unique levels from enrolled papers
+        if obj.papers.exists():
+            levels = set()
+            for enrollment_paper in obj.papers.all():
+                if enrollment_paper.paper and enrollment_paper.paper.level:
+                    levels.add(enrollment_paper.paper.level.level_name)
+            return ', '.join(sorted(levels)) if levels else None
+        return None
+    
+    def get_modules_display(self, obj):
+        """Get modules for modular/workers_pas candidates"""
+        if obj.modules.exists():
+            return ', '.join([m.module.module_code for m in obj.modules.all()])
+        return None
+    
+    class Meta:
+        model = CandidateEnrollment
+        fields = [
+            'id', 'candidate_id', 'registration_number', 'candidate_name',
+            'registration_category', 'occupation_code', 'occupation_name',
+            'assessment_series_id', 'assessment_series_name',
+            'level_name', 'modules_display', 'center_name', 'center_number',
+            'total_amount', 'is_active', 'enrolled_at'
+        ]
+
+
 class EnrollCandidateSerializer(serializers.Serializer):
     """Serializer for enrolling a candidate"""
     assessment_series = serializers.IntegerField()

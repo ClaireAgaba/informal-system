@@ -17,6 +17,7 @@ from .serializers import (
     CandidateDetailSerializer,
     CandidateCreateUpdateSerializer,
     CandidateEnrollmentSerializer,
+    EnrollmentListSerializer,
     EnrollCandidateSerializer,
     BulkEnrollSerializer
 )
@@ -2216,3 +2217,369 @@ def candidate_portal_data(request, registration_number):
             {'error': 'Candidate not found'},
             status=status.HTTP_404_NOT_FOUND
         )
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def enrollment_list_view(request):
+    """
+    List all enrollments with filtering options
+    """
+    from emis.pagination import FlexiblePagination
+    
+    queryset = CandidateEnrollment.objects.select_related(
+        'candidate',
+        'candidate__assessment_center',
+        'candidate__occupation',
+        'assessment_series',
+        'occupation_level',
+        'occupation_level__occupation'
+    ).prefetch_related(
+        'modules',
+        'modules__module',
+        'modules__module__occupation',
+        'papers',
+        'papers__paper',
+        'papers__paper__occupation',
+        'papers__paper__level'
+    ).filter(is_active=True).order_by('-enrolled_at')
+    
+    # Filter by registration category
+    registration_category = request.query_params.get('registration_category')
+    if registration_category:
+        queryset = queryset.filter(candidate__registration_category=registration_category)
+    
+    # Filter by assessment series
+    assessment_series = request.query_params.get('assessment_series')
+    if assessment_series:
+        queryset = queryset.filter(assessment_series_id=assessment_series)
+    
+    # Filter by assessment center
+    assessment_center = request.query_params.get('assessment_center')
+    if assessment_center:
+        queryset = queryset.filter(candidate__assessment_center_id=assessment_center)
+    
+    # Filter by occupation
+    occupation = request.query_params.get('occupation')
+    if occupation:
+        queryset = queryset.filter(
+            Q(occupation_level__occupation_id=occupation) |
+            Q(candidate__occupation_id=occupation)
+        )
+    
+    # Search by registration number or name
+    search = request.query_params.get('search')
+    if search:
+        queryset = queryset.filter(
+            Q(candidate__registration_number__icontains=search) |
+            Q(candidate__full_name__icontains=search)
+        )
+    
+    # Filter by center for center representatives
+    if request.user.is_authenticated and request.user.user_type == 'center_representative':
+        if hasattr(request.user, 'center_rep_profile'):
+            center_rep = request.user.center_rep_profile
+            queryset = queryset.filter(candidate__assessment_center=center_rep.assessment_center)
+            if center_rep.assessment_center_branch:
+                queryset = queryset.filter(candidate__assessment_center_branch=center_rep.assessment_center_branch)
+    
+    # Paginate
+    paginator = FlexiblePagination()
+    page = paginator.paginate_queryset(queryset, request)
+    
+    if page is not None:
+        serializer = EnrollmentListSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+    
+    serializer = EnrollmentListSerializer(queryset, many=True)
+    return Response(serializer.data)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def bulk_change_enrollment_series(request):
+    """Bulk change assessment series for specific enrollments"""
+    enrollment_ids = request.data.get('enrollment_ids', [])
+    new_series_id = request.data.get('new_series_id')
+    select_all = request.data.get('select_all', False)
+    filters = request.data.get('filters', {})
+    
+    if not new_series_id:
+        return Response(
+            {'error': 'New assessment series ID is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    from assessment_series.models import AssessmentSeries
+    try:
+        new_series = AssessmentSeries.objects.get(id=new_series_id)
+    except AssessmentSeries.DoesNotExist:
+        return Response(
+            {'error': 'Assessment series not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    from results.models import ModularResult, FormalResult, WorkersPasResult
+    
+    # Get enrollments to update
+    if select_all:
+        # Apply filters to get all matching enrollments
+        queryset = CandidateEnrollment.objects.select_related(
+            'candidate', 'assessment_series', 'occupation_level'
+        ).all()
+        
+        if filters.get('registration_category'):
+            queryset = queryset.filter(candidate__registration_category=filters['registration_category'])
+        if filters.get('assessment_series'):
+            queryset = queryset.filter(assessment_series_id=filters['assessment_series'])
+        if filters.get('assessment_center'):
+            queryset = queryset.filter(candidate__assessment_center_id=filters['assessment_center'])
+        if filters.get('occupation'):
+            queryset = queryset.filter(
+                Q(occupation_level__occupation_id=filters['occupation']) |
+                Q(candidate__occupation_id=filters['occupation'])
+            )
+        if filters.get('search'):
+            queryset = queryset.filter(
+                Q(candidate__registration_number__icontains=filters['search']) |
+                Q(candidate__full_name__icontains=filters['search'])
+            )
+        enrollments = queryset
+    else:
+        if not enrollment_ids:
+            return Response(
+                {'error': 'No enrollments selected'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        enrollments = CandidateEnrollment.objects.filter(id__in=enrollment_ids)
+    
+    total_updated = {
+        'enrollments': 0,
+        'modular_results': 0,
+        'formal_results': 0,
+        'workers_pas_results': 0,
+    }
+    
+    for enrollment in enrollments:
+        candidate = enrollment.candidate
+        old_series = enrollment.assessment_series
+        
+        # Update the enrollment
+        enrollment.assessment_series = new_series
+        enrollment.save()
+        total_updated['enrollments'] += 1
+        
+        # Update results for this candidate from old series to new series
+        modular_updated = ModularResult.objects.filter(
+            candidate=candidate, assessment_series=old_series
+        ).update(assessment_series=new_series)
+        total_updated['modular_results'] += modular_updated
+        
+        formal_updated = FormalResult.objects.filter(
+            candidate=candidate, assessment_series=old_series
+        ).update(assessment_series=new_series)
+        total_updated['formal_results'] += formal_updated
+        
+        workers_updated = WorkersPasResult.objects.filter(
+            candidate=candidate, assessment_series=old_series
+        ).update(assessment_series=new_series)
+        total_updated['workers_pas_results'] += workers_updated
+    
+    return Response({
+        'message': f'Successfully moved {total_updated["enrollments"]} enrollment(s) to {new_series.name}',
+        'new_series': {
+            'id': new_series.id,
+            'name': new_series.name,
+        },
+        'updated': total_updated
+    }, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def bulk_de_enroll_by_enrollment(request):
+    """Bulk de-enroll by enrollment IDs - deletes enrollments and clears fees"""
+    enrollment_ids = request.data.get('enrollment_ids', [])
+    select_all = request.data.get('select_all', False)
+    filters = request.data.get('filters', {})
+    
+    from results.models import ModularResult, FormalResult, WorkersPasResult
+    from fees.models import CandidateFee
+    
+    # Get enrollments to delete
+    if select_all:
+        queryset = CandidateEnrollment.objects.select_related(
+            'candidate', 'assessment_series', 'occupation_level'
+        ).all()
+        
+        if filters.get('registration_category'):
+            queryset = queryset.filter(candidate__registration_category=filters['registration_category'])
+        if filters.get('assessment_series'):
+            queryset = queryset.filter(assessment_series_id=filters['assessment_series'])
+        if filters.get('assessment_center'):
+            queryset = queryset.filter(candidate__assessment_center_id=filters['assessment_center'])
+        if filters.get('occupation'):
+            queryset = queryset.filter(
+                Q(occupation_level__occupation_id=filters['occupation']) |
+                Q(candidate__occupation_id=filters['occupation'])
+            )
+        if filters.get('search'):
+            queryset = queryset.filter(
+                Q(candidate__registration_number__icontains=filters['search']) |
+                Q(candidate__full_name__icontains=filters['search'])
+            )
+        enrollments = list(queryset)
+    else:
+        if not enrollment_ids:
+            return Response(
+                {'error': 'No enrollments selected'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        enrollments = list(CandidateEnrollment.objects.filter(id__in=enrollment_ids))
+    
+    success_count = 0
+    fees_deleted = 0
+    failed = []
+    skipped_with_marks = []
+    
+    for enrollment in enrollments:
+        candidate = enrollment.candidate
+        series = enrollment.assessment_series
+        
+        # Check if candidate has any results for this enrollment
+        has_modular_results = ModularResult.objects.filter(
+            candidate=candidate, assessment_series=series
+        ).exists()
+        
+        has_formal_results = FormalResult.objects.filter(
+            candidate=candidate, assessment_series=series
+        ).exists()
+        
+        has_workers_pas_results = WorkersPasResult.objects.filter(
+            candidate=candidate, assessment_series=series
+        ).exists()
+        
+        if has_modular_results or has_formal_results or has_workers_pas_results:
+            skipped_with_marks.append({
+                'enrollment_id': enrollment.id,
+                'candidate_id': candidate.id,
+                'name': candidate.full_name,
+                'reg_no': candidate.registration_number,
+                'reason': 'Has marks - cannot de-enroll'
+            })
+            continue
+        
+        try:
+            # Delete fees for this candidate and series
+            deleted_fees = CandidateFee.objects.filter(
+                candidate=candidate, assessment_series=series
+            ).delete()[0]
+            fees_deleted += deleted_fees
+            
+            # Delete the enrollment
+            enrollment.delete()
+            success_count += 1
+        except Exception as e:
+            failed.append({
+                'enrollment_id': enrollment.id,
+                'candidate_id': candidate.id,
+                'name': candidate.full_name,
+                'reason': str(e)
+            })
+    
+    return Response({
+        'message': f'Successfully de-enrolled {success_count} candidate(s)',
+        'success_count': success_count,
+        'fees_deleted': fees_deleted,
+        'skipped_with_marks': skipped_with_marks,
+        'failed': failed
+    }, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def bulk_clear_enrollment_data(request):
+    """Bulk clear results, enrollments, and fees for specific enrollments"""
+    enrollment_ids = request.data.get('enrollment_ids', [])
+    select_all = request.data.get('select_all', False)
+    filters = request.data.get('filters', {})
+    
+    from results.models import ModularResult, FormalResult, WorkersPasResult
+    from fees.models import CandidateFee
+    
+    # Get enrollments to clear
+    if select_all:
+        queryset = CandidateEnrollment.objects.select_related(
+            'candidate', 'assessment_series', 'occupation_level'
+        ).all()
+        
+        if filters.get('registration_category'):
+            queryset = queryset.filter(candidate__registration_category=filters['registration_category'])
+        if filters.get('assessment_series'):
+            queryset = queryset.filter(assessment_series_id=filters['assessment_series'])
+        if filters.get('assessment_center'):
+            queryset = queryset.filter(candidate__assessment_center_id=filters['assessment_center'])
+        if filters.get('occupation'):
+            queryset = queryset.filter(
+                Q(occupation_level__occupation_id=filters['occupation']) |
+                Q(candidate__occupation_id=filters['occupation'])
+            )
+        if filters.get('search'):
+            queryset = queryset.filter(
+                Q(candidate__registration_number__icontains=filters['search']) |
+                Q(candidate__full_name__icontains=filters['search'])
+            )
+        enrollments = list(queryset)
+    else:
+        if not enrollment_ids:
+            return Response(
+                {'error': 'No enrollments selected'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        enrollments = list(CandidateEnrollment.objects.filter(id__in=enrollment_ids))
+    
+    total_cleared = {
+        'modular_results': 0,
+        'formal_results': 0,
+        'workers_pas_results': 0,
+        'enrollments': 0,
+        'fees': 0,
+    }
+    
+    for enrollment in enrollments:
+        candidate = enrollment.candidate
+        series = enrollment.assessment_series
+        
+        # Delete results for this candidate and series
+        modular_deleted = ModularResult.objects.filter(
+            candidate=candidate, assessment_series=series
+        ).delete()[0]
+        total_cleared['modular_results'] += modular_deleted
+        
+        formal_deleted = FormalResult.objects.filter(
+            candidate=candidate, assessment_series=series
+        ).delete()[0]
+        total_cleared['formal_results'] += formal_deleted
+        
+        workers_deleted = WorkersPasResult.objects.filter(
+            candidate=candidate, assessment_series=series
+        ).delete()[0]
+        total_cleared['workers_pas_results'] += workers_deleted
+        
+        # Delete fees for this candidate and series
+        fees_deleted = CandidateFee.objects.filter(
+            candidate=candidate, assessment_series=series
+        ).delete()[0]
+        total_cleared['fees'] += fees_deleted
+        
+        # Delete the enrollment
+        enrollment.delete()
+        total_cleared['enrollments'] += 1
+    
+    return Response({
+        'message': f'Successfully cleared data for {total_cleared["enrollments"]} enrollment(s)',
+        'cleared': total_cleared
+    }, status=status.HTTP_200_OK)

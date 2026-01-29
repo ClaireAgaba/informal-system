@@ -258,6 +258,26 @@ export const candidateApi = {
       new_series_id: newSeriesId
     });
   },
+
+  // Get all enrollments with filters
+  getAllEnrollments: (params = {}) => {
+    return apiClient.get(`${CANDIDATES_BASE}/enrollments/`, { params });
+  },
+
+  // Bulk change assessment series for enrollments
+  bulkChangeEnrollmentSeries: (data) => {
+    return apiClient.post(`${CANDIDATES_BASE}/enrollments/bulk-change-series/`, data);
+  },
+
+  // Bulk de-enroll by enrollment IDs
+  bulkDeEnrollByEnrollment: (data) => {
+    return apiClient.post(`${CANDIDATES_BASE}/enrollments/bulk-de-enroll/`, data);
+  },
+
+  // Bulk clear results, enrollments, and fees by enrollment IDs
+  bulkClearEnrollmentData: (data) => {
+    return apiClient.post(`${CANDIDATES_BASE}/enrollments/bulk-clear-data/`, data);
+  },
 };
 
 export default candidateApi;

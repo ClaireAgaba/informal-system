@@ -13,6 +13,7 @@ import {
   Square,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
 } from 'lucide-react';
 import candidateApi from '../services/candidateApi';
 import assessmentCenterApi from '@modules/assessment-centers/services/assessmentCenterApi';
@@ -379,6 +380,14 @@ const CandidateList = () => {
           </p>
         </div>
         <div className="flex items-center space-x-3">
+          <Button
+            variant="outline"
+            size="md"
+            onClick={() => navigate('/candidates/enrollments')}
+          >
+            <ClipboardList className="w-4 h-4 mr-2" />
+            Enrollments
+          </Button>
           <Button
             variant="primary"
             size="md"

@@ -9,6 +9,7 @@ import CandidateList from '@modules/candidates/pages/CandidateList';
 import CandidateView from '@modules/candidates/pages/CandidateView';
 import CandidateEdit from '@modules/candidates/pages/CandidateEdit';
 import CandidateCreate from '@modules/candidates/pages/CandidateCreate';
+import EnrollmentList from '@modules/candidates/pages/EnrollmentList';
 import OccupationList from '@modules/occupations/pages/OccupationList';
 import OccupationView from '@modules/occupations/pages/OccupationView';
 import OccupationEdit from '@modules/occupations/pages/OccupationEdit';
@@ -65,6 +66,7 @@ function App() {
       <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
         {/* Candidate routes */}
         <Route path="candidates" element={<CandidateList />} />
+        <Route path="candidates/enrollments" element={<EnrollmentList />} />
         <Route path="candidates/new" element={<CandidateCreate />} />
         <Route path="candidates/:id" element={<CandidateView />} />
         <Route path="candidates/:id/edit" element={<CandidateEdit />} />
