@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, User } from 'lucide-react';
 import apiClient from '../services/apiClient';
 
 const Login = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnUrl = searchParams.get('returnUrl');
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -36,8 +38,9 @@ const Login = () => {
       localStorage.setItem('user', JSON.stringify(response.data.user));
       console.log('Stored user:', JSON.parse(localStorage.getItem('user')));
       
-      // Force page reload to ensure fresh data
-      window.location.href = '/dashboard';
+      // Redirect to returnUrl if provided, otherwise dashboard
+      const redirectTo = returnUrl ? decodeURIComponent(returnUrl) : '/dashboard';
+      window.location.href = redirectTo;
     } catch (err) {
       const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Login failed. Please try again.';
       setError(errorMsg);

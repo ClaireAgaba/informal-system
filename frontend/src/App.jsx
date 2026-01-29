@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import DashboardLayout from '@layouts/DashboardLayout';
+import ProtectedRoute from '@shared/components/ProtectedRoute';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import CandidateLogin from './pages/CandidateLogin';
@@ -58,10 +59,10 @@ function App() {
 
       {/* Dashboard - Full screen without sidebar */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
 
       {/* Protected routes with sidebar layout */}
-      <Route path="/" element={<DashboardLayout />}>
+      <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
         {/* Candidate routes */}
         <Route path="candidates" element={<CandidateList />} />
         <Route path="candidates/new" element={<CandidateCreate />} />
