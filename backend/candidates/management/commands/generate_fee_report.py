@@ -65,7 +65,7 @@ class Command(BaseCommand):
         
         if not output_path:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            output_path = f'fee_report_{timestamp}.xlsx'
+            output_path = f'/tmp/fee_report_{timestamp}.xlsx'
         
         self.stdout.write(self.style.NOTICE('Generating fee report...'))
         
@@ -92,7 +92,7 @@ class Command(BaseCommand):
         
         for enrollment in enrollments:
             candidate = enrollment.candidate
-            center_name = candidate.assessment_center.name if candidate.assessment_center else 'N/A'
+            center_name = candidate.assessment_center.center_name if candidate.assessment_center else 'N/A'
             series_name = enrollment.assessment_series.name
             reg_category = candidate.registration_category
             
