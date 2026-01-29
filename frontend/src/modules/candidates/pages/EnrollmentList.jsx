@@ -248,15 +248,17 @@ const EnrollmentList = () => {
     }
     
     try {
-      const response = await occupationApi.getById(occupationId);
-      const occupation = response.data;
+      // Fetch occupation details for levels
+      const occResponse = await occupationApi.getById(occupationId);
+      const occupation = occResponse.data;
       
       if (occupation.levels) {
         setAvailableLevels(occupation.levels);
-        // Get modules from all levels
-        const allModules = occupation.levels.flatMap(level => level.modules || []);
-        setAvailableModules(allModules);
       }
+      
+      // Fetch modules directly for this occupation
+      const modulesResponse = await occupationApi.modules.getAll({ occupation: occupationId });
+      setAvailableModules(modulesResponse.data.results || modulesResponse.data || []);
       
       setShowUpdateEnrollmentModal(true);
     } catch (error) {
