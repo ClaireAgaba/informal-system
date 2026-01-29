@@ -25,6 +25,7 @@ import BulkEnrollModal from '../components/BulkEnrollModal';
 import BulkChangeOccupationModal from '../components/BulkChangeOccupationModal';
 import BulkChangeRegCategoryModal from '../components/BulkChangeRegCategoryModal';
 import BulkChangeSeriesModal from '../components/BulkChangeSeriesModal';
+import BulkChangeCenterModal from '../components/BulkChangeCenterModal';
 
 const CandidateList = () => {
   const navigate = useNavigate();
@@ -45,6 +46,8 @@ const CandidateList = () => {
   const [changingRegCategory, setChangingRegCategory] = useState(false);
   const [showBulkChangeSeriesModal, setShowBulkChangeSeriesModal] = useState(false);
   const [changingSeries, setChangingSeries] = useState(false);
+  const [showBulkChangeCenterModal, setShowBulkChangeCenterModal] = useState(false);
+  const [changingCenter, setChangingCenter] = useState(false);
   
   // Filter states
   const [filters, setFilters] = useState({
@@ -356,6 +359,39 @@ const CandidateList = () => {
     }
   };
 
+  // Handle bulk change center
+  const handleBulkChangeCenter = () => {
+    if (selectedCandidates.length === 0) {
+      toast.error('Please select candidates to change assessment center');
+      return;
+    }
+    setShowBulkChangeCenterModal(true);
+  };
+
+  // Process bulk change center
+  const processBulkChangeCenter = async (newCenterId) => {
+    try {
+      setChangingCenter(true);
+      const response = await candidateApi.bulkChangeCenter(selectedCandidates, newCenterId);
+      const { updated } = response.data;
+      
+      toast.success(
+        `Moved ${updated.candidates} candidate(s) to new center. ${updated.fees_moved} fee record(s) updated.`
+      );
+      
+      // Refresh the list
+      queryClient.invalidateQueries(['candidates']);
+      setSelectedCandidates([]);
+      setSelectAllPages(false);
+      setShowBulkChangeCenterModal(false);
+    } catch (error) {
+      console.error('Bulk change center failed:', error);
+      toast.error(error.response?.data?.error || 'Failed to change assessment center');
+    } finally {
+      setChangingCenter(false);
+    }
+  };
+
   // Clear filters
   const handleClearFilters = () => {
     setFilters({
@@ -553,10 +589,12 @@ const CandidateList = () => {
                     handleBulkChangeRegCategory();
                   } else if (e.target.value === 'change-series') {
                     handleBulkChangeSeries();
+                  } else if (e.target.value === 'change-center') {
+                    handleBulkChangeCenter();
                   }
                   e.target.value = '';
                 }}
-                disabled={exporting || deEnrolling || clearing || changingOccupation || changingRegCategory || changingSeries}
+                disabled={exporting || deEnrolling || clearing || changingOccupation || changingRegCategory || changingSeries || changingCenter}
                 defaultValue=""
               >
                 <option value="" disabled>⚙ Action</option>
@@ -564,6 +602,7 @@ const CandidateList = () => {
                 <option value="enroll">Enroll</option>
                 <option value="de-enroll">{deEnrolling ? 'De-enrolling...' : 'De-enroll'}</option>
                 <option value="change-series">{changingSeries ? 'Changing...' : 'Change Assessment Series'}</option>
+                <option value="change-center">{changingCenter ? 'Changing...' : 'Change Assessment Center'}</option>
                 <option value="change-occupation">{changingOccupation ? 'Changing...' : 'Change Occupation'}</option>
                 <option value="change-reg-category">{changingRegCategory ? 'Changing...' : 'Change Registration Category'}</option>
                 <option value="clear-data">{clearing ? 'Clearing...' : 'Clear Results, Enrollments & Fees'}</option>
@@ -1020,6 +1059,16 @@ const CandidateList = () => {
           onClose={() => setShowBulkChangeSeriesModal(false)}
           onConfirm={processBulkChangeSeries}
           isLoading={changingSeries}
+        />
+      )}
+
+      {/* Bulk Change Center Modal */}
+      {showBulkChangeCenterModal && (
+        <BulkChangeCenterModal
+          selectedCount={selectedCandidates.length}
+          onClose={() => setShowBulkChangeCenterModal(false)}
+          onConfirm={processBulkChangeCenter}
+          isLoading={changingCenter}
         />
       )}
     </div>

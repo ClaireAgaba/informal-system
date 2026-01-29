@@ -1975,6 +1975,117 @@ def bulk_clear_candidate_data(request):
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
+def bulk_change_candidate_center(request):
+    """Bulk change assessment center for multiple candidates"""
+    candidate_ids = request.data.get('candidate_ids', [])
+    new_center_id = request.data.get('new_center_id')
+    
+    if not new_center_id:
+        return Response(
+            {'error': 'New assessment center ID is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if not candidate_ids:
+        return Response(
+            {'error': 'No candidates selected'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    from assessment_centers.models import AssessmentCenter
+    try:
+        new_center = AssessmentCenter.objects.get(id=new_center_id)
+    except AssessmentCenter.DoesNotExist:
+        return Response(
+            {'error': 'Assessment center not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    from fees.models import CandidateFee, CenterFee
+    
+    candidates = Candidate.objects.filter(id__in=candidate_ids)
+    
+    total_updated = {
+        'candidates': 0,
+        'fees_moved': 0,
+    }
+    failed = []
+    
+    for candidate in candidates:
+        try:
+            old_center = candidate.assessment_center
+            
+            # Update candidate's assessment center
+            candidate.assessment_center = new_center
+            candidate.assessment_center_branch = None  # Reset branch
+            
+            # Generate new registration number if candidate is submitted
+            if candidate.is_submitted and candidate.registration_number:
+                new_registration_number = candidate.generate_registration_number()
+                candidate.registration_number = new_registration_number
+                
+                # Regenerate payment code
+                new_payment_code = candidate.generate_payment_code()
+                candidate.payment_code = new_payment_code
+            
+            candidate.save()
+            
+            # Update CenterFee totals if candidate has fees
+            candidate_fees = CandidateFee.objects.filter(candidate=candidate)
+            
+            for candidate_fee in candidate_fees:
+                if candidate_fee.total_amount > 0:
+                    total_updated['fees_moved'] += 1
+                    
+                    # Decrease old center's fee totals
+                    if old_center:
+                        try:
+                            old_center_fee = CenterFee.objects.get(
+                                assessment_center=old_center,
+                                assessment_series=candidate_fee.assessment_series
+                            )
+                            old_center_fee.total_candidates = max(0, old_center_fee.total_candidates - 1)
+                            old_center_fee.total_amount = max(0, old_center_fee.total_amount - candidate_fee.total_amount)
+                            old_center_fee.save()
+                        except CenterFee.DoesNotExist:
+                            pass
+                    
+                    # Increase new center's fee totals
+                    new_center_fee, created = CenterFee.objects.get_or_create(
+                        assessment_center=new_center,
+                        assessment_series=candidate_fee.assessment_series,
+                        defaults={
+                            'total_candidates': 0,
+                            'total_amount': 0,
+                            'amount_due': 0,
+                        }
+                    )
+                    new_center_fee.total_candidates += 1
+                    new_center_fee.total_amount += candidate_fee.total_amount
+                    new_center_fee.save()
+            
+            total_updated['candidates'] += 1
+        except Exception as e:
+            failed.append({
+                'candidate_id': candidate.id,
+                'name': candidate.full_name,
+                'reason': str(e)
+            })
+    
+    return Response({
+        'message': f'Successfully moved {total_updated["candidates"]} candidate(s) to {new_center.center_name}',
+        'new_center': {
+            'id': new_center.id,
+            'name': new_center.center_name,
+        },
+        'updated': total_updated,
+        'failed': failed,
+    }, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def clear_candidate_data(request, candidate_id):
     """Clear all results, enrollments, and fees for a candidate"""
     try:

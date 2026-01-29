@@ -259,6 +259,14 @@ export const candidateApi = {
     });
   },
 
+  // Bulk change assessment center for multiple candidates
+  bulkChangeCenter: (candidateIds, newCenterId) => {
+    return apiClient.post(`${CANDIDATES_BASE}/bulk-change-center/`, {
+      candidate_ids: candidateIds,
+      new_center_id: newCenterId
+    });
+  },
+
   // Get all enrollments with filters
   getAllEnrollments: (params = {}) => {
     return apiClient.get(`${CANDIDATES_BASE}/enrollments/`, { params });
