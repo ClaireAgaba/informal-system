@@ -42,8 +42,10 @@ const EnrollmentList = () => {
   const [selectedNewSeries, setSelectedNewSeries] = useState('');
   const [selectedLevel, setSelectedLevel] = useState('');
   const [selectedModules, setSelectedModules] = useState([]);
+  const [selectedPapers, setSelectedPapers] = useState([]);
   const [availableLevels, setAvailableLevels] = useState([]);
   const [availableModules, setAvailableModules] = useState([]);
+  const [availablePapers, setAvailablePapers] = useState([]);
   
   const [filters, setFilters] = useState({
     registration_category: '',
@@ -260,6 +262,10 @@ const EnrollmentList = () => {
       const modulesResponse = await occupationApi.modules.getAll({ occupation: occupationId });
       setAvailableModules(modulesResponse.data.results || modulesResponse.data || []);
       
+      // Fetch papers for Worker's PAS
+      const papersResponse = await occupationApi.papers.getAll({ occupation: occupationId });
+      setAvailablePapers(papersResponse.data.results || papersResponse.data || []);
+      
       setShowUpdateEnrollmentModal(true);
     } catch (error) {
       toast.error('Failed to load occupation data');
@@ -268,8 +274,8 @@ const EnrollmentList = () => {
 
   // Handle bulk update enrollment
   const handleBulkUpdateEnrollment = async () => {
-    if (!selectedLevel && selectedModules.length === 0) {
-      toast.error('Please select a level or modules');
+    if (!selectedLevel && selectedModules.length === 0 && selectedPapers.length === 0) {
+      toast.error('Please select a level, modules, or papers');
       return;
     }
     
@@ -281,6 +287,7 @@ const EnrollmentList = () => {
         filters: selectAllPages ? { ...filters, search: searchQuery } : {},
         level_id: selectedLevel || null,
         module_ids: selectedModules,
+        paper_ids: selectedPapers,
       };
       
       const response = await candidateApi.bulkUpdateEnrollment(payload);
@@ -297,6 +304,7 @@ const EnrollmentList = () => {
       setShowUpdateEnrollmentModal(false);
       setSelectedLevel('');
       setSelectedModules([]);
+      setSelectedPapers([]);
       handleClearSelection();
       queryClient.invalidateQueries(['enrollments']);
     } catch (error) {
@@ -887,6 +895,7 @@ const EnrollmentList = () => {
                   setShowUpdateEnrollmentModal(false);
                   setSelectedLevel('');
                   setSelectedModules([]);
+                  setSelectedPapers([]);
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -954,11 +963,44 @@ const EnrollmentList = () => {
                 </div>
               )}
               
+              {/* For Worker's PAS - Select Papers */}
+              {filters.registration_category === 'workers_pas' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Papers (for Worker's PAS candidates)
+                  </label>
+                  <div className="max-h-48 overflow-y-auto border border-gray-300 rounded-lg p-2 space-y-2">
+                    {availablePapers.map((paper) => (
+                      <label key={paper.id} className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedPapers.includes(paper.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedPapers([...selectedPapers, paper.id]);
+                            } else {
+                              setSelectedPapers(selectedPapers.filter(id => id !== paper.id));
+                            }
+                          }}
+                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        <span className="text-sm text-gray-700">
+                          {paper.paper_code} - {paper.paper_name}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Selected: {selectedPapers.length} paper(s)
+                  </p>
+                </div>
+              )}
+              
               {/* General message if no category filter */}
               {!filters.registration_category && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                   <p className="text-sm text-amber-800">
-                    Please filter by Category (Formal/Modular) to select appropriate level or modules.
+                    Please filter by Category (Formal/Modular/Worker's PAS) to select appropriate level, modules, or papers.
                   </p>
                 </div>
               )}
@@ -970,6 +1012,7 @@ const EnrollmentList = () => {
                   setShowUpdateEnrollmentModal(false);
                   setSelectedLevel('');
                   setSelectedModules([]);
+                  setSelectedPapers([]);
                 }}
               >
                 Cancel
@@ -978,7 +1021,7 @@ const EnrollmentList = () => {
                 variant="primary"
                 onClick={handleBulkUpdateEnrollment}
                 loading={isProcessing}
-                disabled={isProcessing || (!selectedLevel && selectedModules.length === 0)}
+                disabled={isProcessing || (!selectedLevel && selectedModules.length === 0 && selectedPapers.length === 0)}
               >
                 Update Enrollments
               </Button>
