@@ -14,6 +14,7 @@ import {
   Calendar,
   UserMinus,
   Trash2,
+  Edit,
 } from 'lucide-react';
 import candidateApi from '../services/candidateApi';
 import assessmentCenterApi from '@modules/assessment-centers/services/assessmentCenterApi';
@@ -36,8 +37,13 @@ const EnrollmentList = () => {
   const [showChangeSeriesModal, setShowChangeSeriesModal] = useState(false);
   const [showDeEnrollModal, setShowDeEnrollModal] = useState(false);
   const [showClearDataModal, setShowClearDataModal] = useState(false);
+  const [showUpdateEnrollmentModal, setShowUpdateEnrollmentModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedNewSeries, setSelectedNewSeries] = useState('');
+  const [selectedLevel, setSelectedLevel] = useState('');
+  const [selectedModules, setSelectedModules] = useState([]);
+  const [availableLevels, setAvailableLevels] = useState([]);
+  const [availableModules, setAvailableModules] = useState([]);
   
   const [filters, setFilters] = useState({
     registration_category: '',
@@ -232,6 +238,72 @@ const EnrollmentList = () => {
     }
   };
 
+  // Handle opening update enrollment modal - fetch levels/modules for selected occupation
+  const handleOpenUpdateEnrollment = async () => {
+    // Get the occupation from filter or from first selected enrollment
+    const occupationId = filters.occupation;
+    if (!occupationId) {
+      toast.error('Please filter by occupation first to load levels/modules');
+      return;
+    }
+    
+    try {
+      const response = await occupationApi.getById(occupationId);
+      const occupation = response.data;
+      
+      if (occupation.levels) {
+        setAvailableLevels(occupation.levels);
+        // Get modules from all levels
+        const allModules = occupation.levels.flatMap(level => level.modules || []);
+        setAvailableModules(allModules);
+      }
+      
+      setShowUpdateEnrollmentModal(true);
+    } catch (error) {
+      toast.error('Failed to load occupation data');
+    }
+  };
+
+  // Handle bulk update enrollment
+  const handleBulkUpdateEnrollment = async () => {
+    if (!selectedLevel && selectedModules.length === 0) {
+      toast.error('Please select a level or modules');
+      return;
+    }
+    
+    setIsProcessing(true);
+    try {
+      const payload = {
+        select_all: selectAllPages,
+        enrollment_ids: selectAllPages ? [] : selectedEnrollments,
+        filters: selectAllPages ? { ...filters, search: searchQuery } : {},
+        level_id: selectedLevel || null,
+        module_ids: selectedModules,
+      };
+      
+      const response = await candidateApi.bulkUpdateEnrollment(payload);
+      
+      if (response.data.skipped?.length > 0) {
+        toast.warning(
+          `${response.data.updated_count} updated, ${response.data.skipped.length} skipped`
+        );
+      } else {
+        toast.success(response.data.message);
+      }
+      
+      // Reset state
+      setShowUpdateEnrollmentModal(false);
+      setSelectedLevel('');
+      setSelectedModules([]);
+      handleClearSelection();
+      queryClient.invalidateQueries(['enrollments']);
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to update enrollments');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -419,6 +491,15 @@ const EnrollmentList = () => {
               >
                 <Trash2 className="w-4 h-4 mr-1" />
                 Clear Data
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleOpenUpdateEnrollment}
+                className="text-green-600 border-green-300 hover:bg-green-50"
+              >
+                <Edit className="w-4 h-4 mr-1" />
+                Update Enrollment
               </Button>
             </div>
           </div>
@@ -785,6 +866,119 @@ const EnrollmentList = () => {
                 className="bg-red-600 hover:bg-red-700"
               >
                 Clear All Data
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Update Enrollment Modal */}
+      {showUpdateEnrollmentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Update Enrollment
+              </h2>
+              <button
+                onClick={() => {
+                  setShowUpdateEnrollmentModal(false);
+                  setSelectedLevel('');
+                  setSelectedModules([]);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>{getSelectionCount()}</strong> enrollment(s) selected
+                </p>
+              </div>
+              
+              {/* For Formal - Select Level */}
+              {filters.registration_category === 'formal' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Level (for Formal candidates)
+                  </label>
+                  <select
+                    value={selectedLevel}
+                    onChange={(e) => setSelectedLevel(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">-- Select Level --</option>
+                    {availableLevels.map((level) => (
+                      <option key={level.id} value={level.id}>
+                        {level.level_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              
+              {/* For Modular - Select Modules */}
+              {filters.registration_category === 'modular' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Modules (for Modular candidates)
+                  </label>
+                  <div className="max-h-48 overflow-y-auto border border-gray-300 rounded-lg p-2 space-y-2">
+                    {availableModules.map((module) => (
+                      <label key={module.id} className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedModules.includes(module.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedModules([...selectedModules, module.id]);
+                            } else {
+                              setSelectedModules(selectedModules.filter(id => id !== module.id));
+                            }
+                          }}
+                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        <span className="text-sm text-gray-700">
+                          {module.module_code} - {module.module_name}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Selected: {selectedModules.length} module(s)
+                  </p>
+                </div>
+              )}
+              
+              {/* General message if no category filter */}
+              {!filters.registration_category && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-sm text-amber-800">
+                    Please filter by Category (Formal/Modular) to select appropriate level or modules.
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end space-x-3 px-6 py-4 border-t bg-gray-50 rounded-b-lg">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowUpdateEnrollmentModal(false);
+                  setSelectedLevel('');
+                  setSelectedModules([]);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleBulkUpdateEnrollment}
+                loading={isProcessing}
+                disabled={isProcessing || (!selectedLevel && selectedModules.length === 0)}
+              >
+                Update Enrollments
               </Button>
             </div>
           </div>

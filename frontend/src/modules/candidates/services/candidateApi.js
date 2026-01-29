@@ -278,6 +278,11 @@ export const candidateApi = {
   bulkClearEnrollmentData: (data) => {
     return apiClient.post(`${CANDIDATES_BASE}/enrollments/bulk-clear-data/`, data);
   },
+
+  // Bulk update enrollments (set level/modules/papers)
+  bulkUpdateEnrollment: (data) => {
+    return apiClient.post(`${CANDIDATES_BASE}/enrollments/bulk-update/`, data);
+  },
 };
 
 export default candidateApi;

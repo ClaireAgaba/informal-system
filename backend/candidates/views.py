@@ -2583,3 +2583,124 @@ def bulk_clear_enrollment_data(request):
         'message': f'Successfully cleared data for {total_cleared["enrollments"]} enrollment(s)',
         'cleared': total_cleared
     }, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def bulk_update_enrollment(request):
+    """Bulk update enrollments - set level for formal, modules for modular, papers for workers_pas"""
+    enrollment_ids = request.data.get('enrollment_ids', [])
+    select_all = request.data.get('select_all', False)
+    filters = request.data.get('filters', {})
+    
+    # Update data
+    level_id = request.data.get('level_id')  # For formal candidates
+    module_ids = request.data.get('module_ids', [])  # For modular candidates
+    paper_ids = request.data.get('paper_ids', [])  # For workers_pas candidates
+    
+    from occupations.models import OccupationLevel, OccupationModule, OccupationPaper
+    
+    # Get enrollments to update
+    if select_all:
+        queryset = CandidateEnrollment.objects.select_related(
+            'candidate', 'assessment_series', 'occupation_level'
+        ).all()
+        
+        if filters.get('registration_category'):
+            queryset = queryset.filter(candidate__registration_category=filters['registration_category'])
+        if filters.get('assessment_series'):
+            queryset = queryset.filter(assessment_series_id=filters['assessment_series'])
+        if filters.get('assessment_center'):
+            queryset = queryset.filter(candidate__assessment_center_id=filters['assessment_center'])
+        if filters.get('occupation'):
+            queryset = queryset.filter(
+                Q(occupation_level__occupation_id=filters['occupation']) |
+                Q(candidate__occupation_id=filters['occupation'])
+            )
+        if filters.get('search'):
+            queryset = queryset.filter(
+                Q(candidate__registration_number__icontains=filters['search']) |
+                Q(candidate__full_name__icontains=filters['search'])
+            )
+        enrollments = list(queryset)
+    else:
+        if not enrollment_ids:
+            return Response(
+                {'error': 'No enrollments selected'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        enrollments = list(CandidateEnrollment.objects.select_related('candidate').filter(id__in=enrollment_ids))
+    
+    # Validate level if provided
+    level = None
+    if level_id:
+        try:
+            level = OccupationLevel.objects.get(id=level_id)
+        except OccupationLevel.DoesNotExist:
+            return Response({'error': 'Level not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Validate modules if provided
+    modules = []
+    if module_ids:
+        modules = list(OccupationModule.objects.filter(id__in=module_ids))
+        if len(modules) != len(module_ids):
+            return Response({'error': 'Some modules not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Validate papers if provided
+    papers = []
+    if paper_ids:
+        papers = list(OccupationPaper.objects.filter(id__in=paper_ids))
+        if len(papers) != len(paper_ids):
+            return Response({'error': 'Some papers not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    updated_count = 0
+    skipped = []
+    
+    for enrollment in enrollments:
+        candidate = enrollment.candidate
+        reg_category = candidate.registration_category
+        
+        try:
+            if reg_category == 'formal' and level:
+                # Update level for formal candidates
+                enrollment.occupation_level = level
+                enrollment.save()
+                updated_count += 1
+                
+            elif reg_category == 'modular' and modules:
+                # Clear existing modules and add new ones
+                EnrollmentModule.objects.filter(enrollment=enrollment).delete()
+                for module in modules:
+                    EnrollmentModule.objects.create(enrollment=enrollment, module=module)
+                # Set the level from the first module
+                if modules:
+                    enrollment.occupation_level = modules[0].level
+                    enrollment.save()
+                updated_count += 1
+                
+            elif reg_category == 'workers_pas' and papers:
+                # Clear existing papers and add new ones
+                EnrollmentPaper.objects.filter(enrollment=enrollment).delete()
+                for paper in papers:
+                    EnrollmentPaper.objects.create(enrollment=enrollment, paper=paper)
+                updated_count += 1
+                
+            else:
+                skipped.append({
+                    'enrollment_id': enrollment.id,
+                    'candidate': candidate.full_name,
+                    'reason': f'No matching update data for {reg_category} category'
+                })
+        except Exception as e:
+            skipped.append({
+                'enrollment_id': enrollment.id,
+                'candidate': candidate.full_name,
+                'reason': str(e)
+            })
+    
+    return Response({
+        'message': f'Successfully updated {updated_count} enrollment(s)',
+        'updated_count': updated_count,
+        'skipped': skipped
+    }, status=status.HTTP_200_OK)
