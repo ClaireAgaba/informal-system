@@ -157,9 +157,13 @@ class Command(BaseCommand):
         reg_category = candidate.registration_category
         
         if reg_category == 'formal':
-            # Formal: based on level
+            # Formal: based on level (extract number from level_name like "Level 1")
             if enrollment.occupation_level:
-                level_num = enrollment.occupation_level.level_number
+                level_name = enrollment.occupation_level.level_name
+                # Extract number from level name (e.g., "Level 1" -> 1)
+                import re
+                match = re.search(r'\d+', level_name)
+                level_num = int(match.group()) if match else 0
                 return self.FORMAL_FEES.get(level_num, 0)
             return 0
         
@@ -181,7 +185,7 @@ class Command(BaseCommand):
         
         if reg_category == 'formal':
             if enrollment.occupation_level:
-                return f"Level {enrollment.occupation_level.level_number}"
+                return enrollment.occupation_level.level_name
             return "No level"
         
         elif reg_category == 'modular':
