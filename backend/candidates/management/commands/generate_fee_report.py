@@ -4,9 +4,9 @@ Management command to generate fee report Excel workbook.
 Calculates fees based on enrollment data for candidates who may not have fees set.
 
 Fee Structure:
-- Formal: Level 1 = 80,000, Level 2 = 100,000, Level 3 = 150,000
+- Formal: Level 1 = 80,000, Level 2 = 100,000, Level 3 = 150,000, Level 4 = 220,000
 - Modular: 1 module = 70,000, 2 modules = 90,000
-- Worker's PAS: 2 papers = 150,000, 3 papers = 225,000, 4 papers = 300,000
+- Worker's PAS: 1 paper = 75,000, 2 papers = 150,000, 3 papers = 225,000, 4 papers = 300,000
 
 Usage:
     python manage.py generate_fee_report
@@ -34,6 +34,7 @@ class Command(BaseCommand):
         1: 80000,   # Level 1
         2: 100000,  # Level 2
         3: 150000,  # Level 3
+        4: 220000,  # Level 4
     }
     
     MODULAR_FEES = {
@@ -42,6 +43,7 @@ class Command(BaseCommand):
     }
     
     WORKERS_PAS_FEES = {
+        1: 75000,   # 1 paper
         2: 150000,  # 2 papers
         3: 225000,  # 3 papers
         4: 300000,  # 4 papers
