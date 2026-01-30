@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { FileSpreadsheet, Download, Search, ChevronRight } from 'lucide-react';
+import { FileDown, Search, ChevronRight } from 'lucide-react';
 import apiClient from '../../../services/apiClient';
 import marksheetsApi from '../api/marksheetsApi';
 
-export default function GenerateMarksheets() {
+export default function ExportResults() {
   const [formData, setFormData] = useState({
     assessment_series: '',
     registration_category: '',
@@ -16,7 +16,6 @@ export default function GenerateMarksheets() {
   });
 
   const [selectedModule, setSelectedModule] = useState(null);
-  const [selectedPapers, setSelectedPapers] = useState([]);
   const [moduleSearch, setModuleSearch] = useState('');
   const [occupationSearch, setOccupationSearch] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -28,22 +27,20 @@ export default function GenerateMarksheets() {
     queryKey: ['assessment-series'],
     queryFn: async () => {
       const response = await apiClient.get('/assessment-series/series/');
-      // Handle both paginated and non-paginated responses
       return response.data.results || response.data;
     },
   });
 
-  // Fetch occupations (all - no pagination on backend)
+  // Fetch occupations
   const { data: occupationsData } = useQuery({
     queryKey: ['occupations-all'],
     queryFn: async () => {
       const response = await apiClient.get('/occupations/occupations/', { params: { page_size: 1000 } });
-      // Handle both paginated and non-paginated responses
       return response.data.results || response.data;
     },
   });
 
-  // Fetch levels for selected occupation (for formal and workers_pas)
+  // Fetch levels
   const { data: levelsData } = useQuery({
     queryKey: ['occupation-levels', formData.occupation],
     queryFn: async () => {
@@ -53,7 +50,7 @@ export default function GenerateMarksheets() {
     enabled: !!formData.occupation && (formData.registration_category === 'formal' || formData.registration_category === 'workers_pas'),
   });
 
-  // Fetch modules for selected occupation (for modular)
+  // Fetch modules for modular
   const { data: modulesData } = useQuery({
     queryKey: ['occupation-modules', formData.occupation],
     queryFn: async () => {
@@ -63,27 +60,7 @@ export default function GenerateMarksheets() {
     enabled: !!formData.occupation && formData.registration_category === 'modular',
   });
 
-  // Fetch modules for selected level (for formal module-based)
-  const { data: levelModulesData } = useQuery({
-    queryKey: ['level-modules', formData.level],
-    queryFn: async () => {
-      const response = await apiClient.get(`/occupations/modules/by_level/?level_id=${formData.level}`);
-      return response.data.results || response.data;
-    },
-    enabled: !!formData.level && formData.registration_category === 'formal',
-  });
-
-  // Fetch papers for selected level (for formal paper-based)
-  const { data: papersData } = useQuery({
-    queryKey: ['level-papers', formData.level],
-    queryFn: async () => {
-      const response = await apiClient.get(`/occupations/papers/by-occupation/?occupation=${formData.occupation}`);
-      return response.data.results || response.data;
-    },
-    enabled: !!formData.level && formData.registration_category === 'formal',
-  });
-
-  // Fetch assessment centers (all - no pagination)
+  // Fetch assessment centers
   const { data: centersData } = useQuery({
     queryKey: ['assessment-centers'],
     queryFn: async () => {
@@ -96,22 +73,16 @@ export default function GenerateMarksheets() {
   const allOccupations = Array.isArray(occupationsData) ? occupationsData : [];
   const levels = Array.isArray(levelsData) ? levelsData : [];
   const modules = Array.isArray(modulesData) ? modulesData : [];
-  const levelModules = Array.isArray(levelModulesData) ? levelModulesData : [];
-  const papers = Array.isArray(papersData) ? papersData : [];
   const centers = Array.isArray(centersData) ? centersData : [];
 
-  // Determine structure type from selected level
   const selectedLevel = levels.find(l => l.id === parseInt(formData.level));
-  const structureType = selectedLevel?.structure_type; // 'modules' or 'papers'
+  const structureType = selectedLevel?.structure_type;
 
-  // Filter occupations by registration category
   const occupations = formData.registration_category
     ? allOccupations.filter(occ => {
-      // Modular: only occupations that support modular (has_modular = true)
       if (formData.registration_category === 'modular') {
         return occ.has_modular === true;
       }
-      // Formal and Workers PAS must match occupation category
       return occ.occ_category === formData.registration_category;
     })
     : allOccupations;
@@ -128,25 +99,19 @@ export default function GenerateMarksheets() {
       [name]: value
     }));
 
-    // Reset occupation, level and module when registration category changes
     if (name === 'registration_category') {
       setFormData(prev => ({ ...prev, occupation: '', level: '', module: '' }));
       setSelectedModule(null);
-      setSelectedPapers([]);
     }
 
-    // Reset level and module when occupation changes
     if (name === 'occupation') {
       setFormData(prev => ({ ...prev, level: '', module: '' }));
       setSelectedModule(null);
-      setSelectedPapers([]);
     }
 
-    // Reset module/papers when level changes
     if (name === 'level') {
       setFormData(prev => ({ ...prev, module: '' }));
       setSelectedModule(null);
-      setSelectedPapers([]);
     }
   };
 
@@ -159,7 +124,6 @@ export default function GenerateMarksheets() {
     setError('');
     setSuccess('');
 
-    // Validation
     if (!formData.assessment_series || !formData.registration_category || !formData.occupation) {
       setError('Please fill in all required fields');
       return;
@@ -182,37 +146,35 @@ export default function GenerateMarksheets() {
       let filename;
 
       if (formData.registration_category === 'modular') {
-        // Generate modular marksheet
-        response = await marksheetsApi.generateModularMarksheet({
+        response = await marksheetsApi.exportModularResults({
           assessment_series: formData.assessment_series,
           occupation: formData.occupation,
           module: formData.module,
           assessment_center: formData.assessment_center || null,
         });
-        filename = `Marksheet_Modular_${selectedModule?.module_code}.xlsx`;
+        filename = `Results_Modular_${selectedModule?.module_code}.xlsx`;
       } else if (formData.registration_category === 'formal') {
-        // Generate formal marksheet (module-based or paper-based)
-        response = await marksheetsApi.generateFormalMarksheet({
+        response = await marksheetsApi.exportFormalResults({
           assessment_series: formData.assessment_series,
           occupation: formData.occupation,
           level: formData.level,
           structure_type: structureType,
           assessment_center: formData.assessment_center || null,
         });
-        filename = `Marksheet_Formal_${selectedLevel?.level_name}.xlsx`;
+        filename = `Results_Formal_${selectedLevel?.level_name}.xlsx`;
       } else if (formData.registration_category === 'workers_pas') {
-        // Generate Worker's PAS marksheet with highlighted papers
-        response = await marksheetsApi.generateWorkersPasMarksheet({
+        response = await marksheetsApi.exportWorkersPasResults({
           assessment_series: formData.assessment_series,
           occupation: formData.occupation,
           level: formData.level,
           assessment_center: formData.assessment_center || null,
         });
-        filename = `Marksheet_WorkersPAS_${selectedLevel?.level_name}.xlsx`;
+        filename = `Results_WorkersPAS_${selectedLevel?.level_name}.xlsx`;
       }
 
-      // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const url = window.URL.createObjectURL(new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      }));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', filename);
@@ -221,12 +183,12 @@ export default function GenerateMarksheets() {
       link.remove();
       window.URL.revokeObjectURL(url);
 
-      setSuccess('Marksheet generated successfully!');
+      setSuccess('Results exported successfully!');
     } catch (err) {
       if (err.response?.status === 404) {
         setError('No enrolled candidates found for the selected parameters');
       } else {
-        setError(err.response?.data?.error || 'Failed to generate marksheet');
+        setError(err.response?.data?.error || 'Failed to export results');
       }
     } finally {
       setIsGenerating(false);
@@ -237,24 +199,25 @@ export default function GenerateMarksheets() {
     <div className="p-6">
       <div className="mb-6">
         <div className="flex items-center text-sm text-gray-500 mb-4">
-          <Link to="/dashboard" className="hover:text-blue-600 flex items-center">
+          <Link to="/dashboard" className="hover:text-green-600 flex items-center">
             Dashboard
           </Link>
           <ChevronRight className="h-4 w-4 mx-2" />
-          <Link to="/marksheets" className="hover:text-blue-600">
+          <Link to="/marksheets" className="hover:text-green-600">
             Marksheets
           </Link>
           <ChevronRight className="h-4 w-4 mx-2" />
-          <span className="text-gray-900 font-medium">Generate Marksheets</span>
+          <span className="text-gray-900 font-medium">Export Results</span>
         </div>
 
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <FileSpreadsheet className="h-7 w-7 text-blue-600" />
-          Generate Marksheet Template
+          <FileDown className="h-7 w-7 text-green-600" />
+          Export Results
         </h1>
-        <p className="text-gray-600 mt-1">Generate Excel marksheet templates for modular assessments</p>
+        <p className="text-gray-600 mt-1">Export candidate results to Excel</p>
       </div>
 
+      {/* Render Error and Success messages */}
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
           {error}
@@ -268,7 +231,7 @@ export default function GenerateMarksheets() {
       )}
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        {/* Assessment Series, Registration Category, Occupation */}
+        {/* Form Fields - Reused from GenerateMarksheets but cleaned up */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -326,7 +289,6 @@ export default function GenerateMarksheets() {
                     occ.occ_name?.toLowerCase().includes(occupationSearch.toLowerCase()) ||
                     occ.occ_code?.toLowerCase().includes(occupationSearch.toLowerCase())
                   )
-                  // .slice(0, 20) - Removed to show all results
                   .map(occ => (
                     <div
                       key={occ.id}
@@ -349,7 +311,6 @@ export default function GenerateMarksheets() {
             )}
           </div>
 
-          {/* Level field - for formal and workers_pas */}
           {(formData.registration_category === 'formal' || formData.registration_category === 'workers_pas') && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -375,7 +336,6 @@ export default function GenerateMarksheets() {
           )}
         </div>
 
-        {/* Module Selection - For Modular */}
         {formData.registration_category === 'modular' && formData.occupation && (
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -428,8 +388,6 @@ export default function GenerateMarksheets() {
           </div>
         )}
 
-
-        {/* Assessment Center (Optional) */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Assessment Center (optional)
@@ -449,7 +407,6 @@ export default function GenerateMarksheets() {
           </select>
         </div>
 
-        {/* Action Buttons */}
         <div className="flex justify-end gap-3">
           <button
             onClick={() => {
@@ -462,7 +419,6 @@ export default function GenerateMarksheets() {
                 assessment_center: '',
               });
               setSelectedModule(null);
-              setSelectedPapers([]);
               setError('');
               setSuccess('');
             }}
@@ -478,10 +434,10 @@ export default function GenerateMarksheets() {
               (formData.registration_category === 'formal' && !formData.level) ||
               (formData.registration_category === 'workers_pas' && !formData.level)
             }
-            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
-            <Download className="h-4 w-4" />
-            {isGenerating ? 'Generating...' : 'Generate Marksheet'}
+            <FileDown className="h-4 w-4" />
+            {isGenerating ? 'Exporting Results...' : 'Export Excel'}
           </button>
         </div>
       </div>

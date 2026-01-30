@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { FileSpreadsheet, Upload, Printer } from 'lucide-react';
+import { FileSpreadsheet, Upload, Printer, FileDown, ChevronRight } from 'lucide-react';
 
 export default function MarksheetsIndex() {
   const submodules = [
@@ -24,11 +24,26 @@ export default function MarksheetsIndex() {
       path: '/marksheets/print',
       color: 'purple',
     },
+    {
+      name: 'Export Results',
+      description: 'Export candidate results to Excel',
+      icon: FileDown,
+      path: '/marksheets/export',
+      color: 'green',
+    },
   ];
 
   return (
     <div className="p-6">
       <div className="mb-6">
+        <div className="flex items-center text-sm text-gray-500 mb-4">
+          <Link to="/dashboard" className="hover:text-blue-600 flex items-center">
+            Dashboard
+          </Link>
+          <ChevronRight className="h-4 w-4 mx-2" />
+          <span className="text-gray-900 font-medium">Marksheets</span>
+        </div>
+
         <h1 className="text-2xl font-bold text-gray-900">Marksheets</h1>
         <p className="text-gray-600 mt-1">Manage assessment marksheets</p>
       </div>

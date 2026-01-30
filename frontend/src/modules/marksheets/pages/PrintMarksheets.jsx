@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Printer, Search } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Printer, Search, ChevronRight } from 'lucide-react';
 import apiClient from '../../../services/apiClient';
 import marksheetsApi from '../api/marksheetsApi';
 
@@ -192,6 +193,18 @@ export default function PrintMarksheets() {
   return (
     <div className="p-6">
       <div className="mb-6">
+        <div className="flex items-center text-sm text-gray-500 mb-4">
+          <Link to="/dashboard" className="hover:text-purple-600 flex items-center">
+            Dashboard
+          </Link>
+          <ChevronRight className="h-4 w-4 mx-2" />
+          <Link to="/marksheets" className="hover:text-purple-600">
+            Marksheets
+          </Link>
+          <ChevronRight className="h-4 w-4 mx-2" />
+          <span className="text-gray-900 font-medium">Print Marksheets</span>
+        </div>
+
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Printer className="h-7 w-7 text-purple-600" />
           Print Marksheets

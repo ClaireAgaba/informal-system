@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Search } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Search, ChevronRight } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../../services/apiClient';
 import marksheetsApi from '../api/marksheetsApi';
@@ -75,11 +76,11 @@ export default function UploadMarksheets() {
   // Filter occupations based on registration category
   const occupations = formData.registration_category
     ? allOccupations.filter(occ => {
-        if (formData.registration_category === 'modular') {
-          return occ.has_modular === true;
-        }
-        return occ.occ_category === formData.registration_category;
-      })
+      if (formData.registration_category === 'modular') {
+        return occ.has_modular === true;
+      }
+      return occ.occ_category === formData.registration_category;
+    })
     : [];
 
   // Filter modules based on search
@@ -93,7 +94,7 @@ export default function UploadMarksheets() {
     setFormData(prev => ({ ...prev, [name]: value }));
     setError('');
     setUploadResult(null);
-    
+
     if (name === 'registration_category') {
       setFormData(prev => ({ ...prev, occupation: '', module: '', level: '' }));
     }
@@ -121,13 +122,13 @@ export default function UploadMarksheets() {
       const formDataToSend = new FormData();
       formDataToSend.append('assessment_series', data.assessment_series);
       formDataToSend.append('occupation', data.occupation);
-      
+
       if (data.registration_category === 'modular') {
         formDataToSend.append('module', data.module);
       } else if (data.registration_category === 'formal' || data.registration_category === 'workers_pas') {
         formDataToSend.append('level', data.level);
       }
-      
+
       if (data.assessment_center) {
         formDataToSend.append('assessment_center', data.assessment_center);
       }
@@ -167,7 +168,7 @@ export default function UploadMarksheets() {
       // Check if the error response has detailed error information
       if (err.response?.data) {
         const responseData = err.response.data;
-        
+
         // If there's a message and errors array, show them as upload result
         if (responseData.message && responseData.errors) {
           setUploadResult(responseData);
@@ -188,17 +189,17 @@ export default function UploadMarksheets() {
       setError('Please fill in all required fields');
       return;
     }
-    
+
     if (formData.registration_category === 'modular' && !formData.module) {
       setError('Please select a module');
       return;
     }
-    
+
     if ((formData.registration_category === 'formal' || formData.registration_category === 'workers_pas') && !formData.level) {
       setError('Please select a level');
       return;
     }
-    
+
     if (!selectedFile) {
       setError('Please select an Excel file to upload');
       return;
@@ -213,6 +214,18 @@ export default function UploadMarksheets() {
   return (
     <div className="p-6">
       <div className="mb-6">
+        <div className="flex items-center text-sm text-gray-500 mb-4">
+          <Link to="/dashboard" className="hover:text-green-600 flex items-center">
+            Dashboard
+          </Link>
+          <ChevronRight className="h-4 w-4 mx-2" />
+          <Link to="/marksheets" className="hover:text-green-600">
+            Marksheets
+          </Link>
+          <ChevronRight className="h-4 w-4 mx-2" />
+          <span className="text-gray-900 font-medium">Upload Marksheets</span>
+        </div>
+
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Upload className="h-7 w-7 text-green-600" />
           Upload Marksheets
@@ -403,11 +416,10 @@ export default function UploadMarksheets() {
 
         {/* Success/Warning/Error Message */}
         {uploadResult && (
-          <div className={`mb-4 p-4 rounded-lg border ${
-            uploadResult.updated_count > 0 
-              ? 'bg-green-50 border-green-200' 
-              : 'bg-red-50 border-red-200'
-          }`}>
+          <div className={`mb-4 p-4 rounded-lg border ${uploadResult.updated_count > 0
+            ? 'bg-green-50 border-green-200'
+            : 'bg-red-50 border-red-200'
+            }`}>
             <div className="flex items-start gap-2 mb-2">
               {uploadResult.updated_count > 0 ? (
                 <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
@@ -415,30 +427,25 @@ export default function UploadMarksheets() {
                 <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
               )}
               <div className="flex-1">
-                <p className={`text-sm font-medium ${
-                  uploadResult.updated_count > 0 ? 'text-green-800' : 'text-red-800'
-                }`}>
+                <p className={`text-sm font-medium ${uploadResult.updated_count > 0 ? 'text-green-800' : 'text-red-800'
+                  }`}>
                   {uploadResult.message}
                 </p>
-                <p className={`text-sm mt-1 ${
-                  uploadResult.updated_count > 0 ? 'text-green-700' : 'text-red-700'
-                }`}>
+                <p className={`text-sm mt-1 ${uploadResult.updated_count > 0 ? 'text-green-700' : 'text-red-700'
+                  }`}>
                   Updated: {uploadResult.updated_count} | Skipped: {uploadResult.skipped_count}
                 </p>
               </div>
             </div>
             {uploadResult.errors && uploadResult.errors.length > 0 && (
-              <div className={`mt-3 pt-3 border-t ${
-                uploadResult.updated_count > 0 ? 'border-green-200' : 'border-red-200'
-              }`}>
-                <p className={`text-sm font-medium mb-2 ${
-                  uploadResult.updated_count > 0 ? 'text-green-800' : 'text-red-800'
+              <div className={`mt-3 pt-3 border-t ${uploadResult.updated_count > 0 ? 'border-green-200' : 'border-red-200'
                 }`}>
+                <p className={`text-sm font-medium mb-2 ${uploadResult.updated_count > 0 ? 'text-green-800' : 'text-red-800'
+                  }`}>
                   {uploadResult.updated_count > 0 ? 'Issues encountered:' : 'Errors:'}
                 </p>
-                <ul className={`list-disc list-inside space-y-1 text-sm max-h-40 overflow-y-auto ${
-                  uploadResult.updated_count > 0 ? 'text-green-700' : 'text-red-700'
-                }`}>
+                <ul className={`list-disc list-inside space-y-1 text-sm max-h-40 overflow-y-auto ${uploadResult.updated_count > 0 ? 'text-green-700' : 'text-red-700'
+                  }`}>
                   {uploadResult.errors.map((err, idx) => (
                     <li key={idx}>{err}</li>
                   ))}
@@ -453,8 +460,8 @@ export default function UploadMarksheets() {
           <button
             onClick={handleUpload}
             disabled={
-              uploadMutation.isPending || 
-              !selectedFile || 
+              uploadMutation.isPending ||
+              !selectedFile ||
               (formData.registration_category === 'modular' && !formData.module) ||
               ((formData.registration_category === 'formal' || formData.registration_category === 'workers_pas') && !formData.level)
             }

@@ -1312,14 +1312,368 @@ class MarksheetViewSet(viewsets.ViewSet):
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ]))
         
-        elements.append(table)
-        elements.extend(extra_elements)
         doc.build(elements, onFirstPage=lambda c, d: self._header_footer(c, d, title_text, subtitle_text),
                   onLaterPages=lambda c, d: self._header_footer(c, d, title_text, subtitle_text))
         
         pdf = buffer.getvalue()
         buffer.close()
         response.write(pdf)
+        return response
+
+    @action(detail=False, methods=['post'], url_path='export-modular')
+    def export_modular_results(self, request):
+        """Export modular results to Excel"""
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, Border, Side
+        
+        assessment_series_id = request.data.get('assessment_series')
+        occupation_id = request.data.get('occupation')
+        module_id = request.data.get('module')
+        assessment_center_id = request.data.get('assessment_center')
+        
+        if not all([assessment_series_id, occupation_id, module_id]):
+            return Response(
+                {'error': 'Assessment series, occupation, and module are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        try:
+            assessment_series = AssessmentSeries.objects.get(id=assessment_series_id)
+            module = OccupationModule.objects.get(id=module_id, occupation_id=occupation_id)
+        except (AssessmentSeries.DoesNotExist, OccupationModule.DoesNotExist):
+            return Response(
+                {'error': 'Invalid assessment series or module'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        enrollments = EnrollmentModule.objects.filter(
+            module=module,
+            enrollment__assessment_series=assessment_series,
+            enrollment__candidate__registration_category='modular'
+        ).select_related(
+            'enrollment__candidate',
+            'enrollment__candidate__occupation'
+        ).order_by('enrollment__candidate__registration_number')
+        
+        if assessment_center_id:
+            enrollments = enrollments.filter(
+                enrollment__candidate__assessment_center_id=assessment_center_id
+            )
+            
+        if not enrollments.exists():
+            return Response(
+                {'error': 'No candidates found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Results"
+        
+        # Headers
+        headers = ['SN', 'Reg No', 'Name', 'Mark']
+        ws.append(headers)
+        
+        # Style headers
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='center')
+            
+        for idx, em in enumerate(enrollments, 1):
+            cand = em.enrollment.candidate
+            try:
+                result = ModularResult.objects.get(
+                    candidate=cand,
+                    assessment_series=assessment_series,
+                    module=module
+                )
+                mark = result.mark if result.mark is not None else ''
+            except ModularResult.DoesNotExist:
+                mark = ''
+                
+            ws.append([idx, cand.registration_number, cand.full_name, mark])
+            
+        # Auto-adjust column widths
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter # Get the column name
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            ws.column_dimensions[column].width = adjusted_width
+
+            adjusted_width = (max_length + 2)
+            ws.column_dimensions[column].width = adjusted_width
+
+        from io import BytesIO
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        
+        response = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        filename = f"Results_{module.module_code}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
+
+    @action(detail=False, methods=['post'], url_path='export-formal')
+    def export_formal_results(self, request):
+        """Export formal results to Excel"""
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, Border, Side
+        from results.models import FormalResult
+        
+        assessment_series_id = request.data.get('assessment_series')
+        occupation_id = request.data.get('occupation')
+        level_id = request.data.get('level')
+        structure_type = request.data.get('structure_type')
+        assessment_center_id = request.data.get('assessment_center')
+        
+        if not all([assessment_series_id, occupation_id, level_id]):
+            return Response(
+                {'error': 'Assessment series, occupation, and level are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        try:
+            assessment_series = AssessmentSeries.objects.get(id=assessment_series_id)
+            level = OccupationLevel.objects.get(id=level_id, occupation_id=occupation_id)
+        except (AssessmentSeries.DoesNotExist, OccupationLevel.DoesNotExist):
+            return Response(
+                {'error': 'Invalid assessment series or level'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        candidates = Candidate.objects.filter(
+            occupation_id=occupation_id,
+            registration_category='formal',
+            enrollments__assessment_series=assessment_series,
+            enrollments__occupation_level=level
+        ).select_related('occupation', 'assessment_center').distinct().order_by('registration_number')
+        
+        if assessment_center_id:
+            candidates = candidates.filter(assessment_center_id=assessment_center_id)
+            
+        if not candidates.exists():
+            return Response(
+                {'error': 'No candidates found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Results"
+        
+        if structure_type == 'papers':
+            papers = list(OccupationPaper.objects.filter(level=level).order_by('paper_code'))
+            headers = ['SN', 'Reg No', 'Name'] + [p.paper_code for p in papers]
+            ws.append(headers)
+            
+            for idx, cand in enumerate(candidates, 1):
+                row = [idx, cand.registration_number, cand.full_name]
+                for paper in papers:
+                    try:
+                        result = FormalResult.objects.get(
+                            candidate=cand,
+                            assessment_series=assessment_series,
+                            level=level,
+                            paper=paper
+                        )
+                        row.append(result.mark if result.mark is not None else '')
+                    except FormalResult.DoesNotExist:
+                        row.append('')
+                ws.append(row)
+        else:
+            headers = ['SN', 'Reg No', 'Name', 'Theory', 'Practical']
+            ws.append(headers)
+            
+            for idx, cand in enumerate(candidates, 1):
+                row = [idx, cand.registration_number, cand.full_name]
+                # Theory
+                try:
+                    res_t = FormalResult.objects.get(candidate=cand, assessment_series=assessment_series, level=level, type='theory')
+                    row.append(res_t.mark if res_t.mark is not None else '')
+                except FormalResult.DoesNotExist:
+                    row.append('')
+                # Practical
+                try:
+                    res_p = FormalResult.objects.get(candidate=cand, assessment_series=assessment_series, level=level, type='practical')
+                    row.append(res_p.mark if res_p.mark is not None else '')
+                except FormalResult.DoesNotExist:
+                    row.append('')
+                ws.append(row)
+
+        # Append Paper Key for Paper-based structure
+        if structure_type == 'papers':
+            ws.append([])  # Empty row
+            ws.append([])  # Empty row
+            ws.append(['Paper Codes Description:'])
+            ws['A' + str(ws.max_row)].font = Font(bold=True)
+            
+            ws.append(['Code', 'Paper Name'])
+            # Style the key header
+            for cell in ws[ws.max_row]:
+                cell.font = Font(bold=True)
+                cell.border = Border(bottom=Side(style='thin'))
+                
+            for p in papers:
+                ws.append([p.paper_code, p.paper_name])
+
+        # Style headers
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='center')
+
+        # Auto-adjust column widths
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            ws.column_dimensions[column].width = adjusted_width
+
+            adjusted_width = (max_length + 2)
+            ws.column_dimensions[column].width = adjusted_width
+
+        from io import BytesIO
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+
+        response = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        filename = f"Results_Formal_{level.level_name}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
+
+    @action(detail=False, methods=['post'], url_path='export-workers-pas')
+    def export_workers_pas_results(self, request):
+        """Export Workers PAS results to Excel"""
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, Border, Side
+        from results.models import WorkersPasResult
+        
+        assessment_series_id = request.data.get('assessment_series')
+        occupation_id = request.data.get('occupation')
+        level_id = request.data.get('level')
+        assessment_center_id = request.data.get('assessment_center')
+        
+        if not all([assessment_series_id, occupation_id, level_id]):
+            return Response(
+                {'error': 'Assessment series, occupation, and level are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        try:
+            assessment_series = AssessmentSeries.objects.get(id=assessment_series_id)
+            level = OccupationLevel.objects.get(id=level_id, occupation_id=occupation_id)
+        except (AssessmentSeries.DoesNotExist, OccupationLevel.DoesNotExist):
+            return Response(
+                {'error': 'Invalid assessment series or level'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        papers = list(OccupationPaper.objects.filter(level=level).order_by('paper_code'))
+            
+        enrollments = CandidateEnrollment.objects.filter(
+            assessment_series=assessment_series,
+            candidate__occupation_id=occupation_id,
+            candidate__registration_category='workers_pas',
+            papers__paper__level=level
+        ).select_related('candidate', 'candidate__occupation').prefetch_related(
+            'papers__paper'
+        ).distinct().order_by('candidate__registration_number')
+        
+        if assessment_center_id:
+            enrollments = enrollments.filter(candidate__assessment_center_id=assessment_center_id)
+            
+        if not enrollments.exists():
+            return Response(
+                {'error': 'No candidates found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Results"
+        
+        headers = ['SN', 'Reg No', 'Name'] + [p.paper_code for p in papers]
+        ws.append(headers)
+        
+        for idx, enrollment in enumerate(enrollments, 1):
+            cand = enrollment.candidate
+            row = [idx, cand.registration_number, cand.full_name]
+            enrolled_paper_ids = set(enrollment.papers.values_list('paper_id', flat=True))
+            
+            for paper in papers:
+                if paper.id not in enrolled_paper_ids:
+                    row.append('N/A')
+                else:
+                    try:
+                        result = WorkersPasResult.objects.get(
+                            candidate=cand,
+                            assessment_series=assessment_series,
+                            paper=paper
+                        )
+                        row.append(result.mark if result.mark is not None else '')
+                    except WorkersPasResult.DoesNotExist:
+                        row.append('')
+            ws.append(row)
+
+        # Append Paper Key for Workers PAS
+        ws.append([])  # Empty row
+        ws.append([])  # Empty row
+        ws.append(['Paper Codes Description:'])
+        ws['A' + str(ws.max_row)].font = Font(bold=True)
+        
+        ws.append(['Code', 'Paper Name'])
+        # Style the key header
+        for cell in ws[ws.max_row]:
+            cell.font = Font(bold=True)
+            cell.border = Border(bottom=Side(style='thin'))
+            
+        for p in papers:
+            ws.append([p.paper_code, p.paper_name])
+
+        # Style headers
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='center')
+
+        # Auto-adjust column widths
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            ws.column_dimensions[column].width = adjusted_width
+
+            adjusted_width = (max_length + 2)
+            ws.column_dimensions[column].width = adjusted_width
+
+        from io import BytesIO
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+
+        response = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        filename = f"Results_WorkersPAS_{level.level_name}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
         return response
 
     @action(detail=False, methods=['post'], url_path='print-workers-pas')

@@ -36,6 +36,24 @@ const marksheetsApi = {
       responseType: 'blob'
     });
   },
+
+  exportModularResults: (data) => {
+    return apiClient.post('/results/marksheets/export-modular/', data, {
+      responseType: 'blob'
+    });
+  },
+
+  exportFormalResults: (data) => {
+    return apiClient.post('/results/marksheets/export-formal/', data, {
+      responseType: 'blob'
+    });
+  },
+
+  exportWorkersPasResults: (data) => {
+    return apiClient.post('/results/marksheets/export-workers-pas/', data, {
+      responseType: 'blob'
+    });
+  },
 };
 
 export default marksheetsApi;
