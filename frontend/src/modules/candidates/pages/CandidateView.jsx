@@ -773,8 +773,20 @@ const CandidateView = () => {
                       />
                       <InfoItem label="Entry Year" value={candidate.entry_year} />
                       <InfoItem
-                        label="Intake"
-                        value={candidate.intake === 'M' ? 'March' : candidate.intake === 'A' ? 'August' : candidate.intake}
+                        label="Assessment Intake"
+                        value={
+                          candidate.intake === 'M'
+                            ? 'March'
+                            : candidate.intake === 'J'
+                              ? 'June'
+                              : candidate.intake === 'S'
+                                ? 'September'
+                                : candidate.intake === 'D'
+                                  ? 'December'
+                                  : candidate.intake === 'A'
+                                    ? 'August'
+                                    : candidate.intake
+                        }
                       />
                       <InfoItem label="Status" value={candidate.status} />
                       <InfoItem

@@ -23,7 +23,21 @@ const CandidateEdit = () => {
   const [activeTab, setActiveTab] = useState('personal-info');
   const [photoPreview, setPhotoPreview] = useState(null);
 
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors, isDirty } } = useForm();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isDirty },
+    setValue,
+    watch,
+  } = useForm();
+
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const formatDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const today = new Date();
+  const todayStr = formatDate(today);
+  const maxDob = formatDate(new Date(today.getFullYear() - 12, today.getMonth(), today.getDate()));
+  const minDob = formatDate(new Date(today.getFullYear() - 100, today.getMonth(), today.getDate()));
 
   // Fetch candidate details
   const { data, isLoading } = useQuery({
@@ -75,11 +89,17 @@ const CandidateEdit = () => {
     queryFn: () => assessmentCenterApi.getAll(),
   });
 
+  const { data: nationalitiesData } = useQuery({
+    queryKey: ['candidate-nationalities'],
+    queryFn: () => candidateApi.getNationalities(),
+  });
+
   const districts = districtsData?.results || [];
   const villages = villagesData?.results || [];
   const disabilities = disabilitiesData?.results || [];
   const allOccupations = occupationsData?.data?.results || [];
   const centers = centersData?.data?.results || [];
+  const nationalityOptions = nationalitiesData?.data || [];
 
   // Watch registration category to filter occupations
   const registrationCategory = watch('registration_category');
@@ -392,7 +412,18 @@ const CandidateEdit = () => {
                         </label>
                         <input
                           type="date"
-                          {...register('date_of_birth', { required: 'Date of birth is required' })}
+                          min={minDob}
+                          max={maxDob}
+                          {...register('date_of_birth', {
+                            required: 'Date of birth is required',
+                            validate: (value) => {
+                              if (!value) return true;
+                              if (value > todayStr) return 'Date of birth cannot be in the future.';
+                              if (value < minDob) return 'Candidate cannot be older than 100 years.';
+                              if (value > maxDob) return 'Candidate must be at least 12 years old.';
+                              return true;
+                            },
+                          })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                         />
                         {errors.date_of_birth && (
@@ -422,11 +453,19 @@ const CandidateEdit = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Nationality *
                         </label>
-                        <input
-                          type="text"
+                        <select
                           {...register('nationality', { required: 'Nationality is required' })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        />
+                        >
+                          {candidate?.nationality && !nationalityOptions.some((n) => n.value === candidate.nationality) && (
+                            <option value={candidate.nationality}>{candidate.nationality}</option>
+                          )}
+                          {nationalityOptions.map((n) => (
+                            <option key={n.value} value={n.value}>
+                              {n.label}
+                            </option>
+                          ))}
+                        </select>
                         {errors.nationality && (
                           <p className="text-red-500 text-xs mt-1">{errors.nationality.message}</p>
                         )}
@@ -612,7 +651,7 @@ const CandidateEdit = () => {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Intake
+                          Assessment Intake
                         </label>
                         <select
                           {...register('intake')}
@@ -620,7 +659,10 @@ const CandidateEdit = () => {
                         >
                           <option value="">Select Intake</option>
                           <option value="M">March</option>
-                          <option value="A">August</option>
+                          <option value="J">June</option>
+                          <option value="S">September</option>
+                          <option value="D">December</option>
+                          {candidate?.intake === 'A' && <option value="A">August</option>}
                         </select>
                       </div>
 

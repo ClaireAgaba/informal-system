@@ -6,6 +6,7 @@ from occupations.models import Occupation, OccupationLevel, OccupationModule, Oc
 from assessment_series.models import AssessmentSeries
 from users.models import Staff
 from results.models import FormalResult, ModularResult
+from datetime import date
 
 
 class CandidateListSerializer(serializers.ModelSerializer):
@@ -27,6 +28,7 @@ class CandidateListSerializer(serializers.ModelSerializer):
             'nationality', 'is_refugee', 'refugee_number', 'contact',
             'district_name', 'village_name', 'has_disability', 'has_special_needs',
             'assessment_center', 'registration_category', 'occupation', 'sector',
+            'entry_year', 'intake',
             'verification_status', 'status', 'passport_photo', 'enrollments',
             'is_enrolled', 'has_marks',
             'created_at', 'updated_at'
@@ -205,6 +207,7 @@ class CandidateCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Candidate
         fields = [
+            'id',
             'full_name', 'date_of_birth', 'gender', 'nationality',
             'is_refugee', 'refugee_number', 'contact', 'district', 'village',
             'has_disability', 'nature_of_disability', 'disability_specification',
@@ -216,6 +219,39 @@ class CandidateCreateUpdateSerializer(serializers.ModelSerializer):
             'identification_document', 'qualification_document',
             'enrollment_level', 'reg_number', 'status', 'block_portal_results',
         ]
+
+    def validate_intake(self, value):
+        if value in (None, ''):
+            return None
+        allowed = {'M', 'J', 'S', 'D', 'A'}
+        if value not in allowed:
+            raise serializers.ValidationError('Invalid assessment intake. Allowed values are M, J, S, D.')
+        return value
+
+    def validate_date_of_birth(self, value):
+        if value in (None, ''):
+            return value
+
+        today = date.today()
+
+        if value > today:
+            raise serializers.ValidationError('Date of birth cannot be in the future.')
+
+        def shift_years(d, years):
+            try:
+                return d.replace(year=d.year - years)
+            except ValueError:
+                return d.replace(year=d.year - years, month=2, day=28)
+
+        min_dob = shift_years(today, 100)
+        max_dob = shift_years(today, 12)
+
+        if value < min_dob:
+            raise serializers.ValidationError('Candidate cannot be older than 100 years.')
+        if value > max_dob:
+            raise serializers.ValidationError('Candidate must be at least 12 years old.')
+
+        return value
     
     def validate(self, data):
         """Convert empty strings to None for foreign keys"""

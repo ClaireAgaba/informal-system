@@ -1,5 +1,7 @@
 from django.db import models
 from django.core.validators import MinValueValidator
+from django.core.exceptions import ValidationError
+from datetime import date
 from decimal import Decimal
 from configurations.models import District, Village, NatureOfDisability
 from assessment_centers.models import AssessmentCenter, CenterBranch
@@ -17,57 +19,6 @@ class Candidate(models.Model):
         ('other', 'Other'),
     )
     
-    NATIONALITY_CHOICES = (
-        # East African Countries (Priority)
-        ('Uganda', 'Uganda'),
-        ('Kenya', 'Kenya'),
-        ('Tanzania', 'Tanzania'),
-        ('Rwanda', 'Rwanda'),
-        ('Burundi', 'Burundi'),
-        ('South Sudan', 'South Sudan'),
-        ('---', '--- Other Countries ---'),
-        # Other African Countries
-        ('Algeria', 'Algeria'),
-        ('Angola', 'Angola'),
-        ('Benin', 'Benin'),
-        ('Botswana', 'Botswana'),
-        ('Burkina Faso', 'Burkina Faso'),
-        ('Cameroon', 'Cameroon'),
-        ('Central African Republic', 'Central African Republic'),
-        ('Chad', 'Chad'),
-        ('Congo', 'Congo'),
-        ('Democratic Republic of Congo', 'Democratic Republic of Congo'),
-        ('Egypt', 'Egypt'),
-        ('Eritrea', 'Eritrea'),
-        ('Ethiopia', 'Ethiopia'),
-        ('Gabon', 'Gabon'),
-        ('Gambia', 'Gambia'),
-        ('Ghana', 'Ghana'),
-        ('Guinea', 'Guinea'),
-        ('Ivory Coast', 'Ivory Coast'),
-        ('Liberia', 'Liberia'),
-        ('Libya', 'Libya'),
-        ('Madagascar', 'Madagascar'),
-        ('Malawi', 'Malawi'),
-        ('Mali', 'Mali'),
-        ('Mauritania', 'Mauritania'),
-        ('Morocco', 'Morocco'),
-        ('Mozambique', 'Mozambique'),
-        ('Namibia', 'Namibia'),
-        ('Niger', 'Niger'),
-        ('Nigeria', 'Nigeria'),
-        ('Senegal', 'Senegal'),
-        ('Sierra Leone', 'Sierra Leone'),
-        ('Somalia', 'Somalia'),
-        ('South Africa', 'South Africa'),
-        ('Sudan', 'Sudan'),
-        ('Togo', 'Togo'),
-        ('Tunisia', 'Tunisia'),
-        ('Zambia', 'Zambia'),
-        ('Zimbabwe', 'Zimbabwe'),
-        ('Other', 'Other'),
-    )
-    
     REGISTRATION_CATEGORY_CHOICES = (
         ('modular', 'Modular'),
         ('formal', 'Formal'),
@@ -76,6 +27,9 @@ class Candidate(models.Model):
     
     INTAKE_CHOICES = (
         ('M', 'March'),
+        ('J', 'June'),
+        ('S', 'September'),
+        ('D', 'December'),
         ('A', 'August'),
     )
     
@@ -125,7 +79,6 @@ class Candidate(models.Model):
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES)
     nationality = models.CharField(
         max_length=100, 
-        choices=NATIONALITY_CHOICES,
         default='Uganda',
         verbose_name='Nationality'
     )
@@ -190,7 +143,7 @@ class Candidate(models.Model):
         verbose_name='Assessment Center Branch'
     )
     entry_year = models.IntegerField(verbose_name='Entry Year')
-    intake = models.CharField(max_length=1, choices=INTAKE_CHOICES, verbose_name='Intake')
+    intake = models.CharField(max_length=1, choices=INTAKE_CHOICES, verbose_name='Assessment Intake')
     
     # Registration Category & Occupation
     registration_category = models.CharField(
@@ -402,6 +355,30 @@ class Candidate(models.Model):
     
     def __str__(self):
         return f"{self.registration_number} - {self.full_name}"
+
+    def clean(self):
+        super().clean()
+        if not self.date_of_birth:
+            return
+
+        today = date.today()
+
+        if self.date_of_birth > today:
+            raise ValidationError({'date_of_birth': 'Date of birth cannot be in the future.'})
+
+        def shift_years(d, years):
+            try:
+                return d.replace(year=d.year - years)
+            except ValueError:
+                return d.replace(year=d.year - years, month=2, day=28)
+
+        min_dob = shift_years(today, 100)
+        max_dob = shift_years(today, 12)
+
+        if self.date_of_birth < min_dob:
+            raise ValidationError({'date_of_birth': 'Candidate cannot be older than 100 years.'})
+        if self.date_of_birth > max_dob:
+            raise ValidationError({'date_of_birth': 'Candidate must be at least 12 years old.'})
     
     def is_modular(self):
         """Check if candidate is registered as Modular"""
@@ -417,7 +394,6 @@ class Candidate(models.Model):
     
     def get_age(self):
         """Calculate candidate's age"""
-        from datetime import date
         today = date.today()
         return today.year - self.date_of_birth.year - (
             (today.month, today.day) < (self.date_of_birth.month, self.date_of_birth.day)
@@ -455,7 +431,7 @@ class Candidate(models.Model):
     def generate_registration_number(self):
         """
         Generate registration number in format:
-        UVT218/U/25/A/MVM/F/016
+        UVT218/U/25/M/MVM/F/016
         Format: center_no/nationality/year/intake/occ_code/reg_category/unique_no
         """
         if not all([self.assessment_center, self.entry_year, self.intake, 
@@ -471,7 +447,7 @@ class Candidate(models.Model):
         # Get year (last 2 digits)
         year_code = str(self.entry_year)[-2:]
         
-        # Get intake (M or A)
+        # Get intake (M, J, S, D)
         intake_code = self.intake
         
         # Get occupation code
@@ -515,7 +491,7 @@ class Candidate(models.Model):
         Generate payment code in format: IUV00225000001
         Format: I (Informal) + UV + center_no (3 digits) + year (2 digits) + candidate_id (7 digits with leading zeros)
         
-        Example: UVT002/U/25/A/HD/F/0001 -> IUV00225000001
+        Example: UVT002/U/25/M/HD/F/0001 -> IUV00225000001
         - I: Informal system
         - UV: All centers start with UV
         - 002: Center number (from UVT002)

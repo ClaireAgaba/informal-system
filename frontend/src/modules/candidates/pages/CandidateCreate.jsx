@@ -47,6 +47,20 @@ const CandidateCreate = () => {
     },
   });
 
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const formatDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const today = new Date();
+  const todayStr = formatDate(today);
+  const maxDob = formatDate(new Date(today.getFullYear() - 12, today.getMonth(), today.getDate()));
+  const minDob = formatDate(new Date(today.getFullYear() - 100, today.getMonth(), today.getDate()));
+
+  const { data: nationalitiesData } = useQuery({
+    queryKey: ['candidate-nationalities'],
+    queryFn: () => candidateApi.getNationalities(),
+  });
+
+  const nationalityOptions = nationalitiesData?.data || [];
+
   // Fetch districts
   const { data: districtsData } = useQuery({
     queryKey: ['districts'],
@@ -384,7 +398,18 @@ const CandidateCreate = () => {
                       </label>
                       <input
                         type="date"
-                        {...register('date_of_birth', { required: 'Date of birth is required' })}
+                        min={minDob}
+                        max={maxDob}
+                        {...register('date_of_birth', {
+                          required: 'Date of birth is required',
+                          validate: (value) => {
+                            if (!value) return true;
+                            if (value > todayStr) return 'Date of birth cannot be in the future.';
+                            if (value < minDob) return 'Candidate cannot be older than 100 years.';
+                            if (value > maxDob) return 'Candidate must be at least 12 years old.';
+                            return true;
+                          },
+                        })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                       />
                       {errors.date_of_birth && (
@@ -420,13 +445,15 @@ const CandidateCreate = () => {
                         {...register('nationality', { required: 'Nationality is required' })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                       >
-                        <option value="Uganda">Uganda</option>
-                        <option value="Kenya">Kenya</option>
-                        <option value="Tanzania">Tanzania</option>
-                        <option value="Rwanda">Rwanda</option>
-                        <option value="Burundi">Burundi</option>
-                        <option value="South Sudan">South Sudan</option>
-                        <option value="Other">Other</option>
+                        <option value="">Select nationality</option>
+                        {nationalityOptions.length === 0 && (
+                          <option value="Uganda">Uganda</option>
+                        )}
+                        {nationalityOptions.map((n) => (
+                          <option key={n.value} value={n.value}>
+                            {n.label}
+                          </option>
+                        ))}
                       </select>
                       {errors.nationality && (
                         <p className="mt-1 text-sm text-red-600">{errors.nationality.message}</p>
@@ -642,15 +669,17 @@ const CandidateCreate = () => {
                     {/* Intake */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Intake <span className="text-red-500">*</span>
+                        Assessment Intake <span className="text-red-500">*</span>
                       </label>
                       <select
-                        {...register('intake', { required: 'Intake is required' })}
+                        {...register('intake', { required: 'Assessment intake is required' })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                       >
                         <option value="">Select intake</option>
                         <option value="M">March</option>
-                        <option value="A">August</option>
+                        <option value="J">June</option>
+                        <option value="S">September</option>
+                        <option value="D">December</option>
                       </select>
                       {errors.intake && (
                         <p className="mt-1 text-sm text-red-600">{errors.intake.message}</p>

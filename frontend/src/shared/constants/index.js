@@ -14,12 +14,16 @@ export const REGISTRATION_CATEGORY_LABELS = {
 // Intake Options
 export const INTAKE_OPTIONS = {
   MARCH: 'M',
-  AUGUST: 'A',
+  JUNE: 'J',
+  SEPTEMBER: 'S',
+  DECEMBER: 'D',
 };
 
 export const INTAKE_LABELS = {
   [INTAKE_OPTIONS.MARCH]: 'March',
-  [INTAKE_OPTIONS.AUGUST]: 'August',
+  [INTAKE_OPTIONS.JUNE]: 'June',
+  [INTAKE_OPTIONS.SEPTEMBER]: 'September',
+  [INTAKE_OPTIONS.DECEMBER]: 'December',
 };
 
 // Gender Options

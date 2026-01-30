@@ -21,6 +21,7 @@ import occupationApi from '@modules/occupations/services/occupationApi';
 import Button from '@shared/components/Button';
 import Card from '@shared/components/Card';
 import { formatDate } from '@shared/utils/formatters';
+import { INTAKE_LABELS } from '@shared/constants';
 import BulkEnrollModal from '../components/BulkEnrollModal';
 import BulkChangeOccupationModal from '../components/BulkChangeOccupationModal';
 import BulkChangeRegCategoryModal from '../components/BulkChangeRegCategoryModal';
@@ -54,11 +55,14 @@ const CandidateList = () => {
     registration_category: '',
     assessment_center: '',
     occupation: '',
+    sector: '',
     has_disability: '',
     is_refugee: '',
     verification_status: '',
     is_enrolled: '',
     has_marks: '',
+    entry_year: '',
+    intake: '',
   });
 
   // Fetch candidates
@@ -398,11 +402,17 @@ const CandidateList = () => {
       registration_category: '',
       assessment_center: '',
       occupation: '',
+      sector: '',
       has_disability: '',
       is_refugee: '',
       verification_status: '',
+      is_enrolled: '',
+      has_marks: '',
+      entry_year: '',
+      intake: '',
     });
     setSearchQuery('');
+    setCurrentPage(1);
   };
 
   return (
@@ -411,9 +421,7 @@ const CandidateList = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Candidates</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Manage and view all registered candidates
-          </p>
+          <p className="text-sm text-gray-600">Manage and view all registered candidates</p>
         </div>
         <div className="flex items-center space-x-3">
           <Button
@@ -477,6 +485,37 @@ const CandidateList = () => {
                     <option value="modular">Modular</option>
                     <option value="formal">Formal</option>
                     <option value="workers_pas">Worker's PAS</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Entry Year
+                  </label>
+                  <input
+                    type="number"
+                    value={filters.entry_year}
+                    onChange={(e) => setFilters({ ...filters, entry_year: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="e.g. 2026"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Assessment Intake
+                  </label>
+                  <select
+                    value={filters.intake}
+                    onChange={(e) => setFilters({ ...filters, intake: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">All</option>
+                    <option value="M">March</option>
+                    <option value="J">June</option>
+                    <option value="S">September</option>
+                    <option value="D">December</option>
+                    <option value="A">August</option>
                   </select>
                 </div>
 
@@ -667,6 +706,29 @@ const CandidateList = () => {
                   </select>
                 </th>
                 <th className="px-2 py-2">
+                  <input
+                    type="number"
+                    placeholder="Year"
+                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    value={filters.entry_year}
+                    onChange={(e) => setFilters({ ...filters, entry_year: e.target.value })}
+                  />
+                </th>
+                <th className="px-2 py-2">
+                  <select
+                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    value={filters.intake}
+                    onChange={(e) => setFilters({ ...filters, intake: e.target.value })}
+                  >
+                    <option value="">Select</option>
+                    <option value="M">March</option>
+                    <option value="J">June</option>
+                    <option value="S">September</option>
+                    <option value="D">December</option>
+                    <option value="A">August</option>
+                  </select>
+                </th>
+                <th className="px-2 py-2">
                   <select
                     className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
                     value={filters.occupation}
@@ -775,6 +837,12 @@ const CandidateList = () => {
                   Category
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Entry Year
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Assessment Intake
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Occupation
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -803,19 +871,19 @@ const CandidateList = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan="14" className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan="16" className="px-4 py-8 text-center text-gray-500">
                     Loading candidates...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan="14" className="px-4 py-8 text-center text-red-500">
+                  <td colSpan="16" className="px-4 py-8 text-center text-red-500">
                     Error loading candidates: {error.message}
                   </td>
                 </tr>
               ) : candidates.length === 0 ? (
                 <tr>
-                  <td colSpan="14" className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan="16" className="px-4 py-8 text-center text-gray-500">
                     No candidates found
                   </td>
                 </tr>
@@ -873,6 +941,12 @@ const CandidateList = () => {
                          candidate.registration_category === 'formal' ? 'Formal' :
                          candidate.registration_category === 'workers_pas' ? "Worker's PAS" : '-'}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {candidate.entry_year || '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {candidate.intake ? (INTAKE_LABELS?.[candidate.intake] || candidate.intake) : '-'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
                       {candidate.occupation?.occ_name || '-'}

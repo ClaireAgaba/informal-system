@@ -11,6 +11,10 @@ from decimal import Decimal
 from datetime import date
 import openpyxl
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+try:
+    import pycountry
+except ImportError:
+    pycountry = None
 from .models import Candidate, CandidateEnrollment, EnrollmentModule, EnrollmentPaper
 from .serializers import (
     CandidateListSerializer,
@@ -94,6 +98,31 @@ class CandidateViewSet(viewsets.ModelViewSet):
                     queryset = queryset.filter(assessment_center_branch=center_rep.assessment_center_branch)
         
         return queryset
+
+    @action(detail=False, methods=['get'])
+    def nationalities(self, request):
+        east_africa = [
+            'Uganda',
+            'Kenya',
+            'Tanzania',
+            'Rwanda',
+            'Burundi',
+            'South Sudan',
+        ]
+
+        if pycountry is None:
+            ordered = east_africa
+        else:
+            all_countries = sorted({c.name for c in pycountry.countries}, key=lambda x: x.lower())
+            remaining = [c for c in all_countries if c not in set(east_africa)]
+            ordered = east_africa + remaining
+
+        if 'Other' not in ordered:
+            ordered.append('Other')
+
+        return Response(
+            [{'value': name, 'label': name} for name in ordered]
+        )
     
     def get_serializer_class(self):
         """Return appropriate serializer based on action"""
@@ -718,11 +747,11 @@ class CandidateViewSet(viewsets.ModelViewSet):
     def submit(self, request, pk=None):
         """
         Submit a draft candidate and generate registration number
-        Format: UVT001/X/25/A/HD/M/001
+        Format: UVT001/X/25/M/HD/M/001
         - UVT001: Center number
         - X: Nationality (U for Uganda, X for others)
         - 25: Entry year (last 2 digits)
-        - A: Intake (M or A)
+        - M: Assessment intake (M, J, S, D)
         - HD: Occupation code
         - M: Registration category (M=Modular, F=Formal, I=Workers PAS)
         - 001: Unique sequence per center+occupation
@@ -772,7 +801,7 @@ class CandidateViewSet(viewsets.ModelViewSet):
         # 3. Entry year (last 2 digits)
         year_code = str(candidate.entry_year)[-2:]
         
-        # 4. Intake (M or A)
+        # 4. Intake (M, J, S, D)
         intake_code = candidate.intake
         
         # 5. Occupation code

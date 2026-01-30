@@ -86,6 +86,8 @@ export const candidateApi = {
     return apiClient.get(`${CANDIDATES_BASE}`, { params: { search: query } });
   },
 
+  getNationalities: () => apiClient.get(`${CANDIDATES_BASE}/nationalities/`),
+
   // Enrollment endpoints
   getEnrollmentOptions: (id) => {
     return apiClient.get(`${CANDIDATES_BASE}/${id}/enrollment-options/`);
