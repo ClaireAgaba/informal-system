@@ -1215,7 +1215,7 @@ const CandidateView = () => {
                               <div className="text-xs text-gray-600 mt-1">
                                 {(a.actor_name || 'System')}{a.actor_user_type ? ` (${a.actor_user_type})` : ''}
                               </div>
-                              {a.details && (
+                              {a.details && Object.keys(a.details).length > 0 && (
                                 <pre className="mt-2 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded p-2 overflow-auto">{JSON.stringify(a.details, null, 2)}</pre>
                               )}
                             </div>

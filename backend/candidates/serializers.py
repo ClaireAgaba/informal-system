@@ -278,13 +278,12 @@ class CandidateCreateUpdateSerializer(serializers.ModelSerializer):
 class CandidateActivitySerializer(serializers.ModelSerializer):
     actor_name = serializers.SerializerMethodField()
     actor_user_type = serializers.SerializerMethodField()
+    details = serializers.SerializerMethodField()
 
     class Meta:
         model = CandidateActivity
         fields = [
             'id',
-            'candidate',
-            'actor',
             'actor_name',
             'actor_user_type',
             'action',
@@ -303,6 +302,21 @@ class CandidateActivitySerializer(serializers.ModelSerializer):
 
     def get_actor_user_type(self, obj):
         return getattr(obj.actor, 'user_type', None) if obj.actor else None
+
+    def get_details(self, obj):
+        details = obj.details
+        if details is None:
+            return None
+        if isinstance(details, dict):
+            filtered = {}
+            for k, v in details.items():
+                if k == 'id' or k.endswith('_id') or k.endswith('_ids'):
+                    continue
+                filtered[k] = v
+            return filtered
+        if isinstance(details, list):
+            return details
+        return details
 
 
 class EnrollmentModuleSerializer(serializers.ModelSerializer):
