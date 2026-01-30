@@ -22,6 +22,7 @@ const CandidateEdit = () => {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('personal-info');
   const [photoPreview, setPhotoPreview] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
 
   const {
     register,
@@ -101,6 +102,23 @@ const CandidateEdit = () => {
   const centers = centersData?.data?.results || [];
   const nationalityOptions = nationalitiesData?.data || [];
 
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return;
+    try {
+      setCurrentUser(JSON.parse(userStr));
+    } catch (e) {
+      setCurrentUser(null);
+    }
+  }, []);
+
+  const isCenterRep = currentUser?.user_type === 'center_representative';
+  const repCenter = currentUser?.center_representative?.assessment_center;
+  const repCenterId = repCenter?.id ? String(repCenter.id) : '';
+  const availableCenters = isCenterRep && repCenterId
+    ? [{ id: repCenter.id, center_number: repCenter.center_number, center_name: repCenter.center_name }]
+    : centers;
+
   // Watch registration category to filter occupations
   const registrationCategory = watch('registration_category');
   
@@ -148,6 +166,11 @@ const CandidateEdit = () => {
       setPhotoPreview(candidate.passport_photo);
     }
   }, [candidate, reset]);
+
+  useEffect(() => {
+    if (!isCenterRep || !repCenterId) return;
+    setValue('assessment_center', repCenterId);
+  }, [isCenterRep, repCenterId, setValue]);
 
   // Update mutation
   const updateMutation = useMutation({
@@ -673,9 +696,10 @@ const CandidateEdit = () => {
                         <select
                           {...register('assessment_center', { required: 'Assessment center is required' })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          disabled={isCenterRep && !!repCenterId}
                         >
                           <option value="">Select assessment center</option>
-                          {centers.map((center) => (
+                          {availableCenters.map((center) => (
                             <option key={center.id} value={center.id}>
                               {center.center_number} - {center.center_name}
                             </option>

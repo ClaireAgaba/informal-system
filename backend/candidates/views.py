@@ -137,6 +137,16 @@ class CandidateViewSet(viewsets.ModelViewSet):
         staff = None
         if hasattr(self.request.user, 'staff'):
             staff = self.request.user.staff
+        if self.request.user.is_authenticated and self.request.user.user_type == 'center_representative':
+            if hasattr(self.request.user, 'center_rep_profile'):
+                center_rep = self.request.user.center_rep_profile
+                serializer.save(
+                    created_by=staff,
+                    updated_by=staff,
+                    assessment_center=center_rep.assessment_center,
+                    assessment_center_branch=center_rep.assessment_center_branch,
+                )
+                return
         serializer.save(created_by=staff, updated_by=staff)
     
     def perform_update(self, serializer):
@@ -144,6 +154,15 @@ class CandidateViewSet(viewsets.ModelViewSet):
         staff = None
         if hasattr(self.request.user, 'staff'):
             staff = self.request.user.staff
+        if self.request.user.is_authenticated and self.request.user.user_type == 'center_representative':
+            if hasattr(self.request.user, 'center_rep_profile'):
+                center_rep = self.request.user.center_rep_profile
+                serializer.save(
+                    updated_by=staff,
+                    assessment_center=center_rep.assessment_center,
+                    assessment_center_branch=center_rep.assessment_center_branch,
+                )
+                return
         serializer.save(updated_by=staff)
     
     @action(detail=True, methods=['post'])

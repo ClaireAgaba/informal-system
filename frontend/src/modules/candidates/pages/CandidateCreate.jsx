@@ -16,6 +16,7 @@ const CandidateCreate = () => {
   const [activeTab, setActiveTab] = useState('personal-info');
   const [savedDraftId, setSavedDraftId] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm({
     defaultValues: {
@@ -125,6 +126,30 @@ const CandidateCreate = () => {
   const centers = centersData?.data?.results || [];
   const branches = branchesData?.data?.results || [];
 
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return;
+    try {
+      setCurrentUser(JSON.parse(userStr));
+    } catch (e) {
+      setCurrentUser(null);
+    }
+  }, []);
+
+  const isCenterRep = currentUser?.user_type === 'center_representative';
+  const repCenter = currentUser?.center_representative?.assessment_center;
+  const repCenterId = repCenter?.id ? String(repCenter.id) : '';
+  const repBranch = currentUser?.center_representative?.assessment_center_branch;
+  const repBranchId = repBranch?.id ? String(repBranch.id) : '';
+
+  const availableCenters = isCenterRep && repCenterId
+    ? [{ id: repCenter.id, center_number: repCenter.center_number, center_name: repCenter.center_name }]
+    : centers;
+
+  const availableBranches = isCenterRep && repBranchId
+    ? branches.filter((b) => String(b.id) === repBranchId)
+    : branches;
+
   const isRefugee = watch('is_refugee');
   const hasDisability = watch('has_disability');
   const registrationCategory = watch('registration_category');
@@ -133,6 +158,14 @@ const CandidateCreate = () => {
   useEffect(() => {
     setValue('village', '');
   }, [selectedDistrict, setValue]);
+
+  useEffect(() => {
+    if (!isCenterRep || !repCenterId) return;
+    setValue('assessment_center', repCenterId);
+    if (repBranchId) {
+      setValue('assessment_center_branch', repBranchId);
+    }
+  }, [isCenterRep, repCenterId, repBranchId, setValue]);
 
   // Filter occupations based on registration category
   const occupations = allOccupations.filter(occ => {
@@ -617,9 +650,10 @@ const CandidateCreate = () => {
                       <select
                         {...register('assessment_center', { required: 'Assessment center is required' })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        disabled={isCenterRep && !!repCenterId}
                       >
                         <option value="">Select assessment center</option>
-                        {centers.map((center) => (
+                        {availableCenters.map((center) => (
                           <option key={center.id} value={center.id}>
                             {center.center_number} - {center.center_name}
                           </option>
@@ -639,9 +673,10 @@ const CandidateCreate = () => {
                         <select
                           {...register('assessment_center_branch')}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          disabled={isCenterRep && !!repBranchId}
                         >
                           <option value="">Select branch (optional)</option>
-                          {branches.map((branch) => (
+                          {availableBranches.map((branch) => (
                             <option key={branch.id} value={branch.id}>
                               {branch.branch_code} - {branch.branch_name}
                             </option>
