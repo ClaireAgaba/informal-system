@@ -49,6 +49,7 @@ import StatisticsDashboard from '@modules/statistics/pages/StatisticsDashboard';
 import SeriesStatistics from '@modules/statistics/pages/SeriesStatistics';
 import SeriesResults from '@modules/statistics/pages/SeriesResults';
 import SpecialNeedsAnalytics from '@modules/statistics/pages/SpecialNeedsAnalytics';
+import DitLegacyData from './pages/DitLegacyData';
 
 function App() {
   return (
@@ -132,6 +133,8 @@ function App() {
         <Route path="statistics/series-results" element={<SeriesResults />} />
         <Route path="statistics/series-results/:seriesId" element={<SeriesResults />} />
         <Route path="statistics/special-needs" element={<SpecialNeedsAnalytics />} />
+
+        <Route path="dit-legacy-data" element={<DitLegacyData />} />
 
         <Route path="*" element={<div className="p-6"><h1 className="text-2xl">404 - Page Not Found</h1></div>} />
       </Route>

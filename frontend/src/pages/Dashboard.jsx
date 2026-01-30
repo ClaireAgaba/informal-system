@@ -11,6 +11,7 @@ import {
   FileText,
   Banknote,
   FileSpreadsheet,
+  Database,
   LogOut,
   ChevronDown,
   MessageSquare,
@@ -80,6 +81,13 @@ const modules = [
     path: '/complaints',
     color: 'bg-orange-500',
     description: 'Manage Complaints',
+  },
+  {
+    name: 'DIT Legacy data',
+    icon: Database,
+    path: '/dit-legacy-data',
+    color: 'bg-cyan-600',
+    description: 'Import & reconcile legacy DIT data',
   },
   {
     name: 'Statistics',
