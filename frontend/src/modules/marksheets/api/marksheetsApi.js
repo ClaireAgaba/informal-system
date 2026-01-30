@@ -6,15 +6,33 @@ const marksheetsApi = {
       responseType: 'blob'
     });
   },
-  
+
   generateFormalMarksheet: (data) => {
     return apiClient.post('/results/marksheets/generate-formal/', data, {
       responseType: 'blob'
     });
   },
-  
+
   generateWorkersPasMarksheet: (data) => {
     return apiClient.post('/results/marksheets/generate-workers-pas/', data, {
+      responseType: 'blob'
+    });
+  },
+
+  printModularMarksheet: (data) => {
+    return apiClient.post('/results/marksheets/print-modular/', data, {
+      responseType: 'blob'
+    });
+  },
+
+  printFormalMarksheet: (data) => {
+    return apiClient.post('/results/marksheets/print-formal/', data, {
+      responseType: 'blob'
+    });
+  },
+
+  printWorkersPasMarksheet: (data) => {
+    return apiClient.post('/results/marksheets/print-workers-pas/', data, {
       responseType: 'blob'
     });
   },

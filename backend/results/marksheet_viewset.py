@@ -9,6 +9,13 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 from openpyxl.utils import get_column_letter
 
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter, landscape, A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER
+from io import BytesIO
+
 from candidates.models import EnrollmentModule, Candidate, CandidateEnrollment, EnrollmentPaper
 from occupations.models import OccupationModule, OccupationLevel, OccupationPaper
 from assessment_series.models import AssessmentSeries
@@ -984,6 +991,474 @@ class MarksheetViewSet(viewsets.ViewSet):
             return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
         
         return Response(response_data, status=status.HTTP_200_OK)
+
+    def _header_footer(self, canvas, doc, title_text, subtitle_text):
+        """Draw header and footer on each page"""
+        canvas.saveState()
+        
+        # Header
+        # Logo
+        try:
+            # Assuming logo is in backend/static/images/uvtab-logo.png
+            # Adjust path relative to where manage.py is run or use absolute path
+            import os
+            from django.conf import settings
+            logo_path = os.path.join(settings.BASE_DIR, 'backend/static/images/uvtab-logo.png')
+            if not os.path.exists(logo_path):
+                 # Try alternative path if main one fails (dev environment structure vary)
+                 logo_path = os.path.join(settings.BASE_DIR, 'static/images/uvtab-logo.png')
+            
+            if os.path.exists(logo_path):
+                canvas.drawImage(logo_path, 30, 750, width=60, height=60, preserveAspectRatio=True, mask='auto')
+        except Exception:
+            pass # Skip logo if not found
+            
+        # Header Text (Centered)
+        canvas.setFont("Helvetica-Bold", 14)
+        canvas.drawCentredString(300, 790, "UGANDA VOCATIONAL AND TECHNICAL ASSESSMENT BOARD")
+        canvas.setFont("Helvetica", 10)
+        canvas.drawCentredString(300, 775, "P.O. Box 1499, Kampala. Plot 891, Kigobe Road, Kyambogo Hill, Kampala, Uganda")
+        canvas.drawCentredString(300, 762, "Tel: +256 392-002468 | Email: info@uvtab.go.ug")
+        
+        # Title and Subtitle
+        canvas.setFont("Helvetica-Bold", 12)
+        canvas.drawCentredString(300, 730, title_text)
+        canvas.setFont("Helvetica-Oblique", 11)
+        canvas.drawCentredString(300, 715, subtitle_text)
+        
+        # Line below header
+        canvas.line(30, 705, 565, 705)
+        
+        # Footer
+        canvas.line(30, 50, 565, 50)
+        canvas.setFont("Helvetica", 9)
+        canvas.drawString(30, 35, "Generated from EMIS System")
+        page_num = canvas.getPageNumber()
+        canvas.drawRightString(565, 35, f"Page {page_num}")
+        
+        canvas.restoreState()
+
+    @action(detail=False, methods=['post'], url_path='print-modular')
+    def print_modular_marksheet(self, request):
+        """Generate PDF marksheet for modular candidates"""
+        assessment_series_id = request.data.get('assessment_series')
+        occupation_id = request.data.get('occupation')
+        module_id = request.data.get('module')
+        assessment_center_id = request.data.get('assessment_center')
+        
+        if not all([assessment_series_id, occupation_id, module_id]):
+            return Response(
+                {'error': 'Assessment series, occupation, and module are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        try:
+            assessment_series = AssessmentSeries.objects.get(id=assessment_series_id)
+            module = OccupationModule.objects.get(id=module_id, occupation_id=occupation_id)
+        except (AssessmentSeries.DoesNotExist, OccupationModule.DoesNotExist):
+            return Response(
+                {'error': 'Invalid assessment series or module'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        enrollments = EnrollmentModule.objects.filter(
+            module=module,
+            enrollment__assessment_series=assessment_series,
+            enrollment__candidate__registration_category='modular'
+        ).select_related(
+            'enrollment__candidate',
+            'enrollment__candidate__occupation'
+        ).order_by('enrollment__candidate__registration_number')
+        
+        if assessment_center_id:
+            enrollments = enrollments.filter(
+                enrollment__candidate__assessment_center_id=assessment_center_id
+            )
+            
+        if not enrollments.exists():
+            return Response(
+                {'error': 'No candidates found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        response = HttpResponse(content_type='application/pdf')
+        filename = f"Marksheet_{module.module_code}.pdf"
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        
+        buffer = BytesIO()
+        # Use Portrait A4
+        from reportlab.lib.pagesizes import portrait
+        doc = SimpleDocTemplate(buffer, pagesize=portrait(A4), topMargin=150, bottomMargin=60, title=f"Marksheet - {module.module_code} {module.module_name}")
+        elements = []
+        styles = getSampleStyleSheet()
+        normal_style = styles['Normal']
+        
+        # Table Data
+        # Columns: SN, Reg No, Name, Mark
+        # Reduced columns to fit portrait and ensure wrapping
+        data = [[
+            Paragraph('<b>SN</b>', normal_style), 
+            Paragraph('<b>Reg No</b>', normal_style), 
+            Paragraph('<b>Name</b>', normal_style), 
+            Paragraph('<b>Mark</b>', normal_style)
+        ]]
+        
+        for idx, em in enumerate(enrollments, 1):
+            cand = em.enrollment.candidate
+            try:
+                result = ModularResult.objects.get(
+                    candidate=cand,
+                    assessment_series=assessment_series,
+                    module=module
+                )
+                mark = str(result.mark if result.mark is not None else '')
+            except ModularResult.DoesNotExist:
+                mark = ''
+                
+            data.append([
+                str(idx),
+                Paragraph(cand.registration_number, normal_style),
+                Paragraph(cand.full_name, normal_style),
+                mark
+            ])
+            
+        # Adjust column widths for Portrait (A4 width ~595pt, margins ~60pt/side -> ~475pt usable)
+        # 30 + 130 + 220 + 80 = 460
+        # Increased Reg No width to 130
+        table = Table(data, colWidths=[30, 130, 220, 80], repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'), # Center SN
+            ('ALIGN', (-1, 0), (-1, -1), 'CENTER'), # Center Marks
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ]))
+        
+        elements.append(table)
+        
+        # Title Texts for Header
+        title_text = f"Marksheet - {module.module_code} {module.module_name}"
+        subtitle_text = f"Series: {assessment_series.name} | Category: Modular"
+        
+        doc.build(elements, onFirstPage=lambda c, d: self._header_footer(c, d, title_text, subtitle_text),
+                  onLaterPages=lambda c, d: self._header_footer(c, d, title_text, subtitle_text))
+        
+        pdf = buffer.getvalue()
+        buffer.close()
+        response.write(pdf)
+        return response
+
+    @action(detail=False, methods=['post'], url_path='print-formal')
+    def print_formal_marksheet(self, request):
+        """Generate PDF marksheet for formal candidates"""
+        from results.models import FormalResult
+        
+        assessment_series_id = request.data.get('assessment_series')
+        occupation_id = request.data.get('occupation')
+        level_id = request.data.get('level')
+        structure_type = request.data.get('structure_type')
+        assessment_center_id = request.data.get('assessment_center')
+        
+        if not all([assessment_series_id, occupation_id, level_id]):
+            return Response(
+                {'error': 'Assessment series, occupation, and level are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        try:
+            assessment_series = AssessmentSeries.objects.get(id=assessment_series_id)
+            level = OccupationLevel.objects.get(id=level_id, occupation_id=occupation_id)
+            occupation = level.occupation
+        except (AssessmentSeries.DoesNotExist, OccupationLevel.DoesNotExist):
+            return Response(
+                {'error': 'Invalid assessment series or level'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        candidates = Candidate.objects.filter(
+            occupation_id=occupation_id,
+            registration_category='formal',
+            enrollments__assessment_series=assessment_series,
+            enrollments__occupation_level=level
+        ).select_related('occupation', 'assessment_center').distinct().order_by('registration_number')
+        
+        if assessment_center_id:
+            candidates = candidates.filter(assessment_center_id=assessment_center_id)
+            
+        if not candidates.exists():
+            return Response(
+                {'error': 'No candidates found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        response = HttpResponse(content_type='application/pdf')
+        filename = f"Marksheet_Formal_{level.level_name}.pdf"
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        
+        buffer = BytesIO()
+        from reportlab.lib.pagesizes import portrait
+        doc = SimpleDocTemplate(buffer, pagesize=portrait(A4), topMargin=150, bottomMargin=60, title=f"Marksheet - {level.level_name}")
+        elements = []
+        styles = getSampleStyleSheet()
+        normal_style = styles['Normal']
+        
+        title_text = f"Marksheet - {level.level_name}"
+        subtitle_text = f"Series: {assessment_series.name} | Category: Formal | Occupation: {occupation.occ_name} ({occupation.occ_code})"
+        
+        if structure_type == 'papers':
+            papers = list(OccupationPaper.objects.filter(level=level).order_by('paper_code'))
+            # Calculate dynamic column width
+            # Usable width ~480. 
+            # Fixed sizes: SN(30), Reg(130), Name(150) = 310. Remaining 170.
+            # Increased Reg No from 90 to 130
+            num_papers = len(papers)
+            paper_col_width = max(40, 170 // max(1, num_papers))
+            
+            headers = [
+                Paragraph('<b>SN</b>', normal_style),
+                Paragraph('<b>Reg No</b>', normal_style),
+                Paragraph('<b>Name</b>', normal_style)
+            ] + [Paragraph(f'<b>{p.paper_code}</b>', normal_style) for p in papers]
+            
+            data = [headers]
+            col_widths = [30, 130, 150] + [paper_col_width] * num_papers
+            
+            for idx, cand in enumerate(candidates, 1):
+                row = [
+                    str(idx),
+                    Paragraph(cand.registration_number, normal_style),
+                    Paragraph(cand.full_name, normal_style)
+                ]
+                for paper in papers:
+                    try:
+                        result = FormalResult.objects.get(
+                            candidate=cand,
+                            assessment_series=assessment_series,
+                            level=level,
+                            paper=paper
+                        )
+                        row.append(str(result.mark) if result.mark is not None else '')
+                    except FormalResult.DoesNotExist:
+                        row.append('')
+                data.append(row)
+            
+            # Add table
+            # Table generation moved to common block to avoid duplication
+            
+            # Prepare Key Table to be appended after the main table
+            extra_elements = [Spacer(1, 20)]
+
+            # Paper Key Table
+            key_data = [[Paragraph('<b>Code</b>', normal_style), Paragraph('<b>Paper Name</b>', normal_style)]]
+            for p in papers:
+                 key_data.append([p.paper_code, Paragraph(p.paper_name, normal_style)])
+            
+            key_table = Table(key_data, colWidths=[80, 400])
+            key_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.95, 0.95, 0.95)),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            extra_elements.append(Paragraph("<b>Paper Codes Description:</b>", normal_style))
+            extra_elements.append(Spacer(1, 5))
+            extra_elements.append(key_table)
+        else:
+            extra_elements = []
+            # Theory + Practical
+            headers = [
+                Paragraph('<b>SN</b>', normal_style),
+                Paragraph('<b>Reg No</b>', normal_style),
+                Paragraph('<b>Name</b>', normal_style),
+                Paragraph('<b>Theory</b>', normal_style),
+                Paragraph('<b>Practical</b>', normal_style)
+            ]
+            data = [headers]
+            col_widths = [30, 100, 200, 75, 75]
+            
+            for idx, cand in enumerate(candidates, 1):
+                row = [
+                    str(idx),
+                    Paragraph(cand.registration_number, normal_style),
+                    Paragraph(cand.full_name, normal_style)
+                ]
+                
+                # Theory
+                try:
+                    res_t = FormalResult.objects.get(candidate=cand, assessment_series=assessment_series, level=level, type='theory')
+                    row.append(str(res_t.mark) if res_t.mark is not None else '')
+                except FormalResult.DoesNotExist:
+                    row.append('')
+                    
+                # Practical
+                try:
+                    res_p = FormalResult.objects.get(candidate=cand, assessment_series=assessment_series, level=level, type='practical')
+                    row.append(str(res_p.mark) if res_p.mark is not None else '')
+                except FormalResult.DoesNotExist:
+                    row.append('')
+                    
+                data.append(row)
+                
+        table = Table(data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+            ('ALIGN', (3, 0), (-1, -1), 'CENTER'), # Center marks columns
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ]))
+        
+        elements.append(table)
+        elements.extend(extra_elements)
+        doc.build(elements, onFirstPage=lambda c, d: self._header_footer(c, d, title_text, subtitle_text),
+                  onLaterPages=lambda c, d: self._header_footer(c, d, title_text, subtitle_text))
+        
+        pdf = buffer.getvalue()
+        buffer.close()
+        response.write(pdf)
+        return response
+
+    @action(detail=False, methods=['post'], url_path='print-workers-pas')
+    def print_workers_pas_marksheet(self, request):
+        """Generate PDF marksheet for Workers PAS candidates"""
+        from results.models import WorkersPasResult
+        
+        assessment_series_id = request.data.get('assessment_series')
+        occupation_id = request.data.get('occupation')
+        level_id = request.data.get('level')
+        assessment_center_id = request.data.get('assessment_center')
+        
+        if not all([assessment_series_id, occupation_id, level_id]):
+            return Response(
+                {'error': 'Assessment series, occupation, and level are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        try:
+            assessment_series = AssessmentSeries.objects.get(id=assessment_series_id)
+            level = OccupationLevel.objects.get(id=level_id, occupation_id=occupation_id)
+            occupation = level.occupation
+        except (AssessmentSeries.DoesNotExist, OccupationLevel.DoesNotExist):
+            return Response(
+                {'error': 'Invalid assessment series or level'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        papers = list(OccupationPaper.objects.filter(level=level).order_by('paper_code'))
+            
+        enrollments = CandidateEnrollment.objects.filter(
+            assessment_series=assessment_series,
+            candidate__occupation_id=occupation_id,
+            candidate__registration_category='workers_pas',
+            papers__paper__level=level
+        ).select_related('candidate', 'candidate__occupation').prefetch_related(
+            'papers__paper'
+        ).distinct().order_by('candidate__registration_number')
+        
+        if assessment_center_id:
+            enrollments = enrollments.filter(candidate__assessment_center_id=assessment_center_id)
+            
+        if not enrollments.exists():
+            return Response(
+                {'error': 'No candidates found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        response = HttpResponse(content_type='application/pdf')
+        filename = f"Marksheet_WorkersPAS_{level.level_name}.pdf"
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        
+        buffer = BytesIO()
+        from reportlab.lib.pagesizes import portrait
+        doc = SimpleDocTemplate(buffer, pagesize=portrait(A4), topMargin=150, bottomMargin=60, title=f"Marksheet - Worker's PAS - {level.level_name}")
+        elements = []
+        styles = getSampleStyleSheet()
+        normal_style = styles['Normal']
+        
+        title_text = f"Marksheet - Worker's PAS - {level.level_name}"
+        subtitle_text = f"Series: {assessment_series.name} | Occupation: {occupation.occ_name}"
+        
+        # Calculate dynamic column width
+        # Usable width ~480. 
+        # Fixed: SN(30), Reg(130), Name(150) = 310. Remaining 170.
+        num_papers = len(papers)
+        paper_col_width = max(40, 170 // max(1, num_papers))
+        
+        headers = [
+            Paragraph('<b>SN</b>', normal_style),
+            Paragraph('<b>Reg No</b>', normal_style),
+            Paragraph('<b>Name</b>', normal_style)
+        ] + [Paragraph(f'<b>{p.paper_code}</b>', normal_style) for p in papers]
+        
+        data = [headers]
+        col_widths = [30, 130, 150] + [paper_col_width] * num_papers
+        
+        for idx, enrollment in enumerate(enrollments, 1):
+            cand = enrollment.candidate
+            row = [
+                str(idx),
+                Paragraph(cand.registration_number, normal_style),
+                Paragraph(cand.full_name, normal_style)
+            ]
+            
+            enrolled_paper_ids = set(enrollment.papers.values_list('paper_id', flat=True))
+            
+            for paper in papers:
+                if paper.id not in enrolled_paper_ids:
+                    row.append('N/A')
+                else:
+                    try:
+                        result = WorkersPasResult.objects.get(
+                            candidate=cand,
+                            assessment_series=assessment_series,
+                            paper=paper
+                        )
+                        row.append(str(result.mark) if result.mark is not None else '')
+                    except WorkersPasResult.DoesNotExist:
+                        row.append('')
+            data.append(row)
+            
+        table = Table(data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+            ('ALIGN', (3, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ]))
+        
+        elements.append(table)
+        elements.append(Spacer(1, 20))
+
+        # Paper Key Table
+        key_data = [[Paragraph('<b>Code</b>', normal_style), Paragraph('<b>Paper Name</b>', normal_style)]]
+        for p in papers:
+             key_data.append([p.paper_code, Paragraph(p.paper_name, normal_style)])
+        
+        key_table = Table(key_data, colWidths=[80, 400])
+        key_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.95, 0.95, 0.95)),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ]))
+        elements.append(Paragraph("<b>Paper Codes Description:</b>", normal_style))
+        elements.append(Spacer(1, 5))
+        elements.append(key_table)
+        
+        doc.build(elements, onFirstPage=lambda c, d: self._header_footer(c, d, title_text, subtitle_text),
+                  onLaterPages=lambda c, d: self._header_footer(c, d, title_text, subtitle_text))
+        
+        pdf = buffer.getvalue()
+        buffer.close()
+        response.write(pdf)
+        return response
 
 
 def calculate_grade(mark, grade_type='practical'):
