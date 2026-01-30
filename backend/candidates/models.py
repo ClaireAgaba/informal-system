@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
+from django.conf import settings
 from datetime import date
 from decimal import Decimal
 from configurations.models import District, Village, NatureOfDisability
@@ -624,3 +625,28 @@ class EnrollmentPaper(models.Model):
     
     def __str__(self):
         return f"{self.enrollment.candidate.full_name} - {self.paper.paper_code}"
+
+
+class CandidateActivity(models.Model):
+    candidate = models.ForeignKey(Candidate, on_delete=models.CASCADE, related_name='activities')
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='candidate_activities'
+    )
+    action = models.CharField(max_length=100)
+    description = models.TextField(blank=True, default='')
+    details = models.JSONField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['candidate', 'created_at']),
+            models.Index(fields=['action']),
+        ]
+
+    def __str__(self):
+        return f"{self.candidate_id} - {self.action}"

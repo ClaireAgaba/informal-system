@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Candidate, CandidateEnrollment, EnrollmentModule, EnrollmentPaper
+from .models import Candidate, CandidateEnrollment, EnrollmentModule, EnrollmentPaper, CandidateActivity
 from configurations.models import District, Village, NatureOfDisability
 from assessment_centers.models import AssessmentCenter, CenterBranch
 from occupations.models import Occupation, OccupationLevel, OccupationModule, OccupationPaper
@@ -198,12 +198,12 @@ class CandidateCreateUpdateSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
-    
+
     # Make some fields optional for updates
     entry_year = serializers.IntegerField(required=False, allow_null=True)
     intake = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     registration_category = serializers.CharField(required=False)
-    
+
     class Meta:
         model = Candidate
         fields = [
@@ -252,18 +252,18 @@ class CandidateCreateUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Candidate must be at least 12 years old.')
 
         return value
-    
+
     def validate(self, data):
         """Convert empty strings to None for foreign keys"""
         fk_fields = ['district', 'village', 'nature_of_disability', 
                      'assessment_center', 'assessment_center_branch', 'occupation']
-        
+
         for field in fk_fields:
             if field in data and (data[field] == '' or data[field] == 'None'):
                 data[field] = None
-        
+
         return data
-    
+
     def create(self, validated_data):
         # Auto-generate registration number
         candidate = Candidate(**validated_data)
@@ -273,6 +273,36 @@ class CandidateCreateUpdateSerializer(serializers.ModelSerializer):
                 candidate.registration_number = reg_number
         candidate.save()
         return candidate
+
+
+class CandidateActivitySerializer(serializers.ModelSerializer):
+    actor_name = serializers.SerializerMethodField()
+    actor_user_type = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CandidateActivity
+        fields = [
+            'id',
+            'candidate',
+            'actor',
+            'actor_name',
+            'actor_user_type',
+            'action',
+            'description',
+            'details',
+            'created_at',
+        ]
+
+    def get_actor_name(self, obj):
+        if not obj.actor:
+            return None
+        if hasattr(obj.actor, 'get_full_name'):
+            name = obj.actor.get_full_name()
+            return name if name else obj.actor.username
+        return getattr(obj.actor, 'username', None)
+
+    def get_actor_user_type(self, obj):
+        return getattr(obj.actor, 'user_type', None) if obj.actor else None
 
 
 class EnrollmentModuleSerializer(serializers.ModelSerializer):

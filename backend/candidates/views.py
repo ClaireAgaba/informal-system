@@ -7,6 +7,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 from django.db import transaction
 from django.http import HttpResponse
+from django.utils import timezone
 from decimal import Decimal
 from datetime import date
 import openpyxl
@@ -15,11 +16,12 @@ try:
     import pycountry
 except ImportError:
     pycountry = None
-from .models import Candidate, CandidateEnrollment, EnrollmentModule, EnrollmentPaper
+from .models import Candidate, CandidateEnrollment, EnrollmentModule, EnrollmentPaper, CandidateActivity
 from .serializers import (
     CandidateListSerializer,
     CandidateDetailSerializer,
     CandidateCreateUpdateSerializer,
+    CandidateActivitySerializer,
     CandidateEnrollmentSerializer,
     EnrollmentListSerializer,
     EnrollCandidateSerializer,
@@ -99,6 +101,16 @@ class CandidateViewSet(viewsets.ModelViewSet):
         
         return queryset
 
+    def _log_activity(self, candidate, action, description='', details=None):
+        actor = self.request.user if getattr(self.request, 'user', None) and self.request.user.is_authenticated else None
+        CandidateActivity.objects.create(
+            candidate=candidate,
+            actor=actor,
+            action=action,
+            description=description or '',
+            details=details,
+        )
+
     @action(detail=False, methods=['get'])
     def nationalities(self, request):
         east_africa = [
@@ -140,14 +152,16 @@ class CandidateViewSet(viewsets.ModelViewSet):
         if self.request.user.is_authenticated and self.request.user.user_type == 'center_representative':
             if hasattr(self.request.user, 'center_rep_profile'):
                 center_rep = self.request.user.center_rep_profile
-                serializer.save(
+                candidate = serializer.save(
                     created_by=staff,
                     updated_by=staff,
                     assessment_center=center_rep.assessment_center,
                     assessment_center_branch=center_rep.assessment_center_branch,
                 )
+                self._log_activity(candidate, 'candidate_created', 'Candidate created')
                 return
-        serializer.save(created_by=staff, updated_by=staff)
+        candidate = serializer.save(created_by=staff, updated_by=staff)
+        self._log_activity(candidate, 'candidate_created', 'Candidate created')
     
     def perform_update(self, serializer):
         """Set updated_by when updating a candidate"""
@@ -157,13 +171,22 @@ class CandidateViewSet(viewsets.ModelViewSet):
         if self.request.user.is_authenticated and self.request.user.user_type == 'center_representative':
             if hasattr(self.request.user, 'center_rep_profile'):
                 center_rep = self.request.user.center_rep_profile
-                serializer.save(
+                candidate = serializer.save(
                     updated_by=staff,
                     assessment_center=center_rep.assessment_center,
                     assessment_center_branch=center_rep.assessment_center_branch,
                 )
+                self._log_activity(candidate, 'candidate_updated', 'Candidate updated')
                 return
-        serializer.save(updated_by=staff)
+        candidate = serializer.save(updated_by=staff)
+        self._log_activity(candidate, 'candidate_updated', 'Candidate updated')
+
+    @action(detail=True, methods=['get'])
+    def activity(self, request, pk=None):
+        candidate = self.get_object()
+        qs = candidate.activities.select_related('actor').all()
+        serializer = CandidateActivitySerializer(qs, many=True)
+        return Response(serializer.data)
     
     @action(detail=True, methods=['post'])
     def verify(self, request, pk=None):
@@ -175,9 +198,10 @@ class CandidateViewSet(viewsets.ModelViewSet):
         
         candidate.verification_status = 'verified'
         candidate.verified_by = staff
-        from django.utils import timezone
         candidate.verification_date = timezone.now()
         candidate.save()
+
+        self._log_activity(candidate, 'candidate_verified', 'Candidate verified')
         
         serializer = self.get_serializer(candidate)
         return Response(serializer.data)
@@ -194,9 +218,10 @@ class CandidateViewSet(viewsets.ModelViewSet):
         candidate.verification_status = 'declined'
         candidate.verified_by = staff
         candidate.decline_reason = reason
-        from django.utils import timezone
         candidate.verification_date = timezone.now()
         candidate.save()
+
+        self._log_activity(candidate, 'candidate_declined', 'Candidate declined', details={'reason': reason})
         
         serializer = self.get_serializer(candidate)
         return Response(serializer.data)
@@ -210,12 +235,16 @@ class CandidateViewSet(viewsets.ModelViewSet):
             staff = request.user.staff
         
         candidate.payment_cleared = True
-        from django.utils import timezone
         candidate.payment_cleared_date = timezone.now().date()
         candidate.payment_cleared_by = staff
         candidate.payment_amount_cleared = request.data.get('amount', 0)
         candidate.payment_center_series_ref = request.data.get('reference', '')
         candidate.save()
+
+        self._log_activity(candidate, 'payment_cleared', 'Payment cleared', details={
+            'amount': request.data.get('amount', 0),
+            'reference': request.data.get('reference', ''),
+        })
         
         serializer = self.get_serializer(candidate)
         return Response(serializer.data)
@@ -506,6 +535,14 @@ class CandidateViewSet(viewsets.ModelViewSet):
                 
                 # Return created enrollment
                 enrollment_serializer = CandidateEnrollmentSerializer(enrollment)
+
+                self._log_activity(candidate, 'candidate_enrolled', 'Candidate enrolled', details={
+                    'assessment_series_id': assessment_series.id,
+                    'assessment_series_name': assessment_series.name,
+                    'enrollment_id': enrollment.id,
+                    'registration_category': reg_category,
+                    'total_amount': str(total_amount),
+                })
                 return Response(enrollment_serializer.data, status=status.HTTP_201_CREATED)
         
         except Exception as e:
@@ -867,6 +904,11 @@ class CandidateViewSet(viewsets.ModelViewSet):
         if payment_code:
             candidate.payment_code = payment_code
             candidate.save()
+
+        self._log_activity(candidate, 'candidate_submitted', 'Candidate submitted', details={
+            'registration_number': registration_number,
+            'payment_code': payment_code,
+        })
         
         return Response(
             {
@@ -890,6 +932,8 @@ class CandidateViewSet(viewsets.ModelViewSet):
         
         candidate.passport_photo = request.FILES['photo']
         candidate.save()
+
+        self._log_activity(candidate, 'photo_uploaded', 'Photo uploaded')
         
         return Response(
             {
@@ -924,6 +968,10 @@ class CandidateViewSet(viewsets.ModelViewSet):
             candidate.qualification_document = request.FILES['document']
         
         candidate.save()
+
+        self._log_activity(candidate, 'document_uploaded', f'{document_type.capitalize()} document uploaded', details={
+            'document_type': document_type,
+        })
         
         return Response(
             {
@@ -983,6 +1031,8 @@ class CandidateViewSet(viewsets.ModelViewSet):
         # Save payment code
         candidate.payment_code = payment_code
         candidate.save()
+
+        self._log_activity(candidate, 'payment_code_generated', 'Payment code generated', details={'payment_code': payment_code})
         
         return Response(
             {
@@ -1022,6 +1072,11 @@ class CandidateViewSet(viewsets.ModelViewSet):
             candidate.payment_center_series_ref = f'MANUAL-{timezone.now().strftime("%Y%m%d%H%M%S")}'
         
         candidate.save()
+
+        self._log_activity(candidate, 'payment_marked_cleared', 'Payment marked as cleared', details={
+            'amount_cleared': float(total_billed),
+            'reference': candidate.payment_center_series_ref,
+        })
         
         return Response(
             {
@@ -1182,6 +1237,7 @@ def bulk_de_enroll_view(request):
     
     for enrollment in enrollments:
         candidate = enrollment.candidate
+        series = enrollment.assessment_series
         
         # Check if candidate has any results for this enrollment
         has_modular_results = ModularResult.objects.filter(
@@ -1210,6 +1266,18 @@ def bulk_de_enroll_view(request):
         
         try:
             enrollment.delete()
+            actor = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
+            CandidateActivity.objects.create(
+                candidate=candidate,
+                actor=actor,
+                action='candidate_deenrolled',
+                description='Candidate de-enrolled',
+                details={
+                    'enrollment_id': enrollment.id,
+                    'assessment_series_id': series.id if series else None,
+                    'assessment_series_name': series.name if series else None,
+                },
+            )
             success_count += 1
         except Exception as e:
             failed.append({
@@ -1234,6 +1302,7 @@ def delete_enrollment_view(request, enrollment_id):
     try:
         enrollment = CandidateEnrollment.objects.get(id=enrollment_id)
         candidate = enrollment.candidate
+        series = enrollment.assessment_series
         
         # Check if candidate has any results
         from results.models import ModularResult, FormalResult, WorkersPasResult
@@ -1260,6 +1329,18 @@ def delete_enrollment_view(request, enrollment_id):
             )
         
         enrollment.delete()
+        actor = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
+        CandidateActivity.objects.create(
+            candidate=candidate,
+            actor=actor,
+            action='enrollment_deleted',
+            description='Enrollment deleted',
+            details={
+                'enrollment_id': enrollment_id,
+                'assessment_series_id': series.id if series else None,
+                'assessment_series_name': series.name if series else None,
+            },
+        )
         
         return Response(
             {'message': 'Enrollment deleted successfully'},
@@ -2168,6 +2249,15 @@ def clear_candidate_data(request, candidate_id):
     # Delete all enrollments (this will also reset fees since fees are tied to enrollments)
     enrollments_deleted = CandidateEnrollment.objects.filter(candidate=candidate).delete()
     cleared['enrollments'] = enrollments_deleted[0] if enrollments_deleted else 0
+
+    actor = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
+    CandidateActivity.objects.create(
+        candidate=candidate,
+        actor=actor,
+        action='candidate_data_cleared',
+        description='Candidate results, enrollments & fees cleared',
+        details={'cleared': cleared},
+    )
     
     return Response({
         'message': f'Successfully cleared all data for {candidate.full_name}',

@@ -81,6 +81,8 @@ export const candidateApi = {
     return apiClient.get(`${CANDIDATES_BASE}`, { params: { registration_category: category } });
   },
 
+  getActivity: (id) => apiClient.get(`${CANDIDATES_BASE}/${id}/activity/`),
+
   // Search candidates
   search: (query) => {
     return apiClient.get(`${CANDIDATES_BASE}`, { params: { search: query } });

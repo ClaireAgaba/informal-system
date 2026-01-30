@@ -5,9 +5,20 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.http import HttpResponse
 from .models import ModularResult, WorkersPasResult
 from .serializers import WorkersPasResultSerializer, WorkersPasResultCreateUpdateSerializer
-from candidates.models import Candidate, EnrollmentModule, EnrollmentPaper
+from candidates.models import Candidate, EnrollmentModule, EnrollmentPaper, CandidateActivity
 from occupations.models import OccupationModule, ModuleLWA, OccupationPaper
 from assessment_series.models import AssessmentSeries
+
+
+def _log_candidate_activity(request, candidate, action, description='', details=None):
+    actor = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
+    CandidateActivity.objects.create(
+        candidate=candidate,
+        actor=actor,
+        action=action,
+        description=description or '',
+        details=details,
+    )
 
 
 class ModularResultViewSet(viewsets.ViewSet):
@@ -67,6 +78,8 @@ class ModularResultViewSet(viewsets.ViewSet):
             )
         
         created_results = []
+        created_count = 0
+        updated_count = 0
         for result_data in results_data:
             module_id = result_data.get('module_id')
             mark = result_data.get('mark')
@@ -94,6 +107,10 @@ class ModularResultViewSet(viewsets.ViewSet):
                     defaults=defaults_data
                 )
                 created_results.append(result)
+                if created:
+                    created_count += 1
+                else:
+                    updated_count += 1
             except OccupationModule.DoesNotExist:
                 return Response(
                     {'error': f'Module with id {module_id} not found'},
@@ -105,6 +122,19 @@ class ModularResultViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
+        _log_candidate_activity(
+            request,
+            candidate,
+            'modular_results_saved',
+            'Modular results saved',
+            details={
+                'assessment_series_id': assessment_series.id,
+                'assessment_series_name': assessment_series.name,
+                'created': created_count,
+                'updated': updated_count,
+            },
+        )
+
         return Response(
             {
                 'message': f'{len(created_results)} results added successfully',
@@ -167,6 +197,14 @@ class ModularResultViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
+        _log_candidate_activity(
+            request,
+            candidate,
+            'modular_results_updated',
+            'Modular results updated',
+            details={'updated': updated_count},
+        )
+
         return Response(
             {
                 'message': f'{updated_count} results updated successfully',
@@ -1200,6 +1238,8 @@ class FormalResultViewSet(viewsets.ViewSet):
             )
         
         created_results = []
+        created_count = 0
+        updated_count = 0
         
         if structure_type == 'modules':
             # Module-based: Get the first exam for this level if not provided
@@ -1239,6 +1279,10 @@ class FormalResultViewSet(viewsets.ViewSet):
                         defaults=defaults_data
                     )
                     created_results.append(result)
+                    if created:
+                        created_count += 1
+                    else:
+                        updated_count += 1
                 except OccupationModule.DoesNotExist:
                     return Response(
                         {'error': f'Exam with id {exam_id} not found'},
@@ -1288,6 +1332,10 @@ class FormalResultViewSet(viewsets.ViewSet):
                         defaults=defaults_data
                     )
                     created_results.append(result)
+                    if created:
+                        created_count += 1
+                    else:
+                        updated_count += 1
                 except OccupationPaper.DoesNotExist:
                     return Response(
                         {'error': f'Paper with id {paper_id} not found'},
@@ -1303,6 +1351,22 @@ class FormalResultViewSet(viewsets.ViewSet):
                 {'error': 'Invalid structure type. Must be "modules" or "papers"'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        _log_candidate_activity(
+            request,
+            candidate,
+            'formal_results_saved',
+            'Formal results saved',
+            details={
+                'assessment_series_id': assessment_series.id,
+                'assessment_series_name': assessment_series.name,
+                'level_id': level.id,
+                'level_name': level.level_name,
+                'structure_type': structure_type,
+                'created': created_count,
+                'updated': updated_count,
+            },
+        )
         
         return Response(
             {
@@ -1367,6 +1431,16 @@ class FormalResultViewSet(viewsets.ViewSet):
                     {'error': f'Error updating result: {str(e)}'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+
+        _log_candidate_activity(
+            request,
+            candidate,
+            'formal_results_updated',
+            'Formal results updated',
+            details={
+                'updated': updated_count,
+            },
+        )
         
         return Response(
             {
@@ -1867,6 +1941,18 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         # Serialize the created results
         serializer = WorkersPasResultSerializer(created_results, many=True)
         
+        _log_candidate_activity(
+            request,
+            candidate,
+            'workers_pas_results_saved',
+            "Worker's PAS results saved",
+            details={
+                'assessment_series_id': assessment_series.id,
+                'assessment_series_name': assessment_series.name,
+                'saved': len(created_results),
+            },
+        )
+
         return Response(
             {
                 'message': f'{len(created_results)} result(s) saved successfully',

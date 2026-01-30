@@ -83,6 +83,14 @@ const CandidateView = () => {
 
   const enrollments = enrollmentsData?.data || [];
 
+  const { data: activityData, isLoading: isActivityLoading } = useQuery({
+    queryKey: ['candidate-activity', id],
+    queryFn: () => candidateApi.getActivity(id),
+    enabled: !!id && activeTab === 'activity',
+  });
+
+  const activities = activityData?.data || [];
+
   // De-enroll mutation
   const deEnrollMutation = useMutation({
     mutationFn: (enrollmentId) => candidateApi.deEnroll(id, enrollmentId),
@@ -1191,9 +1199,34 @@ const CandidateView = () => {
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">
                     Recent Activity
                   </h3>
-                  <div className="text-gray-600 text-sm">
-                    Activity log feature coming soon...
-                  </div>
+                  {isActivityLoading ? (
+                    <div className="text-gray-600 text-sm">Loading activity...</div>
+                  ) : activities.length === 0 ? (
+                    <div className="text-gray-600 text-sm">No activity yet.</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {activities.map((a) => (
+                        <div key={a.id} className="border border-gray-200 rounded-lg p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-gray-900 truncate">
+                                {a.description || a.action}
+                              </div>
+                              <div className="text-xs text-gray-600 mt-1">
+                                {(a.actor_name || 'System')}{a.actor_user_type ? ` (${a.actor_user_type})` : ''}
+                              </div>
+                              {a.details && (
+                                <pre className="mt-2 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded p-2 overflow-auto">{JSON.stringify(a.details, null, 2)}</pre>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-500 whitespace-nowrap">
+                              {a.created_at ? new Date(a.created_at).toLocaleString() : ''}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
