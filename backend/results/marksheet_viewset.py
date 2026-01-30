@@ -1138,6 +1138,25 @@ class MarksheetViewSet(viewsets.ViewSet):
         
         elements.append(table)
         
+        elements.append(Spacer(1, 20))
+
+        # Module Description Table
+        key_data = [
+            [Paragraph('<b>Code</b>', normal_style), Paragraph('<b>Module Name</b>', normal_style)],
+            [module.module_code, Paragraph(module.module_name, normal_style)]
+        ]
+        
+        key_table = Table(key_data, colWidths=[80, 400])
+        key_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.95, 0.95, 0.95)),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ]))
+        elements.append(Paragraph("<b>Module Description:</b>", normal_style))
+        elements.append(Spacer(1, 5))
+        elements.append(key_table)
+        
         # Title Texts for Header
         title_text = f"Marksheet - {module.module_code} {module.module_name}"
         subtitle_text = f"Series: {assessment_series.name} | Category: Modular"
@@ -1416,6 +1435,27 @@ class MarksheetViewSet(viewsets.ViewSet):
         
         response = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         filename = f"Results_{module.module_code}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+        # Append Module Description
+        ws.append([])  # Empty row
+        ws.append([])  # Empty row
+        ws.append(['Module Description:'])
+        ws['A' + str(ws.max_row)].font = Font(bold=True)
+        
+        ws.append(['Code', 'Module Name'])
+        # Style the key header
+        for cell in ws[ws.max_row]:
+            cell.font = Font(bold=True)
+            cell.border = Border(bottom=Side(style='thin'))
+            
+        ws.append([module.module_code, module.module_name])
+        
+        # Save again to include new data
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        response = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         
         return response
