@@ -121,11 +121,17 @@ def fix_disability_data(dry_run=False):
     cur = conn.cursor()
     
     # Get all candidates with disability from old system
-    # Note: old DB has 'disability' and 'disability_specification' columns only
+    # Try to capture nature of disability too (if present in old schema)
     cur.execute("""
-        SELECT id, disability, disability_specification
-        FROM eims_candidate 
-        WHERE disability = true
+        SELECT
+            c.id,
+            c.disability,
+            c.disability_specification,
+            c.nature_of_disability_id AS nature_of_disability_id,
+            nod.name AS nature_of_disability_name
+        FROM eims_candidate c
+        LEFT JOIN eims_natureofdisability nod ON nod.id = c.nature_of_disability_id
+        WHERE c.disability = true
     """)
     rows = cur.fetchall()
     cur.close()
@@ -141,7 +147,7 @@ def fix_disability_data(dry_run=False):
     
     updated = 0
     not_found = 0
-    already_set = 0
+    already_complete = 0
     
     # Build NatureOfDisability lookup by name for fallback
     nod_by_name = {nod.name.lower(): nod for nod in NatureOfDisability.objects.all()}
@@ -151,22 +157,50 @@ def fix_disability_data(dry_run=False):
             try:
                 candidate = Candidate.objects.get(id=row['id'])
                 
-                # Skip if already has disability set
-                if candidate.has_disability:
-                    already_set += 1
+                # If already fully populated, skip
+                if candidate.has_disability and candidate.nature_of_disability:
+                    already_complete += 1
                     continue
-                
-                # Update disability fields
-                candidate.has_disability = True
-                candidate.disability_specification = row['disability_specification'] or ''
-                
-                candidate.save(update_fields=['has_disability', 'disability_specification'])
-                updated += 1
+
+                update_fields = []
+
+                # Ensure has_disability
+                if not candidate.has_disability:
+                    candidate.has_disability = True
+                    update_fields.append('has_disability')
+
+                # Set disability specification if missing/empty
+                old_spec = (row.get('disability_specification') or '').strip()
+                if old_spec and not (candidate.disability_specification or '').strip():
+                    candidate.disability_specification = old_spec
+                    update_fields.append('disability_specification')
+
+                # Set nature_of_disability if missing
+                if not candidate.nature_of_disability:
+                    old_nod_id = row.get('nature_of_disability_id')
+                    old_nod_name = (row.get('nature_of_disability_name') or '').strip()
+                    nod_obj = None
+
+                    if old_nod_id and old_nod_id in nod_mapping:
+                        nod_obj = nod_mapping[old_nod_id]
+                    elif old_nod_name:
+                        nod_obj = nod_by_name.get(old_nod_name.lower())
+                        if not nod_obj:
+                            nod_obj, _ = NatureOfDisability.objects.get_or_create(name=old_nod_name)
+                            nod_by_name[old_nod_name.lower()] = nod_obj
+
+                    if nod_obj:
+                        candidate.nature_of_disability = nod_obj
+                        update_fields.append('nature_of_disability')
+
+                if update_fields:
+                    candidate.save(update_fields=update_fields)
+                    updated += 1
                 
             except Candidate.DoesNotExist:
                 not_found += 1
     
-    log(f"Updated: {updated}, Already set: {already_set}, Not found in new system: {not_found}")
+    log(f"Updated: {updated}, Already complete: {already_complete}, Not found in new system: {not_found}")
 
 
 if __name__ == '__main__':
