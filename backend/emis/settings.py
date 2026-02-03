@@ -239,6 +239,28 @@ SCHOOLPAY_API_KEY = config('SCHOOLPAY_API_KEY', default='')
 SCHOOLPAY_ALLOWED_IPS = config('SCHOOLPAY_ALLOWED_IPS', default='', cast=Csv())
 SCHOOLPAY_ENABLED = config('SCHOOLPAY_ENABLED', default=False, cast=bool)
 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.server': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
 # Security settings for production
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
