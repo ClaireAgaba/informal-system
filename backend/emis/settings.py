@@ -5,6 +5,13 @@ Django settings for emis project.
 from pathlib import Path
 from decouple import config, Csv
 
+try:
+    import pymysql
+
+    pymysql.install_as_MySQLdb()
+except ImportError:
+    pymysql = None
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -48,6 +55,7 @@ INSTALLED_APPS = [
     'configurations.apps.ConfigurationsConfig',
     'dit_migration.apps.DitMigrationConfig',
     'fees.apps.FeesConfig',
+    'dit_legacy.apps.DitLegacyConfig',
 ]
 
 MIDDLEWARE = [
@@ -97,7 +105,22 @@ DATABASES = {
         'HOST': config('DB_HOST', default=''),
         'PORT': config('DB_PORT', default=''),
     }
+    ,
+    'dit_legacy': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': config('DIT_LEGACY_DB_NAME', default='dit_legacy'),
+        'USER': config('DIT_LEGACY_DB_USER', default='root'),
+        'PASSWORD': config('DIT_LEGACY_DB_PASSWORD', default='rootpass123'),
+        'HOST': config('DIT_LEGACY_DB_HOST', default='127.0.0.1'),
+        'PORT': config('DIT_LEGACY_DB_PORT', default='3307'),
+        'OPTIONS': {
+            'charset': 'utf8',
+            'init_command': "SET sql_mode='';",
+        },
+    },
 }
+
+DATABASE_ROUTERS = ['dit_legacy.db_router.DitLegacyRouter']
 
 
 # Password validation

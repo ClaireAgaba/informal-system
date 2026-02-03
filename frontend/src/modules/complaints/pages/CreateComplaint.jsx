@@ -29,24 +29,39 @@ const CreateComplaint = () => {
     fetchDropdownData();
   }, []);
 
+  const fetchAllPagesApi = async (fetchPage, params = {}, page = 1, acc = []) => {
+    const response = await fetchPage({ ...params, page, page_size: 1000 });
+    const data = response?.data;
+
+    if (Array.isArray(data)) {
+      return [...acc, ...data];
+    }
+
+    const results = data?.results || [];
+    const nextAcc = [...acc, ...results];
+
+    if (!data?.next) {
+      return nextAcc;
+    }
+
+    return fetchAllPagesApi(fetchPage, params, page + 1, nextAcc);
+  };
+
   const fetchDropdownData = async () => {
     try {
-      const [categoriesRes, centersRes, seriesRes, occupationsRes] = await Promise.all([
-        complaintsApi.getCategories(),
-        assessmentCenterApi.getAll(),
-        assessmentSeriesApi.getAll(),
-        occupationApi.getAll(),
+      const categoriesRes = await complaintsApi.getCategories();
+      const [centersData, seriesData, occupationsData] = await Promise.all([
+        fetchAllPagesApi(assessmentCenterApi.getAll),
+        fetchAllPagesApi(assessmentSeriesApi.getAll),
+        fetchAllPagesApi(occupationApi.getAll),
       ]);
 
       console.log('Categories response:', categoriesRes);
-      console.log('Centers response:', centersRes);
-      console.log('Series response:', seriesRes);
-      console.log('Occupations response:', occupationsRes);
+      console.log('Centers response:', centersData);
+      console.log('Series response:', seriesData);
+      console.log('Occupations response:', occupationsData);
 
       const categoriesData = Array.isArray(categoriesRes.data) ? categoriesRes.data : (categoriesRes.data.results || []);
-      const centersData = Array.isArray(centersRes.data) ? centersRes.data : (centersRes.data.results || []);
-      const seriesData = Array.isArray(seriesRes.data) ? seriesRes.data : (seriesRes.data.results || []);
-      const occupationsData = Array.isArray(occupationsRes.data) ? occupationsRes.data : (occupationsRes.data.results || []);
 
       console.log('Parsed categories:', categoriesData);
       console.log('Parsed centers:', centersData);

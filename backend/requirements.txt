@@ -20,6 +20,7 @@ packaging==25.0
 pillow==12.0.0
 prompt_toolkit==3.0.52
 psycopg2-binary==2.9.11
+PyMySQL==1.1.1
 python-dateutil==2.9.0.post0
 python-decouple==3.8
 pycountry==24.6.1

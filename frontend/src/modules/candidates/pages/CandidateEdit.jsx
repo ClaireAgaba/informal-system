@@ -24,6 +24,49 @@ const CandidateEdit = () => {
   const [photoPreview, setPhotoPreview] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
 
+  const fetchAllPagesFetch = async (baseUrl, params = {}, page = 1, acc = []) => {
+    const url = new URL(baseUrl, window.location.origin);
+    const search = new URLSearchParams(params);
+    search.set('page', String(page));
+    search.set('page_size', '1000');
+    url.search = search.toString();
+
+    const response = await fetch(url.toString());
+    if (!response.ok) throw new Error('Request failed');
+    const data = await response.json();
+
+    if (Array.isArray(data)) {
+      return [...acc, ...data];
+    }
+
+    const results = data?.results || [];
+    const nextAcc = [...acc, ...results];
+
+    if (!data?.next) {
+      return nextAcc;
+    }
+
+    return fetchAllPagesFetch(baseUrl, params, page + 1, nextAcc);
+  };
+
+  const fetchAllPagesApi = async (fetchPage, params = {}, page = 1, acc = []) => {
+    const response = await fetchPage({ ...params, page, page_size: 1000 });
+    const data = response?.data;
+
+    if (Array.isArray(data)) {
+      return [...acc, ...data];
+    }
+
+    const results = data?.results || [];
+    const nextAcc = [...acc, ...results];
+
+    if (!data?.next) {
+      return nextAcc;
+    }
+
+    return fetchAllPagesApi(fetchPage, params, page + 1, nextAcc);
+  };
+
   const {
     register,
     handleSubmit,
@@ -48,46 +91,43 @@ const CandidateEdit = () => {
 
   const candidate = data?.data;
 
+  const selectedDistrict = watch('district');
+
   // Fetch districts
   const { data: districtsData } = useQuery({
     queryKey: ['districts'],
     queryFn: async () => {
-      const response = await fetch('/api/configurations/districts/');
-      if (!response.ok) throw new Error('Failed to fetch districts');
-      return response.json();
+      return fetchAllPagesFetch('/api/configurations/districts/');
     },
   });
 
   // Fetch villages
   const { data: villagesData } = useQuery({
-    queryKey: ['villages'],
+    queryKey: ['villages', selectedDistrict],
     queryFn: async () => {
-      const response = await fetch('/api/configurations/villages/');
-      if (!response.ok) throw new Error('Failed to fetch villages');
-      return response.json();
+      return fetchAllPagesFetch('/api/configurations/villages/', { district: selectedDistrict });
     },
+    enabled: !!selectedDistrict,
   });
 
   // Fetch disabilities
   const { data: disabilitiesData } = useQuery({
     queryKey: ['disabilities'],
     queryFn: async () => {
-      const response = await fetch('/api/configurations/nature-of-disabilities/');
-      if (!response.ok) throw new Error('Failed to fetch disabilities');
-      return response.json();
+      return fetchAllPagesFetch('/api/configurations/nature-of-disabilities/');
     },
   });
 
   // Fetch occupations
   const { data: occupationsData } = useQuery({
     queryKey: ['occupations'],
-    queryFn: () => occupationApi.getAll(),
+    queryFn: () => fetchAllPagesApi(occupationApi.getAll),
   });
 
   // Fetch assessment centers
   const { data: centersData } = useQuery({
     queryKey: ['assessment-centers'],
-    queryFn: () => assessmentCenterApi.getAll(),
+    queryFn: () => fetchAllPagesApi(assessmentCenterApi.getAll),
   });
 
   const { data: nationalitiesData } = useQuery({
@@ -95,12 +135,16 @@ const CandidateEdit = () => {
     queryFn: () => candidateApi.getNationalities(),
   });
 
-  const districts = districtsData?.results || [];
-  const villages = villagesData?.results || [];
-  const disabilities = disabilitiesData?.results || [];
-  const allOccupations = occupationsData?.data?.results || [];
-  const centers = centersData?.data?.results || [];
+  const districts = districtsData || [];
+  const villages = villagesData || [];
+  const disabilities = disabilitiesData || [];
+  const allOccupations = occupationsData || [];
+  const centers = centersData || [];
   const nationalityOptions = nationalitiesData?.data || [];
+
+  useEffect(() => {
+    setValue('village', '');
+  }, [selectedDistrict, setValue]);
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');

@@ -37,10 +37,28 @@ const CenterRepresentativeEdit = () => {
     }
   }, [formData.assessment_center]);
 
+  const fetchAllPages = async (fetchPage, params = {}, page = 1, acc = []) => {
+    const response = await fetchPage({ ...params, page, page_size: 1000 });
+    const data = response?.data;
+
+    if (Array.isArray(data)) {
+      return [...acc, ...data];
+    }
+
+    const results = data?.results || [];
+    const nextAcc = [...acc, ...results];
+
+    if (!data?.next) {
+      return nextAcc;
+    }
+
+    return fetchAllPages(fetchPage, params, page + 1, nextAcc);
+  };
+
   const fetchCenters = async () => {
     try {
-      const response = await assessmentCenterApi.getAll();
-      setCenters(response.data.results || response.data || []);
+      const allCenters = await fetchAllPages(assessmentCenterApi.getAll);
+      setCenters(allCenters);
     } catch (error) {
       console.error('Error fetching centers:', error);
     }
@@ -48,8 +66,10 @@ const CenterRepresentativeEdit = () => {
 
   const fetchBranches = async (centerId) => {
     try {
-      const response = await assessmentCenterApi.branches.getByCenter(centerId);
-      setBranches(response.data?.results || response.data || []);
+      const allBranches = await fetchAllPages(assessmentCenterApi.branches.getAll, {
+        assessment_center: centerId,
+      });
+      setBranches(allBranches);
     } catch (error) {
       console.error('Error fetching branches:', error);
       setBranches([]);

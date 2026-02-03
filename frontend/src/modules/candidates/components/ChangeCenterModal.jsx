@@ -10,13 +10,31 @@ const ChangeCenterModal = ({ candidate, onClose }) => {
   const queryClient = useQueryClient();
   const [selectedCenter, setSelectedCenter] = useState('');
 
+  const fetchAllPagesApi = async (fetchPage, params = {}, page = 1, acc = []) => {
+    const response = await fetchPage({ ...params, page, page_size: 1000 });
+    const data = response?.data;
+
+    if (Array.isArray(data)) {
+      return [...acc, ...data];
+    }
+
+    const results = data?.results || [];
+    const nextAcc = [...acc, ...results];
+
+    if (!data?.next) {
+      return nextAcc;
+    }
+
+    return fetchAllPagesApi(fetchPage, params, page + 1, nextAcc);
+  };
+
   // Fetch all assessment centers
   const { data: centersData, isLoading } = useQuery({
     queryKey: ['assessment-centers-list'],
-    queryFn: () => assessmentCenterApi.getAll(),
+    queryFn: () => fetchAllPagesApi(assessmentCenterApi.getAll),
   });
 
-  const centersList = centersData?.data?.results || centersData?.data || [];
+  const centersList = centersData || [];
 
   // Change center mutation
   const changeCenterMutation = useMutation({

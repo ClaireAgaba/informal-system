@@ -16,6 +16,31 @@ const AssessmentCenterEdit = () => {
   
   console.log('AssessmentCenterEdit loaded:', { id, isNewCenter });
 
+  const fetchAllPagesFetch = async (baseUrl, params = {}, page = 1, acc = []) => {
+    const url = new URL(baseUrl, window.location.origin);
+    const search = new URLSearchParams(params);
+    search.set('page', String(page));
+    search.set('page_size', '1000');
+    url.search = search.toString();
+
+    const response = await fetch(url.toString());
+    if (!response.ok) throw new Error('Failed to fetch data');
+    const data = await response.json();
+
+    if (Array.isArray(data)) {
+      return [...acc, ...data];
+    }
+
+    const results = data?.results || [];
+    const nextAcc = [...acc, ...results];
+
+    if (!data?.next) {
+      return nextAcc;
+    }
+
+    return fetchAllPagesFetch(baseUrl, params, page + 1, nextAcc);
+  };
+
   const {
     register,
     handleSubmit,
@@ -35,9 +60,7 @@ const AssessmentCenterEdit = () => {
   const { data: districtsData } = useQuery({
     queryKey: ['districts'],
     queryFn: async () => {
-      const response = await fetch('/api/configurations/districts/');
-      if (!response.ok) throw new Error('Failed to fetch districts');
-      return response.json();
+      return fetchAllPagesFetch('/api/configurations/districts/');
     },
   });
 
@@ -45,15 +68,13 @@ const AssessmentCenterEdit = () => {
   const { data: villagesData } = useQuery({
     queryKey: ['villages'],
     queryFn: async () => {
-      const response = await fetch('/api/configurations/villages/');
-      if (!response.ok) throw new Error('Failed to fetch villages');
-      return response.json();
+      return fetchAllPagesFetch('/api/configurations/villages/');
     },
   });
 
   const center = data?.data;
-  const districts = districtsData?.results || [];
-  const villages = villagesData?.results || [];
+  const districts = districtsData || [];
+  const villages = villagesData || [];
 
   // Populate form when data is loaded
   useEffect(() => {
