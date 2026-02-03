@@ -818,8 +818,8 @@ const CandidateView = () => {
                         value={candidate.assessment_center_detail?.center_number}
                       />
                       <InfoItem
-                        label="Branch"
-                        value={candidate.assessment_center_branch_detail?.branch_name}
+                        label="Branch Code"
+                        value={candidate.assessment_center_branch_detail?.branch_code || candidate.assessment_center_branch_detail?.branch_name}
                       />
                       <InfoItem
                         label="Category"

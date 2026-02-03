@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -159,9 +159,24 @@ const CandidateEdit = () => {
   const isCenterRep = currentUser?.user_type === 'center_representative';
   const repCenter = currentUser?.center_representative?.assessment_center;
   const repCenterId = repCenter?.id ? String(repCenter.id) : '';
+  const repBranch = currentUser?.center_representative?.assessment_center_branch;
+  const repBranchId = repBranch?.id ? String(repBranch.id) : '';
   const availableCenters = isCenterRep && repCenterId
     ? [{ id: repCenter.id, center_number: repCenter.center_number, center_name: repCenter.center_name }]
     : centers;
+
+  const selectedCenter = watch('assessment_center');
+  const { data: branchesData } = useQuery({
+    queryKey: ['center-branches', selectedCenter],
+    queryFn: () => fetchAllPagesApi(assessmentCenterApi.branches.getAll, { assessment_center: selectedCenter }),
+    enabled: !!selectedCenter,
+  });
+
+  const branches = branchesData || [];
+
+  const availableBranches = isCenterRep && repBranchId
+    ? branches.filter((b) => String(b.id) === repBranchId)
+    : branches;
 
   // Watch registration category to filter occupations
   const registrationCategory = watch('registration_category');
@@ -214,7 +229,27 @@ const CandidateEdit = () => {
   useEffect(() => {
     if (!isCenterRep || !repCenterId) return;
     setValue('assessment_center', repCenterId);
-  }, [isCenterRep, repCenterId, setValue]);
+    if (repBranchId) {
+      setValue('assessment_center_branch', repBranchId);
+    }
+  }, [isCenterRep, repCenterId, repBranchId, setValue]);
+
+  const prevSelectedCenterRef = useRef(undefined);
+  useEffect(() => {
+    const prev = prevSelectedCenterRef.current;
+
+    if (!selectedCenter) {
+      setValue('assessment_center_branch', '');
+      prevSelectedCenterRef.current = selectedCenter;
+      return;
+    }
+
+    if (prev && String(prev) !== String(selectedCenter)) {
+      setValue('assessment_center_branch', '');
+    }
+
+    prevSelectedCenterRef.current = selectedCenter;
+  }, [selectedCenter, setValue]);
 
   // Update mutation
   const updateMutation = useMutation({
@@ -752,6 +787,24 @@ const CandidateEdit = () => {
                         {errors.assessment_center && (
                           <p className="text-red-500 text-xs mt-1">{errors.assessment_center.message}</p>
                         )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Center Branch
+                        </label>
+                        <select
+                          {...register('assessment_center_branch')}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          disabled={!selectedCenter || (isCenterRep && !!repCenterId)}
+                        >
+                          <option value="">Select branch (optional)</option>
+                          {availableBranches.map((branch) => (
+                            <option key={branch.id} value={branch.id}>
+                              {branch.branch_code}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
                       <div>

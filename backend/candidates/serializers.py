@@ -121,6 +121,7 @@ class CandidateDetailSerializer(serializers.ModelSerializer):
             return {
                 'id': obj.assessment_center_branch.id,
                 'branch_name': obj.assessment_center_branch.branch_name,
+                'branch_code': obj.assessment_center_branch.branch_code,
             }
         return None
     
@@ -261,6 +262,17 @@ class CandidateCreateUpdateSerializer(serializers.ModelSerializer):
         for field in fk_fields:
             if field in data and (data[field] == '' or data[field] == 'None'):
                 data[field] = None
+
+        assessment_center = data.get('assessment_center', getattr(self.instance, 'assessment_center', None))
+        assessment_center_branch = data.get(
+            'assessment_center_branch',
+            getattr(self.instance, 'assessment_center_branch', None)
+        )
+        if assessment_center_branch and assessment_center:
+            if assessment_center_branch.assessment_center_id != assessment_center.id:
+                raise serializers.ValidationError({
+                    'assessment_center_branch': 'Selected branch does not belong to the selected assessment center'
+                })
 
         return data
 
