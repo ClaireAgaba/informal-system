@@ -48,7 +48,7 @@ def migrate_center_reps(dry_run=False):
         return
     
     # Pre-hash the default password once (much faster than hashing 916 times)
-    default_password = make_password('uvtab@2025')
+    default_password = make_password('uvtab')
     
     migrated = 0
     skipped = 0

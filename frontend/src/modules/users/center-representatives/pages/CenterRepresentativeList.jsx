@@ -53,10 +53,10 @@ const CenterRepresentativeList = () => {
   };
 
   const handleResetPassword = async (id, fullname) => {
-    if (window.confirm(`Reset password for ${fullname} to default (uvtab@2025)?`)) {
+    if (window.confirm(`Reset password for ${fullname} to default (uvtab)?`)) {
       try {
         await centerRepresentativeApi.resetPassword(id);
-        alert('Password reset successfully to uvtab@2025');
+        alert('Password reset successfully to uvtab');
       } catch (error) {
         console.error('Error resetting password:', error);
         alert('Failed to reset password');

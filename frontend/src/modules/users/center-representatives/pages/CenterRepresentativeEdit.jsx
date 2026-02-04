@@ -336,7 +336,7 @@ const CenterRepresentativeEdit = () => {
               </p>
               <ul className="text-sm text-green-700 space-y-1 ml-4 list-disc">
                 <li><strong>Email:</strong> {generatedEmail || '(Select a center first)'}</li>
-                <li><strong>Password:</strong> <span className="font-mono">uvtab@2025</span></li>
+                <li><strong>Password:</strong> <span className="font-mono">uvtab</span></li>
               </ul>
               <p className="text-xs text-green-600 mt-3">
                 * Representative should change password after first login

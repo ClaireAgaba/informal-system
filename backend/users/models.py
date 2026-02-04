@@ -82,7 +82,7 @@ class Staff(models.Model):
                 is_active=self.account_status == 'active'
             )
             # Set default password: uvtab@2025
-            user.set_password('uvtab@2025')
+            user.set_password('uvtab')
             user.save()
             self.user = user
         else:
@@ -153,7 +153,7 @@ class SupportStaff(models.Model):
                 is_active=self.account_status == 'active'
             )
             # Set default password: uvtab@2025
-            user.set_password('uvtab@2025')
+            user.set_password('uvtab')
             user.save()
             self.user = user
         else:
@@ -241,10 +241,10 @@ class CenterRepresentative(models.Model):
                 user_type='center_representative',
                 phone_number=self.contact,
                 is_staff=False,
-                is_active=True
+                is_active=self.account_status == 'active'
             )
-            # Set default password: uvtab@2025
-            user.set_password('uvtab@2025')
+            # Set default password: uvtab
+            user.set_password('uvtab')
             user.save()
             self.user = user
         else:
@@ -253,6 +253,7 @@ class CenterRepresentative(models.Model):
             self.user.phone_number = self.contact
             self.user.first_name = self.fullname.split()[0] if self.fullname else ''
             self.user.last_name = ' '.join(self.fullname.split()[1:]) if len(self.fullname.split()) > 1 else ''
+            self.user.is_active = self.account_status == 'active'
             self.user.save()
         
         super().save(*args, **kwargs)

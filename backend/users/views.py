@@ -229,9 +229,9 @@ class CenterRepresentativeViewSet(viewsets.ModelViewSet):
         """Reset center representative password to default"""
         rep = self.get_object()
         if rep.user:
-            rep.user.set_password('uvtab@2025')
+            rep.user.set_password('uvtab')
             rep.user.save()
-            return Response({'status': 'Password reset to default (uvtab@2025)'})
+            return Response({'status': 'Password reset to default (uvtab)'})
         return Response({'error': 'No user account found'}, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'])

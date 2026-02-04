@@ -26,10 +26,10 @@ const CenterRepresentativeView = () => {
   };
 
   const handleResetPassword = async () => {
-    if (window.confirm(`Reset password for ${representative.fullname} to default (uvtab@2025)?`)) {
+    if (window.confirm(`Reset password for ${representative.fullname} to default (uvtab)?`)) {
       try {
         await centerRepresentativeApi.resetPassword(id);
-        alert('Password reset successfully to uvtab@2025');
+        alert('Password reset successfully to uvtab');
       } catch (error) {
         console.error('Error resetting password:', error);
         alert('Failed to reset password');
@@ -272,7 +272,7 @@ const CenterRepresentativeView = () => {
               </div>
               <div>
                 <span className="text-blue-700 font-medium">Default Password:</span>
-                <p className="text-blue-900 font-mono">uvtab@2025</p>
+                <p className="text-blue-900 font-mono">uvtab</p>
               </div>
               <p className="text-xs text-blue-600 mt-3">
                 * Representative should change password after first login
