@@ -8,6 +8,7 @@ const CenterRepresentativeList = () => {
   const [representatives, setRepresentatives] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -15,13 +16,27 @@ const CenterRepresentativeList = () => {
   const pageSize = 20;
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
     fetchRepresentatives();
-  }, [currentPage]);
+  }, [currentPage, debouncedSearchTerm, statusFilter]);
 
   const fetchRepresentatives = async () => {
     try {
       setLoading(true);
-      const response = await centerRepresentativeApi.getAll({ page: currentPage });
+      const params = { page: currentPage };
+      if (debouncedSearchTerm.trim()) {
+        params.search = debouncedSearchTerm.trim();
+      }
+      if (statusFilter !== 'all') {
+        params.account_status = statusFilter;
+      }
+      const response = await centerRepresentativeApi.getAll(params);
       const data = response.data;
       
       if (data.results) {
@@ -78,17 +93,7 @@ const CenterRepresentativeList = () => {
     }
   };
 
-  const filteredRepresentatives = representatives.filter(rep => {
-    const matchesSearch = 
-      rep.fullname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rep.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rep.center_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rep.contact?.includes(searchTerm);
-    
-    const matchesStatus = statusFilter === 'all' || rep.account_status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
+  const filteredRepresentatives = representatives;
 
   if (loading) {
     return (
@@ -124,13 +129,19 @@ const CenterRepresentativeList = () => {
               type="text"
               placeholder="Search by name, email, center, or contact..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setCurrentPage(1);
+            }}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="all">All Status</option>
