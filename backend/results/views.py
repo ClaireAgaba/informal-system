@@ -903,8 +903,8 @@ class ModularResultViewSet(viewsets.ViewSet):
         # Create PDF buffer
         buffer = BytesIO()
         
-        # Generate QR Code with candidate info
-        qr_data = f"Name: {candidate.full_name}\nReg No: {candidate.registration_number}\nOccupation: {candidate.occupation.occ_name if candidate.occupation else ''}\nInstitution: {candidate.assessment_center.center_name if candidate.assessment_center else ''}\nAward: {candidate.occupation.award_modular if candidate.occupation else ''}\nCompletion Year: {datetime.now().year}"
+        # Generate QR Code with candidate info (use pipe separator for better scanner compatibility)
+        qr_data = f"Name: {candidate.full_name} | Reg No: {candidate.registration_number} | Occupation: {candidate.occupation.occ_name if candidate.occupation else ''} | Institution: {candidate.assessment_center.center_name if candidate.assessment_center else ''} | Award: {candidate.occupation.award_modular if candidate.occupation else ''} | Year: {datetime.now().year}"
         qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=6, border=1)
         qr.add_data(qr_data)
         qr.make(fit=True)
@@ -1659,8 +1659,8 @@ class FormalResultViewSet(viewsets.ViewSet):
         # Create PDF buffer
         buffer = BytesIO()
         
-        # Generate QR Code with candidate info (award now comes from level, determined later)
-        qr_data = f"Name: {candidate.full_name}\nReg No: {candidate.registration_number}\nOccupation: {candidate.occupation.occ_name if candidate.occupation else ''}\nInstitution: {candidate.assessment_center.center_name if candidate.assessment_center else ''}\nCompletion Year: {datetime.now().year}"
+        # Generate QR Code with candidate info (use pipe separator for better scanner compatibility)
+        qr_data = f"Name: {candidate.full_name} | Reg No: {candidate.registration_number} | Occupation: {candidate.occupation.occ_name if candidate.occupation else ''} | Institution: {candidate.assessment_center.center_name if candidate.assessment_center else ''} | Year: {datetime.now().year}"
         qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=6, border=1)
         qr.add_data(qr_data)
         qr.make(fit=True)
