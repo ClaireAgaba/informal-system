@@ -33,7 +33,8 @@ class OccupationLevelInline(admin.TabularInline):
     model = OccupationLevel
     extra = 1
     fields = ['level_name', 'structure_type', 'formal_fee', 'workers_pas_base_fee', 
-              'workers_pas_per_module_fee', 'modular_fee_single_module', 'modular_fee_double_module', 'is_active']
+              'workers_pas_per_module_fee', 'modular_fee_single_module', 'modular_fee_double_module', 
+              'award', 'contact_hours', 'is_active']
     verbose_name = 'Level'
     verbose_name_plural = 'Occupation Levels'
 
@@ -52,9 +53,9 @@ class OccupationAdmin(admin.ModelAdmin):
         ('Basic Information', {
             'fields': ('occ_code', 'occ_name', 'occ_category', 'sector')
         }),
-        ('Awards & Hours', {
-            'fields': ('award', 'award_modular', 'contact_hours'),
-            'description': 'Award titles used on transcripts. Modular award only applies if "Has Modular" is enabled.'
+        ('Modular Award', {
+            'fields': ('award_modular',),
+            'description': 'Award title for modular candidates. Only applies if "Has Modular" is enabled.'
         }),
         ('Levels & Structure Type', {
             'fields': ('has_modular', 'get_levels_count'),
@@ -98,6 +99,10 @@ class OccupationLevelAdmin(admin.ModelAdmin):
                 'modular_fee_double_module'
             ),
             'description': 'Set the fees for different registration types (all amounts in UGX)'
+        }),
+        ('Award & Duration', {
+            'fields': ('award', 'contact_hours'),
+            'description': 'Award title and contact hours for this level (used on transcripts)'
         }),
         ('Status & Timestamps', {
             'fields': ('is_active', 'created_at', 'updated_at'),

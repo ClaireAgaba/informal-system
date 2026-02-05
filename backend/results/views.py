@@ -1141,12 +1141,19 @@ class ModularResultViewSet(viewsets.ViewSet):
         cu_summary.setStyle(TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0)]))
         elements.append(cu_summary)
 
-        # Duration (Contact hours from occupation)
-        duration = candidate.occupation.contact_hours if candidate.occupation and candidate.occupation.contact_hours else "-"
+        # Duration (Contact hours from level - get from first module's level)
+        duration = "-"
+        level_award = "-"
+        if results.exists():
+            first_result = results.first()
+            if first_result.module and first_result.module.level:
+                level = first_result.module.level
+                duration = level.contact_hours if level.contact_hours else "-"
+                level_award = level.award if level.award else "-"
         elements.append(Paragraph(f"<b>Duration:</b> {duration}", info_value_style))
 
-        # Award (Modular award from occupation)
-        award = candidate.occupation.award_modular if candidate.occupation and candidate.occupation.award_modular else "-"
+        # Award (Modular award from occupation - stays on occupation for modular candidates)
+        award = candidate.occupation.award_modular if candidate.occupation and candidate.occupation.award_modular else level_award
         elements.append(Paragraph(f"<b>Award:</b> {award}", info_value_style))
 
         # Completion Year (from assessment series)
@@ -1973,14 +1980,19 @@ class FormalResultViewSet(viewsets.ViewSet):
         else:
             elements.append(Paragraph("No results found.", info_value_style))
         
-        # Footer info
+        # Footer info - get duration and award from level
         elements.append(Spacer(1, 0.3*cm))
         elements.append(Paragraph(f"<b>Total Credit Units:</b> {level_total_cus}", info_value_style))
         
-        duration = candidate.occupation.contact_hours if candidate.occupation and candidate.occupation.contact_hours else "-"
+        # Get duration and award from level
+        duration = "-"
+        award = "-"
+        if results.exists():
+            first_result = results.first()
+            if first_result.level:
+                duration = first_result.level.contact_hours if first_result.level.contact_hours else "-"
+                award = first_result.level.award if first_result.level.award else "-"
         elements.append(Paragraph(f"<b>Duration:</b> {duration}", info_value_style))
-        
-        award = candidate.occupation.award if candidate.occupation and candidate.occupation.award else "-"
         elements.append(Paragraph(f"<b>Award:</b> {award}", info_value_style))
         
         elements.append(Paragraph(f"<b>Completion Year:</b> {completion_date or '-'}", info_value_style))

@@ -16,6 +16,8 @@ const LevelModal = ({ isOpen, onClose, onSubmit, level, isLoading }) => {
         workers_pas_per_module_fee: level.workers_pas_per_module_fee,
         modular_fee_single_module: level.modular_fee_single_module,
         modular_fee_double_module: level.modular_fee_double_module,
+        award: level.award || '',
+        contact_hours: level.contact_hours || '',
       });
     } else {
       reset({
@@ -26,6 +28,8 @@ const LevelModal = ({ isOpen, onClose, onSubmit, level, isLoading }) => {
         workers_pas_per_module_fee: '0.00',
         modular_fee_single_module: '0.00',
         modular_fee_double_module: '0.00',
+        award: '',
+        contact_hours: '',
       });
     }
   }, [level, reset]);
@@ -190,6 +194,48 @@ const LevelModal = ({ isOpen, onClose, onSubmit, level, isLoading }) => {
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Fee for Modular registration with 2 modules
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Award & Duration */}
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-purple-900 mb-3">Award & Duration</h3>
+            <p className="text-xs text-purple-700 mb-4">
+              Award title and contact hours for this level (used on transcripts)
+            </p>
+
+            <div className="space-y-4">
+              {/* Award */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Award:
+                </label>
+                <input
+                  type="text"
+                  {...register('award')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="e.g., Certificate in Hair Dressing Level 1"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Award/Certificate title for this level (used on transcripts)
+                </p>
+              </div>
+
+              {/* Contact Hours */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Contact Hours:
+                </label>
+                <input
+                  type="number"
+                  {...register('contact_hours')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="e.g., 1200"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Total contact hours for this level
                 </p>
               </div>
             </div>

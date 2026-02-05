@@ -39,25 +39,12 @@ class Occupation(models.Model):
     occ_code = models.CharField(max_length=50, unique=True, verbose_name='Occupation Code')
     occ_name = models.CharField(max_length=200, verbose_name='Occupation Name')
     occ_category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, verbose_name='Occupation Category')
-    award = models.CharField(
-        max_length=200, 
-        blank=True, 
-        null=True,
-        verbose_name='Award (Full Occupation)',
-        help_text="Award/Certificate title for full occupation candidates (used on transcripts)"
-    )
     award_modular = models.CharField(
         max_length=200, 
         blank=True, 
         null=True,
         verbose_name='Award (Modular)',
         help_text="Award/Certificate title for modular candidates (only if Has Modular is enabled)"
-    )
-    contact_hours = models.PositiveIntegerField(
-        blank=True,
-        null=True,
-        verbose_name='Contact Hours',
-        help_text="Total contact hours for this occupation"
     )
     sector = models.ForeignKey(
         Sector, 
@@ -167,6 +154,21 @@ class OccupationLevel(models.Model):
         validators=[MinValueValidator(Decimal('0.00'))],
         verbose_name='Modular Fee - Double Module (UGX)',
         help_text="Fee for Modular registration with 2 modules"
+    )
+    
+    # Award and Duration fields (moved from Occupation)
+    award = models.CharField(
+        max_length=200, 
+        blank=True, 
+        null=True,
+        verbose_name='Award',
+        help_text="Award/Certificate title for this level (used on transcripts)"
+    )
+    contact_hours = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        verbose_name='Contact Hours',
+        help_text="Total contact hours for this level"
     )
     
     is_active = models.BooleanField(default=True)

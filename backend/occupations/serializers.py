@@ -29,7 +29,8 @@ class OccupationLevelCreateSerializer(serializers.ModelSerializer):
         model = OccupationLevel
         fields = ['occupation', 'level_name', 'structure_type', 'formal_fee', 
                   'workers_pas_base_fee', 'workers_pas_per_module_fee', 
-                  'modular_fee_single_module', 'modular_fee_double_module', 'is_active']
+                  'modular_fee_single_module', 'modular_fee_double_module', 
+                  'award', 'contact_hours', 'is_active']
     
     def validate(self, data):
         """Validate level name is unique for the occupation"""
@@ -62,7 +63,7 @@ class OccupationCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Occupation
-        fields = ['occ_code', 'occ_name', 'occ_category', 'award', 'award_modular', 'contact_hours', 'sector', 'has_modular', 'is_active']
+        fields = ['occ_code', 'occ_name', 'occ_category', 'award_modular', 'sector', 'has_modular', 'is_active']
     
     def validate_occ_code(self, value):
         """Ensure occupation code is unique"""
@@ -88,7 +89,7 @@ class OccupationListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Occupation
         fields = ['id', 'occ_code', 'occ_name', 'occ_category', 'occ_category_display', 
-                  'award', 'award_modular', 'contact_hours', 'sector', 'sector_name', 'has_modular', 'levels_count', 'is_active']
+                  'award_modular', 'sector', 'sector_name', 'has_modular', 'levels_count', 'is_active']
 
 
 class OccupationModuleSerializer(serializers.ModelSerializer):

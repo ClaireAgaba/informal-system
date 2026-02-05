@@ -247,28 +247,12 @@ const OccupationView = () => {
                 }
               />
 
-              {/* Award fields - only for formal category */}
-              {occupation.occ_category === 'formal' && occupation.award && (
-                <InfoItem
-                  icon={<FileText className="w-5 h-5 text-gray-400" />}
-                  label="Award (Full Occupation)"
-                  value={occupation.award}
-                />
-              )}
-
+              {/* Award Modular - only for formal category with modular */}
               {occupation.occ_category === 'formal' && occupation.has_modular && occupation.award_modular && (
                 <InfoItem
                   icon={<FileText className="w-5 h-5 text-gray-400" />}
                   label="Award (Modular)"
                   value={occupation.award_modular}
-                />
-              )}
-
-              {occupation.contact_hours && (
-                <InfoItem
-                  icon={<Tag className="w-5 h-5 text-gray-400" />}
-                  label="Contact Hours"
-                  value={`${occupation.contact_hours} Hrs`}
                 />
               )}
 
@@ -441,6 +425,26 @@ const OccupationView = () => {
                                   {totalCU} CU
                                 </span>
                               </div>
+                              
+                              {/* Award */}
+                              {level.award && (
+                                <div className="flex items-center text-sm">
+                                  <span className="text-gray-500 w-48">Award:</span>
+                                  <span className="font-medium text-gray-900">
+                                    {level.award}
+                                  </span>
+                                </div>
+                              )}
+                              
+                              {/* Contact Hours */}
+                              {level.contact_hours && (
+                                <div className="flex items-center text-sm">
+                                  <span className="text-gray-500 w-48">Contact Hours:</span>
+                                  <span className="font-medium text-gray-900">
+                                    {level.contact_hours} Hrs
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
                           <Button

@@ -21,9 +21,7 @@ const OccupationCreate = () => {
       occ_code: '',
       occ_name: '',
       occ_category: '',
-      award: '',
       award_modular: '',
-      contact_hours: '',
       sector: '',
       has_modular: false,
       is_active: true,
@@ -76,9 +74,7 @@ const OccupationCreate = () => {
       occ_code: formData.occ_code,
       occ_name: formData.occ_name,
       occ_category: formData.occ_category,
-      award: formData.occ_category === 'formal' ? (formData.award || null) : null,
       award_modular: formData.has_modular ? (formData.award_modular || null) : null,
-      contact_hours: formData.contact_hours ? parseInt(formData.contact_hours) : null,
       sector: formData.sector ? parseInt(formData.sector) : null,
       has_modular: formData.has_modular || false,
       is_active: formData.is_active !== false,
@@ -170,22 +166,6 @@ const OccupationCreate = () => {
                   )}
                 </div>
 
-                {/* Award - Only for Formal category */}
-                {watchCategory === 'formal' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Award (Full Occupation)
-                    </label>
-                    <input
-                      type="text"
-                      {...register('award')}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      placeholder="e.g., Uganda Vocational Qualification"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">Award title for full occupation candidates (used on transcripts)</p>
-                  </div>
-                )}
-
                 {/* Award Modular - Only when has_modular is checked */}
                 {watchCategory === 'formal' && watchHasModular && (
                   <div>
@@ -201,21 +181,6 @@ const OccupationCreate = () => {
                     <p className="mt-1 text-xs text-gray-500">Award title for modular candidates (used on transcripts)</p>
                   </div>
                 )}
-
-                {/* Contact Hours */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Contact Hours
-                  </label>
-                  <input
-                    type="number"
-                    {...register('contact_hours')}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    placeholder="e.g., 120"
-                    min="0"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">Total contact hours for this occupation</p>
-                </div>
 
                 {/* Sector */}
                 <div>
