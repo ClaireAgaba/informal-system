@@ -882,11 +882,17 @@ class ModularResultViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Check if candidate qualifies for transcript (must have at least one successful result)
+        # Check if candidate qualifies for transcript (ALL results must be successful)
         modular_results = ModularResult.objects.filter(candidate=candidate)
-        has_successful = any(r.comment == 'Success' for r in modular_results)
+        if not modular_results.exists():
+            return Response(
+                {'error': 'Candidate does not qualify for transcript. No results found.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-        if not has_successful:
+        all_successful = all(r.comment == 'Success' for r in modular_results)
+        
+        if not all_successful:
             return Response(
                 {'error': 'Candidate does not qualify for transcript. No successful results found.'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1564,11 +1570,17 @@ class FormalResultViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Check if candidate qualifies for transcript (must have at least one successful result)
+        # Check if candidate qualifies for transcript (ALL results must be successful)
         formal_results = FormalResult.objects.filter(candidate=candidate)
-        has_successful = any(r.comment == 'Successful' for r in formal_results)
+        if not formal_results.exists():
+            return Response(
+                {'error': 'Candidate does not qualify for transcript. No results found.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-        if not has_successful:
+        all_successful = all(r.comment == 'Successful' for r in formal_results)
+        
+        if not all_successful:
             return Response(
                 {'error': 'Candidate does not qualify for transcript. No successful results found.'},
                 status=status.HTTP_400_BAD_REQUEST
