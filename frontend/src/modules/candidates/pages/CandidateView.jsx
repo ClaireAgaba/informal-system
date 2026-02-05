@@ -221,6 +221,24 @@ const CandidateView = () => {
     }
   };
 
+  const handleTranscript = async () => {
+    try {
+      const url = candidateApi.getTranscriptPDF(id, candidate?.registration_category);
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        const data = await response.json();
+        toast.error(data.error || 'Candidate does not qualify for transcript');
+        return;
+      }
+      
+      // If successful, open the PDF
+      window.open(url, '_blank');
+    } catch (error) {
+      toast.error('Failed to generate transcript');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -314,14 +332,16 @@ const CandidateView = () => {
             <Download className="w-4 h-4 mr-2" />
             Verified Results
           </Button>
-          <Button
-            variant="outline"
-            size="md"
-            onClick={() => window.open(candidateApi.getTranscriptPDF(id, candidate?.registration_category), '_blank')}
-          >
-            <span className="mr-2">📄</span>
-            Transcript
-          </Button>
+          {candidate?.registration_category !== 'workers_pas' && (
+            <Button
+              variant="outline"
+              size="md"
+              onClick={handleTranscript}
+            >
+              <span className="mr-2">📄</span>
+              Transcript
+            </Button>
+          )}
           <Button
             variant="primary"
             size="md"

@@ -882,6 +882,16 @@ class ModularResultViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
+        # Check if candidate qualifies for transcript (must have at least one successful result)
+        modular_results = ModularResult.objects.filter(candidate=candidate)
+        has_successful = any(r.comment == 'Success' for r in modular_results)
+        
+        if not has_successful:
+            return Response(
+                {'error': 'Candidate does not qualify for transcript. No successful results found.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         # Create PDF buffer
         buffer = BytesIO()
         
@@ -1552,6 +1562,16 @@ class FormalResultViewSet(viewsets.ViewSet):
             return Response(
                 {'error': 'Candidate not found'},
                 status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if candidate qualifies for transcript (must have at least one successful result)
+        formal_results = FormalResult.objects.filter(candidate=candidate)
+        has_successful = any(r.comment == 'Success' for r in formal_results)
+        
+        if not has_successful:
+            return Response(
+                {'error': 'Candidate does not qualify for transcript. No successful results found.'},
+                status=status.HTTP_400_BAD_REQUEST
             )
         
         # Create PDF buffer
