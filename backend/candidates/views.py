@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.http import HttpResponse
 from django.utils import timezone
 from decimal import Decimal
@@ -872,32 +872,43 @@ class CandidateViewSet(viewsets.ModelViewSet):
         reg_cat_code = reg_cat_map.get(candidate.registration_category, 'M')
         
         # 7. Sequence number (unique per center + occupation)
-        # Find the last candidate with same center and occupation
-        last_candidate = Candidate.objects.filter(
+        # Find the MAX sequence from all existing registration numbers for this center+occupation
+        existing_candidates = Candidate.objects.filter(
             assessment_center=candidate.assessment_center,
             occupation=candidate.occupation,
             is_submitted=True,
             registration_number__isnull=False
-        ).order_by('-id').first()
+        ).exclude(pk=candidate.pk).values_list('registration_number', flat=True)
         
-        if last_candidate and last_candidate.registration_number:
-            # Extract the sequence number (last part after final /)
-            parts = last_candidate.registration_number.split('/')
+        max_seq = 0
+        for reg_num in existing_candidates:
+            if reg_num:
+                parts = reg_num.split('/')
+                try:
+                    seq = int(parts[-1])
+                    if seq > max_seq:
+                        max_seq = seq
+                except (ValueError, IndexError):
+                    pass
+        
+        new_seq = max_seq + 1
+        
+        # Generate registration number with retry for race conditions
+        max_retries = 5
+        for attempt in range(max_retries):
+            registration_number = f'{center_number}/{nationality_code}/{year_code}/{intake_code}/{occ_code}/{reg_cat_code}/{new_seq:04d}'
+            candidate.registration_number = registration_number
+            candidate.is_submitted = True
             try:
-                last_seq = int(parts[-1])
-                new_seq = last_seq + 1
-            except (ValueError, IndexError):
-                new_seq = 1
-        else:
-            new_seq = 1
-        
-        # Generate registration number
-        registration_number = f'{center_number}/{nationality_code}/{year_code}/{intake_code}/{occ_code}/{reg_cat_code}/{new_seq:04d}'
-        
-        # Update candidate with registration number first
-        candidate.registration_number = registration_number
-        candidate.is_submitted = True
-        candidate.save()
+                candidate.save()
+                break
+            except IntegrityError:
+                if attempt < max_retries - 1:
+                    # Collision detected, increment sequence and retry
+                    new_seq += 1
+                    continue
+                else:
+                    raise
         
         # Generate payment code after saving (so candidate.pk is available)
         payment_code = candidate.generate_payment_code()
