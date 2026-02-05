@@ -247,6 +247,23 @@ const OccupationView = () => {
                 }
               />
 
+              {/* Award fields - only for formal category */}
+              {occupation.occ_category === 'formal' && occupation.award && (
+                <InfoItem
+                  icon={<FileText className="w-5 h-5 text-gray-400" />}
+                  label="Award (Full Occupation)"
+                  value={occupation.award}
+                />
+              )}
+
+              {occupation.occ_category === 'formal' && occupation.has_modular && occupation.award_modular && (
+                <InfoItem
+                  icon={<FileText className="w-5 h-5 text-gray-400" />}
+                  label="Award (Modular)"
+                  value={occupation.award_modular}
+                />
+              )}
+
               <InfoItem
                 icon={<Layers className="w-5 h-5 text-gray-400" />}
                 label="Total Levels"
