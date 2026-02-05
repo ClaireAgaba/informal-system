@@ -67,30 +67,47 @@ const OccupationList = () => {
 
   const isAllSelected = occupations.length > 0 && selectedOccupations.length === occupations.length;
 
-  const handleExportExcel = () => {
-    const occupationsToExport = selectedOccupations.length > 0
-      ? occupations.filter(o => selectedOccupations.includes(o.id))
-      : occupations;
+  const [exporting, setExporting] = useState(false);
 
-    if (occupationsToExport.length === 0) {
-      alert('No occupations to export');
-      return;
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      let occupationsToExport;
+      
+      if (selectedOccupations.length > 0) {
+        // Export only selected items from current page
+        occupationsToExport = occupations.filter(o => selectedOccupations.includes(o.id));
+      } else {
+        // Fetch ALL occupations for export
+        const response = await occupationApi.getAll({ page_size: 10000 });
+        occupationsToExport = response?.data?.results || response?.data || [];
+      }
+
+      if (occupationsToExport.length === 0) {
+        alert('No occupations to export');
+        return;
+      }
+
+      const exportData = occupationsToExport.map(occupation => ({
+        'Occ Code': occupation.occ_code,
+        'Occ Name': occupation.occ_name,
+        'Category': occupation.occ_category_display || occupation.occ_category,
+        'Sector': occupation.sector_name || 'N/A',
+        'Levels': occupation.levels_count || 0,
+        'Has Modular': occupation.has_modular ? 'Yes' : 'No',
+        'Status': occupation.is_active ? 'Active' : 'Inactive',
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Occupations');
+      XLSX.writeFile(workbook, `occupations_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Error exporting data');
+    } finally {
+      setExporting(false);
     }
-
-    const exportData = occupationsToExport.map(occupation => ({
-      'Occ Code': occupation.occ_code,
-      'Occ Name': occupation.occ_name,
-      'Category': occupation.occ_category_display || occupation.occ_category,
-      'Sector': occupation.sector_name || 'N/A',
-      'Levels': occupation.levels_count || 0,
-      'Has Modular': occupation.has_modular ? 'Yes' : 'No',
-      'Status': occupation.is_active ? 'Active' : 'Inactive',
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Occupations');
-    XLSX.writeFile(workbook, `occupations_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   return (
@@ -118,9 +135,10 @@ const OccupationList = () => {
               variant="outline"
               size="md"
               onClick={handleExportExcel}
+              disabled={exporting}
             >
               <Download className="w-4 h-4 mr-2" />
-              Export Excel {selectedOccupations.length > 0 ? `(${selectedOccupations.length})` : ''}
+              {exporting ? 'Exporting...' : `Export Excel ${selectedOccupations.length > 0 ? `(${selectedOccupations.length})` : ''}`}
             </Button>
             <Button
               variant="primary"

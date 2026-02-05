@@ -60,17 +60,25 @@ const AssessmentCenterList = () => {
   const [exporting, setExporting] = useState(false);
 
   const handleExportExcel = async () => {
-    const centersToExport = selectedCenters.length > 0
-      ? centers.filter(c => selectedCenters.includes(c.id))
-      : centers;
-
-    if (centersToExport.length === 0) {
-      alert('No centers to export');
-      return;
-    }
-
     setExporting(true);
     try {
+      let centersToExport;
+      
+      if (selectedCenters.length > 0) {
+        // Export only selected items from current page
+        centersToExport = centers.filter(c => selectedCenters.includes(c.id));
+      } else {
+        // Fetch ALL centers for export
+        const response = await assessmentCenterApi.getAll({ page_size: 10000 });
+        centersToExport = response?.data?.results || response?.data || [];
+      }
+
+      if (centersToExport.length === 0) {
+        alert('No centers to export');
+        setExporting(false);
+        return;
+      }
+
       // Export centers data
       const centersData = centersToExport.map(center => ({
         'Center Code': center.center_number,
