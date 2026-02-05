@@ -916,9 +916,9 @@ class ModularResultViewSet(viewsets.ViewSet):
         # Define Page Templates for mixed orientation
         def onFirstPage(canvas, doc):
             canvas.saveState()
-            # Draw QR Code at top right (smaller size)
+            # Draw QR Code on right side, slightly above bio data section
             qr_buffer.seek(0)
-            canvas.drawImage(ImageReader(qr_buffer), A4[0] - 2.5*cm, A4[1] - 2.5*cm, width=1.5*cm, height=1.5*cm)
+            canvas.drawImage(ImageReader(qr_buffer), A4[0] - 2.5*cm, A4[1] - 9*cm, width=1.8*cm, height=1.8*cm)
             
             # Signature at bottom right (no EXECUTIVE SECRETARY text)
             signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
