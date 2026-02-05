@@ -264,6 +264,14 @@ const OccupationView = () => {
                 />
               )}
 
+              {occupation.contact_hours && (
+                <InfoItem
+                  icon={<Tag className="w-5 h-5 text-gray-400" />}
+                  label="Contact Hours"
+                  value={`${occupation.contact_hours} Hrs`}
+                />
+              )}
+
               <InfoItem
                 icon={<Layers className="w-5 h-5 text-gray-400" />}
                 label="Total Levels"

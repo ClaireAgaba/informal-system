@@ -51,6 +51,7 @@ const OccupationEdit = () => {
         occ_category: occupation.occ_category,
         award: occupation.award || '',
         award_modular: occupation.award_modular || '',
+        contact_hours: occupation.contact_hours || '',
         sector: occupation.sector || '',
         has_modular: occupation.has_modular,
         is_active: occupation.is_active,
@@ -93,6 +94,7 @@ const OccupationEdit = () => {
       occ_category: formData.occ_category,
       award: formData.occ_category === 'formal' ? (formData.award || null) : null,
       award_modular: formData.has_modular ? (formData.award_modular || null) : null,
+      contact_hours: formData.contact_hours ? parseInt(formData.contact_hours) : null,
       sector: formData.sector ? parseInt(formData.sector) : null,
       has_modular: formData.has_modular || false,
       is_active: formData.is_active !== false,
@@ -232,6 +234,21 @@ const OccupationEdit = () => {
                     <p className="mt-1 text-xs text-gray-500">Award title for modular candidates (used on transcripts)</p>
                   </div>
                 )}
+
+                {/* Contact Hours */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Contact Hours
+                  </label>
+                  <input
+                    type="number"
+                    {...register('contact_hours')}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="e.g., 120"
+                    min="0"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Total contact hours for this occupation</p>
+                </div>
 
                 {/* Sector */}
                 <div>

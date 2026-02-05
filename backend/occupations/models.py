@@ -53,6 +53,12 @@ class Occupation(models.Model):
         verbose_name='Award (Modular)',
         help_text="Award/Certificate title for modular candidates (only if Has Modular is enabled)"
     )
+    contact_hours = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        verbose_name='Contact Hours',
+        help_text="Total contact hours for this occupation"
+    )
     sector = models.ForeignKey(
         Sector, 
         on_delete=models.SET_NULL, 

@@ -52,8 +52,8 @@ class OccupationAdmin(admin.ModelAdmin):
         ('Basic Information', {
             'fields': ('occ_code', 'occ_name', 'occ_category', 'sector')
         }),
-        ('Awards', {
-            'fields': ('award', 'award_modular'),
+        ('Awards & Hours', {
+            'fields': ('award', 'award_modular', 'contact_hours'),
             'description': 'Award titles used on transcripts. Modular award only applies if "Has Modular" is enabled.'
         }),
         ('Levels & Structure Type', {
