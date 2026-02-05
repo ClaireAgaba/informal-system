@@ -1847,88 +1847,100 @@ class FormalResultViewSet(viewsets.ViewSet):
                             level_total_cus += mod.credit_units
             
             if is_paper_based:
-                # PAPER-BASED: Split table - Theory | Practical (each with Code, Module, CU, Grade)
+                # PAPER-BASED: Single table with Theory | Practical sections, vertical divider only
                 theory_results = [r for r in results if r.type == 'theory']
                 practical_results = [r for r in results if r.type == 'practical']
                 
-                # Build theory side
-                theory_data = [[
-                    Paragraph("<b>Code</b>", info_label_style),
-                    Paragraph("<b>Module</b>", info_label_style),
-                    Paragraph("<b>CU</b>", info_label_style),
-                    Paragraph("<b>Grade</b>", info_label_style)
-                ]]
-                for r in theory_results:
-                    code = r.paper.paper_code if r.paper else "-"
-                    name = r.paper.paper_name if r.paper else "-"
-                    cu = r.paper.credit_units if r.paper and r.paper.credit_units else "-"
-                    theory_data.append([
-                        Paragraph(code, info_value_style),
-                        Paragraph(name, info_value_style),
-                        Paragraph(str(cu), info_value_style),
-                        Paragraph(r.grade or "-", info_value_style)
-                    ])
+                # Determine max rows needed
+                max_rows = max(len(theory_results), len(practical_results))
                 
-                # Build practical side
-                practical_data = [[
-                    Paragraph("<b>Code</b>", info_label_style),
-                    Paragraph("<b>Module</b>", info_label_style),
-                    Paragraph("<b>CU</b>", info_label_style),
-                    Paragraph("<b>Grade</b>", info_label_style)
-                ]]
-                for r in practical_results:
-                    code = r.paper.paper_code if r.paper else "-"
-                    name = r.paper.paper_name if r.paper else "-"
-                    cu = r.paper.credit_units if r.paper and r.paper.credit_units else "-"
-                    practical_data.append([
-                        Paragraph(code, info_value_style),
-                        Paragraph(name, info_value_style),
-                        Paragraph(str(cu), info_value_style),
-                        Paragraph(r.grade or "-", info_value_style)
-                    ])
+                # Build combined table data
+                # Row 0: THEORY (spanning 4 cols) | PRACTICAL (spanning 4 cols)
+                # Row 1: Code, Module, CU, Grade | Code, Module, CU, Grade
+                # Row 2+: Data rows
                 
-                # Create side-by-side tables
-                theory_table = Table(theory_data, colWidths=[1.8*cm, 3.5*cm, 1*cm, 1.2*cm])
-                theory_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+                header_style = ParagraphStyle('TableHeader', parent=styles['Normal'], fontSize=9, fontName='Times-Bold', alignment=TA_CENTER)
+                col_header_style = ParagraphStyle('ColHeader', parent=styles['Normal'], fontSize=8, fontName='Times-Bold')
+                data_style = ParagraphStyle('DataStyle', parent=styles['Normal'], fontSize=8, fontName='Times-Roman')
+                
+                table_data = []
+                
+                # Header row with THEORY and PRACTICAL
+                table_data.append([
+                    Paragraph("<b>THEORY</b>", header_style), '', '', '',
+                    Paragraph("<b>PRACTICAL</b>", header_style), '', '', ''
+                ])
+                
+                # Column headers row
+                table_data.append([
+                    Paragraph("CODE", col_header_style),
+                    Paragraph("SUBJECT NAME", col_header_style),
+                    Paragraph("CU", col_header_style),
+                    Paragraph("GRADE", col_header_style),
+                    Paragraph("CODE", col_header_style),
+                    Paragraph("SUBJECT NAME", col_header_style),
+                    Paragraph("CU", col_header_style),
+                    Paragraph("GRADE", col_header_style)
+                ])
+                
+                # Data rows
+                for i in range(max_rows):
+                    row = []
+                    # Theory side
+                    if i < len(theory_results):
+                        r = theory_results[i]
+                        row.extend([
+                            Paragraph(r.paper.paper_code if r.paper else "-", data_style),
+                            Paragraph(r.paper.paper_name if r.paper else "-", data_style),
+                            Paragraph(str(r.paper.credit_units) if r.paper and r.paper.credit_units else "-", data_style),
+                            Paragraph(r.grade or "-", data_style)
+                        ])
+                    else:
+                        row.extend([Paragraph("", data_style)] * 4)
+                    
+                    # Practical side
+                    if i < len(practical_results):
+                        r = practical_results[i]
+                        row.extend([
+                            Paragraph(r.paper.paper_code if r.paper else "-", data_style),
+                            Paragraph(r.paper.paper_name if r.paper else "-", data_style),
+                            Paragraph(str(r.paper.credit_units) if r.paper and r.paper.credit_units else "-", data_style),
+                            Paragraph(r.grade or "-", data_style)
+                        ])
+                    else:
+                        row.extend([Paragraph("", data_style)] * 4)
+                    
+                    table_data.append(row)
+                
+                # Create table with 8 columns
+                col_widths = [1.5*cm, 4*cm, 0.8*cm, 1.2*cm, 1.5*cm, 4*cm, 0.8*cm, 1.2*cm]
+                t = Table(table_data, colWidths=col_widths)
+                t.setStyle(TableStyle([
+                    # Span THEORY and PRACTICAL headers
+                    ('SPAN', (0, 0), (3, 0)),
+                    ('SPAN', (4, 0), (7, 0)),
+                    # Alignment
+                    ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                    ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
+                    ('ALIGN', (2, 1), (2, -1), 'CENTER'),
+                    ('ALIGN', (3, 1), (3, -1), 'CENTER'),
+                    ('ALIGN', (6, 1), (6, -1), 'CENTER'),
+                    ('ALIGN', (7, 1), (7, -1), 'CENTER'),
                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-                    ('TOPPADDING', (0, 0), (-1, -1), 2),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                    # Only vertical line between Theory and Practical (after column 3)
+                    ('LINEAFTER', (3, 0), (3, -1), 1, colors.black),
+                    # Bottom line under header row
+                    ('LINEBELOW', (0, 1), (-1, 1), 0.5, colors.grey),
+                    # Padding
+                    ('TOPPADDING', (0, 0), (-1, -1), 3),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                    # Font
                     ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
                     ('FONTSIZE', (0, 0), (-1, -1), 8),
                 ]))
-                
-                practical_table = Table(practical_data, colWidths=[1.8*cm, 3.5*cm, 1*cm, 1.2*cm])
-                practical_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('ALIGN', (2, 0), (2, -1), 'CENTER'),
-                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-                    ('TOPPADDING', (0, 0), (-1, -1), 2),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-                    ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 8),
-                ]))
-                
-                # Combine with headers
-                combined_header = Table([
-                    [Paragraph("<b>THEORY</b>", ParagraphStyle('Header', parent=styles['Normal'], fontSize=9, fontName='Times-Bold', alignment=TA_CENTER)),
-                     Paragraph("<b>PRACTICAL</b>", ParagraphStyle('Header', parent=styles['Normal'], fontSize=9, fontName='Times-Bold', alignment=TA_CENTER))]
-                ], colWidths=[7.5*cm, 7.5*cm])
-                combined_header.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
-                elements.append(combined_header)
-                
-                combined_tables = Table([[theory_table, practical_table]], colWidths=[7.5*cm, 7.5*cm])
-                combined_tables.setStyle(TableStyle([
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                ]))
-                elements.append(combined_tables)
+                elements.append(t)
                 
             else:
                 # MODULE-BASED: Simple 2-column table (Theory Grade | Practical Grade)
