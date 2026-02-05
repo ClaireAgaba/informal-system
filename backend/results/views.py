@@ -1965,17 +1965,22 @@ class FormalResultViewSet(viewsets.ViewSet):
                 # MODULE-BASED: Simple 2-column table (Theory Grade | Practical Grade)
                 # Group results by module
                 module_results = {}
-                modules_trained = []
                 for r in results:
                     if r.exam:
                         mod_id = r.exam.id
                         if mod_id not in module_results:
                             module_results[mod_id] = {'module': r.exam, 'theory': '-', 'practical': '-'}
-                            modules_trained.append(f"{r.exam.module_name} ({r.exam.credit_units or 0} CU)")
                         if r.type == 'theory':
                             module_results[mod_id]['theory'] = r.grade or '-'
                         else:
                             module_results[mod_id]['practical'] = r.grade or '-'
+                
+                # Get ALL active modules in the level (not just from results)
+                modules_trained = []
+                if level:
+                    active_modules = OccupationModule.objects.filter(level=level, is_active=True).order_by('module_name')
+                    for mod in active_modules:
+                        modules_trained.append(f"{mod.module_name} ({mod.credit_units or 0} CU)")
                 
                 # Build table
                 module_table_data = [[
