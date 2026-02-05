@@ -1977,8 +1977,9 @@ class FormalResultViewSet(viewsets.ViewSet):
                 
                 # Get ALL active modules in the level (not just from results)
                 modules_trained = []
-                if level:
-                    active_modules = OccupationModule.objects.filter(level=level, is_active=True).order_by('module_name')
+                first_result = results.first()
+                if first_result and first_result.level:
+                    active_modules = OccupationModule.objects.filter(level=first_result.level, is_active=True).order_by('module_name')
                     for mod in active_modules:
                         modules_trained.append(f"{mod.module_name} ({mod.credit_units or 0} CU)")
                 
