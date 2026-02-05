@@ -1927,10 +1927,12 @@ class FormalResultViewSet(viewsets.ViewSet):
                     ('ALIGN', (6, 1), (6, -1), 'CENTER'),
                     ('ALIGN', (7, 1), (7, -1), 'CENTER'),
                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    # Only vertical line between Theory and Practical (after column 3)
+                    # Outer border (box around entire table)
+                    ('BOX', (0, 0), (-1, -1), 1, colors.black),
+                    # Vertical line between Theory and Practical (after column 3)
                     ('LINEAFTER', (3, 0), (3, -1), 1, colors.black),
-                    # Bottom line under header row
-                    ('LINEBELOW', (0, 1), (-1, 1), 0.5, colors.grey),
+                    # Bottom line under column headers row
+                    ('LINEBELOW', (0, 1), (-1, 1), 0.5, colors.black),
                     # Padding
                     ('TOPPADDING', (0, 0), (-1, -1), 3),
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
