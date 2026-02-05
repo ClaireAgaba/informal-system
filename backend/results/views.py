@@ -861,10 +861,12 @@ class ModularResultViewSet(viewsets.ViewSet):
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak, Frame, PageTemplate, NextPageTemplate
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
+        from reportlab.lib.utils import ImageReader
         from io import BytesIO
         from datetime import datetime
         from django.conf import settings
         import os
+        import qrcode
         
         candidate_id = request.query_params.get('candidate_id')
         
@@ -901,21 +903,30 @@ class ModularResultViewSet(viewsets.ViewSet):
         # Create PDF buffer
         buffer = BytesIO()
         
+        # Generate QR Code with candidate info
+        qr_data = f"Name: {candidate.full_name}\nReg No: {candidate.registration_number}\nOccupation: {candidate.occupation.occ_name if candidate.occupation else ''}\nInstitution: {candidate.assessment_center.center_name if candidate.assessment_center else ''}\nAward: {candidate.occupation.award_modular if candidate.occupation else ''}\nCompletion Year: {datetime.now().year}"
+        qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=10, border=2)
+        qr.add_data(qr_data)
+        qr.make(fit=True)
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+        qr_buffer = BytesIO()
+        qr_img.save(qr_buffer, format='PNG')
+        qr_buffer.seek(0)
+        
         # Define Page Templates for mixed orientation
         def onFirstPage(canvas, doc):
             canvas.saveState()
-            # Signature at absolute bottom
+            # Draw QR Code at top right
+            qr_buffer.seek(0)
+            canvas.drawImage(ImageReader(qr_buffer), A4[0] - 3.5*cm, A4[1] - 4*cm, width=2.5*cm, height=2.5*cm)
+            
+            # Signature at bottom right (no EXECUTIVE SECRETARY text)
             signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
             if os.path.exists(signature_path):
                 try:
-                    # Draw signature image
-                    canvas.drawImage(signature_path, A4[0] - 6*cm, 2*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
+                    canvas.drawImage(signature_path, A4[0] - 6*cm, 1.5*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
                 except:
                     pass
-            
-            # Draw "EXECUTIVE SECRETARY" text centered under signature
-            canvas.setFont("Times-Bold", 10)
-            canvas.drawCentredString(A4[0] - 4*cm, 1.8*cm, "EXECUTIVE SECRETARY")
             canvas.restoreState()
 
         def onLaterPages(canvas, doc):
@@ -926,7 +937,7 @@ class ModularResultViewSet(viewsets.ViewSet):
             canvas.translate(0, A4[1])
             canvas.rotate(-90)
 
-        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=3*cm, leftMargin=1.5*cm, rightMargin=1.5*cm)
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=2.5*cm, leftMargin=1.5*cm, rightMargin=1.5*cm)
         
         # Create Frames
         frame_portrait = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='portrait')
@@ -980,10 +991,8 @@ class ModularResultViewSet(viewsets.ViewSet):
             fontName='Times-Bold'
         )
 
-        # Content - Page 1
-        elements.append(Spacer(1, 9*cm))
-        elements.append(Paragraph("TRANSCRIPT", title_style))
-        elements.append(Spacer(1, 0.5*cm))
+        # Content - Page 1 (No TRANSCRIPT title - paper already has it printed)
+        elements.append(Spacer(1, 7.5*cm))
 
         # Candidate Info
         candidate_photo = None
@@ -1014,11 +1023,11 @@ class ModularResultViewSet(viewsets.ViewSet):
             [Paragraph("OCCUPATION:", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        info_table = Table(info_data, colWidths=[2.5*cm, 6*cm, 3*cm, 4*cm])
+        info_table = Table(info_data, colWidths=[2.5*cm, 5.5*cm, 3*cm, 4.5*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 2),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('TOPPADDING', (0, 0), (-1, -1), 1),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
             ('SPAN', (1, 3), (3, 3)), # Span center name
             ('SPAN', (1, 4), (3, 4)), # Span occupation
         ]))
@@ -1033,24 +1042,28 @@ class ModularResultViewSet(viewsets.ViewSet):
         else:
             elements.append(info_table)
 
-        elements.append(Spacer(1, 0.5*cm))
+        elements.append(Spacer(1, 0.3*cm))
         elements.append(Paragraph("ASSESSMENT RESULTS", section_heading_style))
-        elements.append(Spacer(1, 0.2*cm))
+        elements.append(Spacer(1, 0.15*cm))
 
-        # Results Table
+        # Results Table - Modular
         results = ModularResult.objects.filter(candidate=candidate).select_related('module', 'assessment_series')
         
         if results.exists():
             results_data = [[
-                Paragraph("MODULE CODE", info_label_style),
-                Paragraph("MODULE NAME", info_label_style),
+                Paragraph("LEVEL", info_label_style),
+                Paragraph("MODULE/PAPER", info_label_style),
                 Paragraph("TYPE", info_label_style),
                 Paragraph("GRADE", info_label_style)
             ]]
             
             for result in results:
+                # Get level name from module's level
+                level_name = ""
+                if result.module and result.module.level:
+                    level_name = result.module.level.level_name
                 results_data.append([
-                    Paragraph(result.module.module_code if result.module else "", info_value_style),
+                    Paragraph(level_name, info_value_style),
                     Paragraph(result.module.module_name if result.module else "", info_value_style),
                     Paragraph(result.get_type_display().capitalize(), info_value_style),
                     Paragraph(result.grade or "-", info_value_style)
@@ -1548,10 +1561,12 @@ class FormalResultViewSet(viewsets.ViewSet):
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak, Frame, PageTemplate, NextPageTemplate
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
+        from reportlab.lib.utils import ImageReader
         from io import BytesIO
         from datetime import datetime
         from django.conf import settings
         import os
+        import qrcode
         from .models import FormalResult
         
         candidate_id = request.query_params.get('candidate_id')
@@ -1589,21 +1604,30 @@ class FormalResultViewSet(viewsets.ViewSet):
         # Create PDF buffer
         buffer = BytesIO()
         
+        # Generate QR Code with candidate info
+        qr_data = f"Name: {candidate.full_name}\nReg No: {candidate.registration_number}\nOccupation: {candidate.occupation.occ_name if candidate.occupation else ''}\nInstitution: {candidate.assessment_center.center_name if candidate.assessment_center else ''}\nAward: {candidate.occupation.award if candidate.occupation else ''}\nCompletion Year: {datetime.now().year}"
+        qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=10, border=2)
+        qr.add_data(qr_data)
+        qr.make(fit=True)
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+        qr_buffer = BytesIO()
+        qr_img.save(qr_buffer, format='PNG')
+        qr_buffer.seek(0)
+        
         # Define Page Templates for mixed orientation
         def onFirstPage(canvas, doc):
             canvas.saveState()
-            # Signature at absolute bottom
+            # Draw QR Code at top right
+            qr_buffer.seek(0)
+            canvas.drawImage(ImageReader(qr_buffer), A4[0] - 3.5*cm, A4[1] - 4*cm, width=2.5*cm, height=2.5*cm)
+            
+            # Signature at bottom right (no EXECUTIVE SECRETARY text)
             signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
             if os.path.exists(signature_path):
                 try:
-                    # Draw signature image
-                    canvas.drawImage(signature_path, A4[0] - 6*cm, 2*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
+                    canvas.drawImage(signature_path, A4[0] - 6*cm, 1.5*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
                 except:
                     pass
-            
-            # Draw "EXECUTIVE SECRETARY" text centered under signature
-            canvas.setFont("Times-Bold", 10)
-            canvas.drawCentredString(A4[0] - 4*cm, 1.8*cm, "EXECUTIVE SECRETARY")
             canvas.restoreState()
 
         def onLaterPages(canvas, doc):
@@ -1614,7 +1638,7 @@ class FormalResultViewSet(viewsets.ViewSet):
             canvas.translate(0, A4[1])
             canvas.rotate(-90)
 
-        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=3*cm, leftMargin=1.5*cm, rightMargin=1.5*cm)
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=2.5*cm, leftMargin=1.5*cm, rightMargin=1.5*cm)
         
         # Create Frames
         frame_portrait = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='portrait')
@@ -1668,10 +1692,8 @@ class FormalResultViewSet(viewsets.ViewSet):
             fontName='Times-Bold'
         )
 
-        # Content - Page 1
-        elements.append(Spacer(1, 9*cm))
-        elements.append(Paragraph("TRANSCRIPT", title_style))
-        elements.append(Spacer(1, 0.5*cm))
+        # Content - Page 1 (No TRANSCRIPT title - paper already has it printed)
+        elements.append(Spacer(1, 7.5*cm))
 
         # Candidate Info
         candidate_photo = None
@@ -1702,11 +1724,11 @@ class FormalResultViewSet(viewsets.ViewSet):
             [Paragraph("OCCUPATION:", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        info_table = Table(info_data, colWidths=[2.5*cm, 6*cm, 3*cm, 4*cm])
+        info_table = Table(info_data, colWidths=[2.5*cm, 5.5*cm, 3*cm, 4.5*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 2),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('TOPPADDING', (0, 0), (-1, -1), 1),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
             ('SPAN', (1, 3), (3, 3)), # Span center name
             ('SPAN', (1, 4), (3, 4)), # Span occupation
         ]))
@@ -1721,9 +1743,9 @@ class FormalResultViewSet(viewsets.ViewSet):
         else:
             elements.append(info_table)
 
-        elements.append(Spacer(1, 0.5*cm))
+        elements.append(Spacer(1, 0.3*cm))
         elements.append(Paragraph("ASSESSMENT RESULTS", section_heading_style))
-        elements.append(Spacer(1, 0.2*cm))
+        elements.append(Spacer(1, 0.15*cm))
 
         # Formal Results
         results = FormalResult.objects.filter(candidate=candidate).select_related(
