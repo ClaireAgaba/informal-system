@@ -1,3 +1,4 @@
+import json
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -903,8 +904,13 @@ class ModularResultViewSet(viewsets.ViewSet):
         # Create PDF buffer
         buffer = BytesIO()
         
-        # Generate QR Code with candidate info (use pipe separator for better scanner compatibility)
-        qr_data = f"Name: {candidate.full_name} | Reg No: {candidate.registration_number} | Occupation: {candidate.occupation.occ_name if candidate.occupation else ''} | Institution: {candidate.assessment_center.center_name if candidate.assessment_center else ''} | Award: {candidate.occupation.award_modular if candidate.occupation else ''} | Year: {datetime.now().year}"
+        # Generate QR Code with candidate info (JSON format for scanner compatibility)
+        qr_data = json.dumps({
+            "name": candidate.full_name or "",
+            "regno": candidate.registration_number or "",
+            "occupation": candidate.occupation.occ_name if candidate.occupation else "",
+            "award": candidate.occupation.award_modular if candidate.occupation else ""
+        })
         qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=6, border=1)
         qr.add_data(qr_data)
         qr.make(fit=True)
@@ -1659,8 +1665,13 @@ class FormalResultViewSet(viewsets.ViewSet):
         # Create PDF buffer
         buffer = BytesIO()
         
-        # Generate QR Code with candidate info (use pipe separator for better scanner compatibility)
-        qr_data = f"Name: {candidate.full_name} | Reg No: {candidate.registration_number} | Occupation: {candidate.occupation.occ_name if candidate.occupation else ''} | Institution: {candidate.assessment_center.center_name if candidate.assessment_center else ''} | Year: {datetime.now().year}"
+        # Generate QR Code with candidate info (JSON format for scanner compatibility)
+        qr_data = json.dumps({
+            "name": candidate.full_name or "",
+            "regno": candidate.registration_number or "",
+            "occupation": candidate.occupation.occ_name if candidate.occupation else "",
+            "award": ""
+        })
         qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=6, border=1)
         qr.add_data(qr_data)
         qr.make(fit=True)
