@@ -1566,7 +1566,7 @@ class FormalResultViewSet(viewsets.ViewSet):
         
         # Check if candidate qualifies for transcript (must have at least one successful result)
         formal_results = FormalResult.objects.filter(candidate=candidate)
-        has_successful = any(r.comment == 'Success' for r in formal_results)
+        has_successful = any(r.comment == 'Successful' for r in formal_results)
         
         if not has_successful:
             return Response(
