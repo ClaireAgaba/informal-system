@@ -1912,8 +1912,8 @@ class FormalResultViewSet(viewsets.ViewSet):
                     
                     table_data.append(row)
                 
-                # Create table with 8 columns
-                col_widths = [1.5*cm, 4*cm, 0.8*cm, 1.2*cm, 1.5*cm, 4*cm, 0.8*cm, 1.2*cm]
+                # Create table with 8 columns (wider GRADE columns to fit on one line)
+                col_widths = [1.5*cm, 3.8*cm, 0.8*cm, 1.5*cm, 1.5*cm, 3.8*cm, 0.8*cm, 1.5*cm]
                 t = Table(table_data, colWidths=col_widths)
                 t.setStyle(TableStyle([
                     # Span THEORY and PRACTICAL headers
