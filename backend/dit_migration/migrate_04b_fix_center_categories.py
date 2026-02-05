@@ -69,7 +69,7 @@ def get_category_mapping():
         rows = cur.fetchall()
         for row in rows:
             name = row['name'].lower()
-            if 'tech' in name:
+            if 'tti' in name or 'technical' in name:
                 mapping[row['id']] = 'TTI'
             elif 'work' in name:
                 mapping[row['id']] = 'workplace'
