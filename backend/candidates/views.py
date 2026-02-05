@@ -752,7 +752,11 @@ class CandidateViewSet(viewsets.ModelViewSet):
         reg_category = candidate.registration_category
         
         # Get assessment series
-        assessment_series = AssessmentSeries.objects.filter(is_active=True).values('id', 'name', 'start_date', 'end_date')
+        # For center representatives, only show the current series
+        if request.user.is_authenticated and request.user.user_type == 'center_representative':
+            assessment_series = AssessmentSeries.objects.filter(is_active=True, is_current=True).values('id', 'name', 'start_date', 'end_date')
+        else:
+            assessment_series = AssessmentSeries.objects.filter(is_active=True).values('id', 'name', 'start_date', 'end_date')
         
         response_data = {
             'assessment_series': list(assessment_series),
