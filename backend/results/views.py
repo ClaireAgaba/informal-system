@@ -1058,33 +1058,45 @@ class ModularResultViewSet(viewsets.ViewSet):
         elements.append(Paragraph("ASSESSMENT RESULTS", section_heading_style))
         elements.append(Spacer(1, 0.1*cm))
 
-        # Results Table - Modular
-        results = ModularResult.objects.filter(candidate=candidate).select_related('module', 'assessment_series')
+        # Results Table - Modular (Code, Module Name, CU, Grade)
+        results = ModularResult.objects.filter(candidate=candidate).select_related('module', 'module__level', 'assessment_series')
+        
+        candidate_total_cus = 0
+        level_total_cus = 0
+        completion_date = None
         
         if results.exists():
             results_data = [[
-                Paragraph("LEVEL", info_label_style),
-                Paragraph("MODULE/PAPER", info_label_style),
-                Paragraph("TYPE", info_label_style),
+                Paragraph("CODE", info_label_style),
+                Paragraph("MODULE NAME", info_label_style),
+                Paragraph("CU", info_label_style),
                 Paragraph("GRADE", info_label_style)
             ]]
             
             for result in results:
-                # Get level name from module's level
-                level_name = ""
-                if result.module and result.module.level:
-                    level_name = result.module.level.level_name
+                module_code = result.module.module_code if result.module else ""
+                module_name = result.module.module_name if result.module else ""
+                module_cu = result.module.credit_units if result.module and result.module.credit_units else 0
+                candidate_total_cus += module_cu
+                
+                # Get completion date from assessment_series
+                if result.assessment_series and not completion_date:
+                    series_name = result.assessment_series.name
+                    series_year = result.assessment_series.year
+                    completion_date = f"{series_name} {series_year}"
+                
                 results_data.append([
-                    Paragraph(level_name, info_value_style),
-                    Paragraph(result.module.module_name if result.module else "", info_value_style),
-                    Paragraph(result.get_type_display().capitalize(), info_value_style),
+                    Paragraph(module_code, info_value_style),
+                    Paragraph(module_name, info_value_style),
+                    Paragraph(str(module_cu) if module_cu else "-", info_value_style),
                     Paragraph(result.grade or "-", info_value_style)
                 ])
             
-            t = Table(results_data, colWidths=[3*cm, 8*cm, 3*cm, 2.5*cm], repeatRows=1)
+            t = Table(results_data, colWidths=[2.5*cm, 9*cm, 1.5*cm, 2*cm], repeatRows=1)
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('ALIGN', (2, 0), (2, -1), 'CENTER'),  # CU column centered
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
                 ('TOPPADDING', (0, 0), (-1, -1), 4),
@@ -1095,28 +1107,54 @@ class ModularResultViewSet(viewsets.ViewSet):
         else:
             elements.append(Paragraph("No results found.", info_value_style))
 
-        # LWAs
-        if candidate.registration_category == 'modular':
-            elements.append(Spacer(1, 0.5*cm))
-            enrollment_modules = EnrollmentModule.objects.filter(
-                enrollment__candidate=candidate
-            ).select_related('module').distinct()
-            
-            if enrollment_modules.exists():
-                elements.append(Paragraph("Candidate Trained in the following:", ParagraphStyle('SubHeading', parent=styles['Normal'], fontName='Times-Bold', fontSize=11)))
-                elements.append(Spacer(1, 0.1*cm))
-                
-                lwa_list = []
-                for em in enrollment_modules:
-                    lwas = ModuleLWA.objects.filter(module=em.module).order_by('lwa_name')
-                    for lwa in lwas:
-                        lwa_list.append(f"• {lwa.lwa_name}")
-                
-                for lwa_text in lwa_list:
-                    elements.append(Paragraph(lwa_text, ParagraphStyle('LWA', parent=styles['Normal'], fontName='Times-Roman', leftIndent=10, fontSize=10)))
+        # Calculate level total CUs
+        if candidate.occupation:
+            from occupations.models import OccupationModule
+            level_modules = OccupationModule.objects.filter(occupation=candidate.occupation)
+            for mod in level_modules:
+                if mod.credit_units:
+                    level_total_cus += mod.credit_units
 
-        # Footer (Signature) - Removed from here as it is now in onFirstPage
-        elements.append(Spacer(1, 1*cm)) # Just a small spacer before page break
+        # LWAs - Candidate trained in the following
+        elements.append(Spacer(1, 0.3*cm))
+        enrollment_modules = EnrollmentModule.objects.filter(
+            enrollment__candidate=candidate
+        ).select_related('module').distinct()
+        
+        if enrollment_modules.exists():
+            elements.append(Paragraph("<b>Candidate trained in the following:</b>", ParagraphStyle('SubHeading', parent=styles['Normal'], fontName='Times-Roman', fontSize=9)))
+            
+            lwa_list = []
+            for em in enrollment_modules:
+                lwas = ModuleLWA.objects.filter(module=em.module).order_by('lwa_name')
+                for lwa in lwas:
+                    if lwa.lwa_name not in lwa_list:
+                        lwa_list.append(lwa.lwa_name)
+            
+            lwa_text = ", ".join(lwa_list) if lwa_list else "-"
+            elements.append(Paragraph(lwa_text, ParagraphStyle('LWA', parent=styles['Normal'], fontName='Times-Roman', fontSize=9)))
+
+        # Credit Units summary
+        elements.append(Spacer(1, 0.2*cm))
+        cu_summary = Table([
+            [Paragraph(f"<b>Total Credit Units:</b> {level_total_cus}", info_value_style),
+             Paragraph(f"<b>Credit Units:</b> {candidate_total_cus}", info_value_style)]
+        ], colWidths=[8*cm, 7*cm])
+        cu_summary.setStyle(TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0)]))
+        elements.append(cu_summary)
+
+        # Duration (Contact hours from occupation)
+        duration = candidate.occupation.contact_hours if candidate.occupation and candidate.occupation.contact_hours else "-"
+        elements.append(Paragraph(f"<b>Duration:</b> {duration}", info_value_style))
+
+        # Award (Modular award from occupation)
+        award = candidate.occupation.award_modular if candidate.occupation and candidate.occupation.award_modular else "-"
+        elements.append(Paragraph(f"<b>Award:</b> {award}", info_value_style))
+
+        # Completion Year (from assessment series)
+        elements.append(Paragraph(f"<b>Completion Year:</b> {completion_date or '-'}", info_value_style))
+
+        elements.append(Spacer(1, 0.5*cm))
 
         # Page Break (Starts using portrait_back template)
         elements.append(NextPageTemplate('portrait_back'))
