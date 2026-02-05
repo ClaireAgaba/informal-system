@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Eye, Edit, Trash2, Plus, Search, Filter, CheckSquare, Square } from 'lucide-react';
+import { Eye, Edit, Trash2, Plus, Search, Filter, CheckSquare, Square, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import occupationApi from '../services/occupationApi';
 import Button from '@shared/components/Button';
 import Card from '@shared/components/Card';
@@ -66,6 +67,32 @@ const OccupationList = () => {
 
   const isAllSelected = occupations.length > 0 && selectedOccupations.length === occupations.length;
 
+  const handleExportExcel = () => {
+    const occupationsToExport = selectedOccupations.length > 0
+      ? occupations.filter(o => selectedOccupations.includes(o.id))
+      : occupations;
+
+    if (occupationsToExport.length === 0) {
+      alert('No occupations to export');
+      return;
+    }
+
+    const exportData = occupationsToExport.map(occupation => ({
+      'Occ Code': occupation.occ_code,
+      'Occ Name': occupation.occ_name,
+      'Category': occupation.occ_category_display || occupation.occ_category,
+      'Sector': occupation.sector_name || 'N/A',
+      'Levels': occupation.levels_count || 0,
+      'Has Modular': occupation.has_modular ? 'Yes' : 'No',
+      'Status': occupation.is_active ? 'Active' : 'Inactive',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Occupations');
+    XLSX.writeFile(workbook, `occupations_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   return (
     <div className="p-6">
       {/* Header */}
@@ -87,6 +114,14 @@ const OccupationList = () => {
                 Clear Selection ({selectedOccupations.length})
               </Button>
             )}
+            <Button
+              variant="outline"
+              size="md"
+              onClick={handleExportExcel}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export Excel {selectedOccupations.length > 0 ? `(${selectedOccupations.length})` : ''}
+            </Button>
             <Button
               variant="primary"
               size="md"

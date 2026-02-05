@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Eye, Edit, Plus, Search } from 'lucide-react';
+import { Eye, Edit, Plus, Search, Download, CheckSquare, Square } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import assessmentCenterApi from '../services/assessmentCenterApi';
 import Button from '@shared/components/Button';
 import Card from '@shared/components/Card';
@@ -11,6 +12,7 @@ const AssessmentCenterList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [selectedCenters, setSelectedCenters] = useState([]);
   const pageSize = 20;
 
   // Fetch assessment centers
@@ -37,6 +39,95 @@ const AssessmentCenterList = () => {
     navigate(`/assessment-centers/${id}`);
   };
 
+  const handleSelectAll = () => {
+    if (selectedCenters.length === centers.length) {
+      setSelectedCenters([]);
+    } else {
+      setSelectedCenters(centers.map(center => center.id));
+    }
+  };
+
+  const handleSelectCenter = (id) => {
+    setSelectedCenters(prev => 
+      prev.includes(id) 
+        ? prev.filter(centerId => centerId !== id)
+        : [...prev, id]
+    );
+  };
+
+  const isAllSelected = centers.length > 0 && selectedCenters.length === centers.length;
+
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    const centersToExport = selectedCenters.length > 0
+      ? centers.filter(c => selectedCenters.includes(c.id))
+      : centers;
+
+    if (centersToExport.length === 0) {
+      alert('No centers to export');
+      return;
+    }
+
+    setExporting(true);
+    try {
+      // Export centers data
+      const centersData = centersToExport.map(center => ({
+        'Center Code': center.center_number,
+        'Center Name': center.center_name,
+        'Category': center.assessment_category_display || center.assessment_category,
+        'District': center.district_name || 'N/A',
+        'Village': center.village_name || 'N/A',
+        'Contact 1': center.contact_1 || 'N/A',
+        'Contact 2': center.contact_2 || 'N/A',
+        'Email': center.email || 'N/A',
+        'Status': center.is_active ? 'Active' : 'Inactive',
+      }));
+
+      // Fetch branches for all selected centers
+      const branchPromises = centersToExport.map(center => 
+        assessmentCenterApi.branches.getByCenter(center.id)
+      );
+      const branchResponses = await Promise.all(branchPromises);
+      
+      // Flatten all branches and add center info
+      const allBranches = [];
+      branchResponses.forEach((response, index) => {
+        const branches = response?.data?.results || response?.data || [];
+        const center = centersToExport[index];
+        branches.forEach(branch => {
+          allBranches.push({
+            'Center Code': center.center_number,
+            'Center Name': center.center_name,
+            'Branch Code': branch.branch_code || 'N/A',
+            'Branch Name': branch.branch_name || 'N/A',
+            'District': branch.district_name || 'N/A',
+            'Village': branch.village_name || 'N/A',
+            'Status': branch.is_active ? 'Active' : 'Inactive',
+          });
+        });
+      });
+
+      // Create workbook with two sheets
+      const workbook = XLSX.utils.book_new();
+      
+      const centersSheet = XLSX.utils.json_to_sheet(centersData);
+      XLSX.utils.book_append_sheet(workbook, centersSheet, 'Assessment Centers');
+      
+      if (allBranches.length > 0) {
+        const branchesSheet = XLSX.utils.json_to_sheet(allBranches);
+        XLSX.utils.book_append_sheet(workbook, branchesSheet, 'Center Branches');
+      }
+      
+      XLSX.writeFile(workbook, `assessment_centers_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Error exporting data');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="p-6">
       {/* Header */}
@@ -46,14 +137,34 @@ const AssessmentCenterList = () => {
             <h1 className="text-2xl font-bold text-gray-900">Assessment Centers</h1>
             <p className="text-gray-600 mt-1">Manage assessment centers and branches</p>
           </div>
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => navigate('/assessment-centers/new')}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Center
-          </Button>
+          <div className="flex items-center space-x-2">
+            {selectedCenters.length > 0 && (
+              <Button
+                variant="outline"
+                size="md"
+                onClick={() => setSelectedCenters([])}
+              >
+                Clear Selection ({selectedCenters.length})
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="md"
+              onClick={handleExportExcel}
+              disabled={exporting}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {exporting ? 'Exporting...' : `Export Excel ${selectedCenters.length > 0 ? `(${selectedCenters.length})` : ''}`}
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => navigate('/assessment-centers/new')}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Center
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -103,6 +214,18 @@ const AssessmentCenterList = () => {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="px-6 py-3 text-left">
+                  <button
+                    onClick={handleSelectAll}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    {isAllSelected ? (
+                      <CheckSquare className="w-5 h-5" />
+                    ) : (
+                      <Square className="w-5 h-5" />
+                    )}
+                  </button>
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Center Code
                 </th>
@@ -132,19 +255,19 @@ const AssessmentCenterList = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan="9" className="px-6 py-4 text-center text-gray-500">
                     Loading assessment centers...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-4 text-center text-red-500">
+                  <td colSpan="9" className="px-6 py-4 text-center text-red-500">
                     Error loading centers: {error.message}
                   </td>
                 </tr>
               ) : centers.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan="9" className="px-6 py-4 text-center text-gray-500">
                     No assessment centers found
                   </td>
                 </tr>
@@ -152,9 +275,21 @@ const AssessmentCenterList = () => {
                 centers.map((center) => (
                   <tr
                     key={center.id}
-                    className="hover:bg-gray-50 cursor-pointer"
+                    className={`hover:bg-gray-50 cursor-pointer ${selectedCenters.includes(center.id) ? 'bg-primary-50' : ''}`}
                     onClick={() => handleViewCenter(center.id)}
                   >
+                    <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => handleSelectCenter(center.id)}
+                        className="text-gray-500 hover:text-gray-700"
+                      >
+                        {selectedCenters.includes(center.id) ? (
+                          <CheckSquare className="w-5 h-5 text-primary-600" />
+                        ) : (
+                          <Square className="w-5 h-5" />
+                        )}
+                      </button>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm font-medium text-gray-900">
                         {center.center_number}
