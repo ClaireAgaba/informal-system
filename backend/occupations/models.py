@@ -43,8 +43,15 @@ class Occupation(models.Model):
         max_length=200, 
         blank=True, 
         null=True,
-        verbose_name='Award',
-        help_text="Award/Certificate title for this occupation (used on transcripts)"
+        verbose_name='Award (Full Occupation)',
+        help_text="Award/Certificate title for full occupation candidates (used on transcripts)"
+    )
+    award_modular = models.CharField(
+        max_length=200, 
+        blank=True, 
+        null=True,
+        verbose_name='Award (Modular)',
+        help_text="Award/Certificate title for modular candidates (only if Has Modular is enabled)"
     )
     sector = models.ForeignKey(
         Sector, 

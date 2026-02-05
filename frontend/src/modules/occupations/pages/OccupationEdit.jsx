@@ -18,8 +18,13 @@ const OccupationEdit = () => {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors, isDirty },
   } = useForm();
+
+  // Watch category and has_modular for conditional fields
+  const watchCategory = watch('occ_category');
+  const watchHasModular = watch('has_modular');
 
   // Fetch occupation details if editing
   const { data, isLoading } = useQuery({
@@ -45,6 +50,7 @@ const OccupationEdit = () => {
         occ_name: occupation.occ_name,
         occ_category: occupation.occ_category,
         award: occupation.award || '',
+        award_modular: occupation.award_modular || '',
         sector: occupation.sector || '',
         has_modular: occupation.has_modular,
         is_active: occupation.is_active,
@@ -85,7 +91,8 @@ const OccupationEdit = () => {
       occ_code: formData.occ_code,
       occ_name: formData.occ_name,
       occ_category: formData.occ_category,
-      award: formData.award || null,
+      award: formData.occ_category === 'formal' ? (formData.award || null) : null,
+      award_modular: formData.has_modular ? (formData.award_modular || null) : null,
       sector: formData.sector ? parseInt(formData.sector) : null,
       has_modular: formData.has_modular || false,
       is_active: formData.is_active !== false,
@@ -194,19 +201,37 @@ const OccupationEdit = () => {
                   )}
                 </div>
 
-                {/* Award */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Award
-                  </label>
-                  <input
-                    type="text"
-                    {...register('award')}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    placeholder="e.g., Uganda Vocational Qualification"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">Award/Certificate title used on transcripts</p>
-                </div>
+                {/* Award - Only for Formal category */}
+                {watchCategory === 'formal' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Award (Full Occupation)
+                    </label>
+                    <input
+                      type="text"
+                      {...register('award')}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      placeholder="e.g., Uganda Vocational Qualification"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Award title for full occupation candidates (used on transcripts)</p>
+                  </div>
+                )}
+
+                {/* Award Modular - Only when has_modular is checked */}
+                {watchCategory === 'formal' && watchHasModular && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Award (Modular)
+                    </label>
+                    <input
+                      type="text"
+                      {...register('award_modular')}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      placeholder="e.g., Statement of Attainment"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Award title for modular candidates (used on transcripts)</p>
+                  </div>
+                )}
 
                 {/* Sector */}
                 <div>

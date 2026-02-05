@@ -52,6 +52,10 @@ class OccupationAdmin(admin.ModelAdmin):
         ('Basic Information', {
             'fields': ('occ_code', 'occ_name', 'occ_category', 'sector')
         }),
+        ('Awards', {
+            'fields': ('award', 'award_modular'),
+            'description': 'Award titles used on transcripts. Modular award only applies if "Has Modular" is enabled.'
+        }),
         ('Levels & Structure Type', {
             'fields': ('has_modular', 'get_levels_count'),
             'description': 'Tick if this occupation allows Modular registration (Level 1 only). Add levels below.'
