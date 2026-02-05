@@ -905,7 +905,7 @@ class ModularResultViewSet(viewsets.ViewSet):
         
         # Generate QR Code with candidate info
         qr_data = f"Name: {candidate.full_name}\nReg No: {candidate.registration_number}\nOccupation: {candidate.occupation.occ_name if candidate.occupation else ''}\nInstitution: {candidate.assessment_center.center_name if candidate.assessment_center else ''}\nAward: {candidate.occupation.award_modular if candidate.occupation else ''}\nCompletion Year: {datetime.now().year}"
-        qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=10, border=2)
+        qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=6, border=1)
         qr.add_data(qr_data)
         qr.make(fit=True)
         qr_img = qr.make_image(fill_color="black", back_color="white")
@@ -916,9 +916,9 @@ class ModularResultViewSet(viewsets.ViewSet):
         # Define Page Templates for mixed orientation
         def onFirstPage(canvas, doc):
             canvas.saveState()
-            # Draw QR Code at top right
+            # Draw QR Code at top right (smaller size)
             qr_buffer.seek(0)
-            canvas.drawImage(ImageReader(qr_buffer), A4[0] - 3.5*cm, A4[1] - 4*cm, width=2.5*cm, height=2.5*cm)
+            canvas.drawImage(ImageReader(qr_buffer), A4[0] - 2.5*cm, A4[1] - 2.5*cm, width=1.5*cm, height=1.5*cm)
             
             # Signature at bottom right (no EXECUTIVE SECRETARY text)
             signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
@@ -952,13 +952,13 @@ class ModularResultViewSet(viewsets.ViewSet):
         elements = []
         styles = getSampleStyleSheet()
         
-        # Custom styles with Serif font (Times-Roman)
+        # Custom styles with Serif font (Times-Roman) - smaller fonts for neat layout
         title_style = ParagraphStyle(
             'TranscriptTitle',
             parent=styles['Heading1'],
-            fontSize=18,
+            fontSize=14,
             textColor=colors.black,
-            spaceAfter=20,
+            spaceAfter=10,
             spaceBefore=0,
             alignment=TA_CENTER,
             fontName='Times-Bold'
@@ -967,7 +967,7 @@ class ModularResultViewSet(viewsets.ViewSet):
         info_label_style = ParagraphStyle(
             'InfoLabel',
             parent=styles['Normal'],
-            fontSize=11,
+            fontSize=9,
             fontName='Times-Bold',
             alignment=TA_LEFT
         )
@@ -975,7 +975,7 @@ class ModularResultViewSet(viewsets.ViewSet):
         info_value_style = ParagraphStyle(
             'InfoValue',
             parent=styles['Normal'],
-            fontSize=11,
+            fontSize=9,
             fontName='Times-Roman',
             alignment=TA_LEFT
         )
@@ -983,10 +983,10 @@ class ModularResultViewSet(viewsets.ViewSet):
         section_heading_style = ParagraphStyle(
             'SectionHeading',
             parent=styles['Heading2'],
-            fontSize=14,
+            fontSize=11,
             textColor=colors.black,
-            spaceAfter=10,
-            spaceBefore=15,
+            spaceAfter=8,
+            spaceBefore=10,
             alignment=TA_CENTER,
             fontName='Times-Bold'
         )
@@ -994,8 +994,7 @@ class ModularResultViewSet(viewsets.ViewSet):
         # Content - Page 1 (No TRANSCRIPT title - paper already has it printed)
         elements.append(Spacer(1, 7.5*cm))
 
-        # Candidate Info - Photo with reg number below
-        photo_with_caption = None
+        # Candidate Photo on top with reg number below
         if candidate.passport_photo:
             photo_path = os.path.join(settings.MEDIA_ROOT, str(candidate.passport_photo))
             if os.path.exists(photo_path):
@@ -1007,26 +1006,16 @@ class ModularResultViewSet(viewsets.ViewSet):
                     img_buffer = BytesIO()
                     pil_image.save(img_buffer, format='PNG')
                     img_buffer.seek(0)
-                    candidate_photo = Image(img_buffer, width=3.5*cm, height=4.5*cm)
-                    
-                    # Create photo with registration number caption below
-                    photo_caption_style = ParagraphStyle('PhotoCaption', parent=styles['Normal'], fontSize=8, fontName='Times-Roman', alignment=TA_LEFT)
-                    photo_data = [
-                        [candidate_photo],
-                        [Paragraph(candidate.registration_number or "", photo_caption_style)]
-                    ]
-                    photo_table = Table(photo_data, colWidths=[3.5*cm])
-                    photo_table.setStyle(TableStyle([
-                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                        ('TOPPADDING', (0, 1), (0, 1), 2),
-                    ]))
-                    photo_with_caption = photo_table
+                    candidate_photo = Image(img_buffer, width=2.8*cm, height=3.5*cm)
+                    elements.append(candidate_photo)
+                    # Registration number caption below photo
+                    photo_caption_style = ParagraphStyle('PhotoCaption', parent=styles['Normal'], fontSize=7, fontName='Times-Roman', alignment=TA_LEFT)
+                    elements.append(Paragraph(candidate.registration_number or "", photo_caption_style))
+                    elements.append(Spacer(1, 0.15*cm))
                 except Exception as e:
                     print(f"Error loading photo: {e}")
-                    photo_with_caption = None
 
-        # Bio data - two column layout
+        # Bio data - two column layout with adjusted widths
         info_data = [
             [Paragraph("<b>NAME:</b>", info_label_style), Paragraph(candidate.full_name or "", info_value_style), 
              Paragraph("<b>NATIONALITY:</b>", info_label_style), Paragraph(candidate.nationality or "Ugandan", info_value_style)],
@@ -1035,31 +1024,22 @@ class ModularResultViewSet(viewsets.ViewSet):
             [Paragraph("<b>GENDER:</b>", info_label_style), Paragraph(candidate.gender.capitalize() if candidate.gender else "", info_value_style),
              Paragraph("<b>PRINTDATE:</b>", info_label_style), Paragraph(datetime.now().strftime("%d-%b-%Y"), info_value_style)],
             [Paragraph("<b>CENTER NAME:</b>", info_label_style), Paragraph(candidate.assessment_center.center_name if candidate.assessment_center else "", info_value_style), "", ""],
-            [Paragraph("<b>PROGRAMME:</b>", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
+            [Paragraph("<b>OCCUPATION:</b>", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        info_table = Table(info_data, colWidths=[2.8*cm, 5.5*cm, 2.8*cm, 4*cm])
+        info_table = Table(info_data, colWidths=[2.5*cm, 6.5*cm, 2.5*cm, 4*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 2),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('TOPPADDING', (0, 0), (-1, -1), 1),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
             ('SPAN', (1, 3), (3, 3)), # Span center name
-            ('SPAN', (1, 4), (3, 4)), # Span programme/occupation
+            ('SPAN', (1, 4), (3, 4)), # Span occupation
         ]))
+        elements.append(info_table)
 
-        if photo_with_caption:
-            combined_data = [[photo_with_caption, info_table]]
-            combined_table = Table(combined_data, colWidths=[4*cm, 15*cm])
-            combined_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ]))
-            elements.append(combined_table)
-        else:
-            elements.append(info_table)
-
-        elements.append(Spacer(1, 0.3*cm))
+        elements.append(Spacer(1, 0.2*cm))
         elements.append(Paragraph("ASSESSMENT RESULTS", section_heading_style))
-        elements.append(Spacer(1, 0.15*cm))
+        elements.append(Spacer(1, 0.1*cm))
 
         # Results Table - Modular
         results = ModularResult.objects.filter(candidate=candidate).select_related('module', 'assessment_series')
@@ -1621,7 +1601,7 @@ class FormalResultViewSet(viewsets.ViewSet):
         
         # Generate QR Code with candidate info
         qr_data = f"Name: {candidate.full_name}\nReg No: {candidate.registration_number}\nOccupation: {candidate.occupation.occ_name if candidate.occupation else ''}\nInstitution: {candidate.assessment_center.center_name if candidate.assessment_center else ''}\nAward: {candidate.occupation.award if candidate.occupation else ''}\nCompletion Year: {datetime.now().year}"
-        qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=10, border=2)
+        qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=6, border=1)
         qr.add_data(qr_data)
         qr.make(fit=True)
         qr_img = qr.make_image(fill_color="black", back_color="white")
@@ -1632,9 +1612,9 @@ class FormalResultViewSet(viewsets.ViewSet):
         # Define Page Templates for mixed orientation
         def onFirstPage(canvas, doc):
             canvas.saveState()
-            # Draw QR Code at top right
+            # Draw QR Code at top right (smaller size)
             qr_buffer.seek(0)
-            canvas.drawImage(ImageReader(qr_buffer), A4[0] - 3.5*cm, A4[1] - 4*cm, width=2.5*cm, height=2.5*cm)
+            canvas.drawImage(ImageReader(qr_buffer), A4[0] - 2.5*cm, A4[1] - 2.5*cm, width=1.5*cm, height=1.5*cm)
             
             # Signature at bottom right (no EXECUTIVE SECRETARY text)
             signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
@@ -1668,13 +1648,13 @@ class FormalResultViewSet(viewsets.ViewSet):
         elements = []
         styles = getSampleStyleSheet()
         
-        # Custom styles
+        # Custom styles - smaller fonts for neat layout
         title_style = ParagraphStyle(
             'TranscriptTitle',
             parent=styles['Heading1'],
-            fontSize=18,
+            fontSize=14,
             textColor=colors.black,
-            spaceAfter=20,
+            spaceAfter=10,
             spaceBefore=0,
             alignment=TA_CENTER,
             fontName='Times-Bold'
@@ -1683,7 +1663,7 @@ class FormalResultViewSet(viewsets.ViewSet):
         info_label_style = ParagraphStyle(
             'InfoLabel',
             parent=styles['Normal'],
-            fontSize=11,
+            fontSize=9,
             fontName='Times-Bold',
             alignment=TA_LEFT
         )
@@ -1691,7 +1671,7 @@ class FormalResultViewSet(viewsets.ViewSet):
         info_value_style = ParagraphStyle(
             'InfoValue',
             parent=styles['Normal'],
-            fontSize=11,
+            fontSize=9,
             fontName='Times-Roman',
             alignment=TA_LEFT
         )
@@ -1699,10 +1679,10 @@ class FormalResultViewSet(viewsets.ViewSet):
         section_heading_style = ParagraphStyle(
             'SectionHeading',
             parent=styles['Heading2'],
-            fontSize=14,
+            fontSize=11,
             textColor=colors.black,
-            spaceAfter=10,
-            spaceBefore=15,
+            spaceAfter=8,
+            spaceBefore=10,
             alignment=TA_CENTER,
             fontName='Times-Bold'
         )
@@ -1710,8 +1690,7 @@ class FormalResultViewSet(viewsets.ViewSet):
         # Content - Page 1 (No TRANSCRIPT title - paper already has it printed)
         elements.append(Spacer(1, 7.5*cm))
 
-        # Candidate Info - Photo with reg number below
-        photo_with_caption = None
+        # Candidate Photo on top with reg number below
         if candidate.passport_photo:
             photo_path = os.path.join(settings.MEDIA_ROOT, str(candidate.passport_photo))
             if os.path.exists(photo_path):
@@ -1723,26 +1702,16 @@ class FormalResultViewSet(viewsets.ViewSet):
                     img_buffer = BytesIO()
                     pil_image.save(img_buffer, format='PNG')
                     img_buffer.seek(0)
-                    candidate_photo = Image(img_buffer, width=3.5*cm, height=4.5*cm)
-                    
-                    # Create photo with registration number caption below
-                    photo_caption_style = ParagraphStyle('PhotoCaption', parent=styles['Normal'], fontSize=8, fontName='Times-Roman', alignment=TA_LEFT)
-                    photo_data = [
-                        [candidate_photo],
-                        [Paragraph(candidate.registration_number or "", photo_caption_style)]
-                    ]
-                    photo_table = Table(photo_data, colWidths=[3.5*cm])
-                    photo_table.setStyle(TableStyle([
-                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                        ('TOPPADDING', (0, 1), (0, 1), 2),
-                    ]))
-                    photo_with_caption = photo_table
+                    candidate_photo = Image(img_buffer, width=2.8*cm, height=3.5*cm)
+                    elements.append(candidate_photo)
+                    # Registration number caption below photo
+                    photo_caption_style = ParagraphStyle('PhotoCaption', parent=styles['Normal'], fontSize=7, fontName='Times-Roman', alignment=TA_LEFT)
+                    elements.append(Paragraph(candidate.registration_number or "", photo_caption_style))
+                    elements.append(Spacer(1, 0.15*cm))
                 except Exception as e:
                     print(f"Error loading photo: {e}")
-                    photo_with_caption = None
 
-        # Bio data - two column layout
+        # Bio data - two column layout with adjusted widths
         info_data = [
             [Paragraph("<b>NAME:</b>", info_label_style), Paragraph(candidate.full_name or "", info_value_style), 
              Paragraph("<b>NATIONALITY:</b>", info_label_style), Paragraph(candidate.nationality or "Ugandan", info_value_style)],
@@ -1751,31 +1720,22 @@ class FormalResultViewSet(viewsets.ViewSet):
             [Paragraph("<b>GENDER:</b>", info_label_style), Paragraph(candidate.gender.capitalize() if candidate.gender else "", info_value_style),
              Paragraph("<b>PRINTDATE:</b>", info_label_style), Paragraph(datetime.now().strftime("%d-%b-%Y"), info_value_style)],
             [Paragraph("<b>CENTER NAME:</b>", info_label_style), Paragraph(candidate.assessment_center.center_name if candidate.assessment_center else "", info_value_style), "", ""],
-            [Paragraph("<b>PROGRAMME:</b>", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
+            [Paragraph("<b>OCCUPATION:</b>", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        info_table = Table(info_data, colWidths=[2.8*cm, 5.5*cm, 2.8*cm, 4*cm])
+        info_table = Table(info_data, colWidths=[2.5*cm, 6.5*cm, 2.5*cm, 4*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 2),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('TOPPADDING', (0, 0), (-1, -1), 1),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
             ('SPAN', (1, 3), (3, 3)), # Span center name
-            ('SPAN', (1, 4), (3, 4)), # Span programme/occupation
+            ('SPAN', (1, 4), (3, 4)), # Span occupation
         ]))
+        elements.append(info_table)
 
-        if photo_with_caption:
-            combined_data = [[photo_with_caption, info_table]]
-            combined_table = Table(combined_data, colWidths=[4*cm, 15*cm])
-            combined_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ]))
-            elements.append(combined_table)
-        else:
-            elements.append(info_table)
-
-        elements.append(Spacer(1, 0.3*cm))
+        elements.append(Spacer(1, 0.2*cm))
         elements.append(Paragraph("ASSESSMENT RESULTS", section_heading_style))
-        elements.append(Spacer(1, 0.15*cm))
+        elements.append(Spacer(1, 0.1*cm))
 
         # Formal Results
         results = FormalResult.objects.filter(candidate=candidate).select_related(
