@@ -16,6 +16,7 @@ import {
   ChevronDown,
   MessageSquare,
   BarChart3,
+  Award,
 } from 'lucide-react';
 
 const modules = [
@@ -95,6 +96,13 @@ const modules = [
     path: '/statistics',
     color: 'bg-blue-600',
     description: 'System Analytics & Reports',
+  },
+  {
+    name: 'Awards',
+    icon: Award,
+    path: '/awards',
+    color: 'bg-amber-500',
+    description: 'Successful Candidates & Awards',
   },
 ];
 

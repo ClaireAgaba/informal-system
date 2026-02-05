@@ -47,6 +47,14 @@ class AssessmentSeries(models.Model):
         help_text="If enabled, candidates enrolled in this series will not be charged any fees"
     )
     
+    completion_year = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name='Completion Year',
+        help_text='Completion year/period (e.g., "November, 2025")'
+    )
+    
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

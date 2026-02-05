@@ -168,6 +168,12 @@ const AssessmentSeriesView = () => {
               />
 
               <InfoItem
+                icon={<Calendar className="w-5 h-5 text-gray-400" />}
+                label="Completion Year"
+                value={series.completion_year || 'Not set'}
+              />
+
+              <InfoItem
                 icon={<StatusIcon className="w-5 h-5 text-gray-400" />}
                 label="Status"
                 value={

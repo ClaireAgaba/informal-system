@@ -38,6 +38,7 @@ const AssessmentSeriesEdit = () => {
         start_date: series.start_date,
         end_date: series.end_date,
         date_of_release: series.date_of_release,
+        completion_year: series.completion_year || '',
         is_current: series.is_current,
         results_released: series.results_released,
         dont_charge: series.dont_charge,
@@ -78,6 +79,7 @@ const AssessmentSeriesEdit = () => {
       start_date: formData.start_date,
       end_date: formData.end_date,
       date_of_release: formData.date_of_release,
+      completion_year: formData.completion_year || '',
       is_current: formData.is_current || false,
       results_released: formData.results_released || false,
       dont_charge: formData.dont_charge || false,
@@ -172,6 +174,19 @@ const AssessmentSeriesEdit = () => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                   {errors.date_of_release && <p className="mt-1 text-sm text-red-600">{errors.date_of_release.message}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Completion Year
+                  </label>
+                  <input
+                    type="text"
+                    {...register('completion_year')}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="e.g., November, 2025"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Optional: Completion year/period for certificates</p>
                 </div>
 
                 <div className="flex items-center">

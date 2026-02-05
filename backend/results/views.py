@@ -1085,9 +1085,9 @@ class ModularResultViewSet(viewsets.ViewSet):
                 module_cu = result.module.credit_units if result.module and result.module.credit_units else 0
                 candidate_total_cus += module_cu
                 
-                # Get completion date from assessment_series (name already contains full info like "March 2025")
+                # Get completion date from assessment_series (use completion_year if set, else series name)
                 if result.assessment_series and not completion_date:
-                    completion_date = result.assessment_series.name
+                    completion_date = result.assessment_series.completion_year or result.assessment_series.name
                 
                 results_data.append([
                     Paragraph(module_code, info_value_style),
@@ -1237,8 +1237,9 @@ class ModularResultViewSet(viewsets.ViewSet):
         buffer.close()
         
         response = HttpResponse(content_type='application/pdf')
-        filename = f"Transcript_{candidate.full_name.replace(' ', '_')}.pdf"
-        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        reg_no_safe = (candidate.registration_number or 'unknown').replace('/', '_')
+        filename = f"Transcript_{reg_no_safe}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
         response.write(pdf)
         
         return response
@@ -1844,9 +1845,9 @@ class FormalResultViewSet(viewsets.ViewSet):
             first_result = results.first()
             is_paper_based = first_result.level and first_result.level.structure_type == 'papers'
             
-            # Get completion date from assessment series
+            # Get completion date from assessment series (use completion_year if set, else series name)
             if first_result.assessment_series:
-                completion_date = first_result.assessment_series.name
+                completion_date = first_result.assessment_series.completion_year or first_result.assessment_series.name
             
             # Calculate level total CUs
             if first_result.level:
@@ -2105,8 +2106,9 @@ class FormalResultViewSet(viewsets.ViewSet):
         buffer.close()
         
         response = HttpResponse(content_type='application/pdf')
-        filename = f"Transcript_{candidate.full_name.replace(' ', '_')}.pdf"
-        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        reg_no_safe = (candidate.registration_number or 'unknown').replace('/', '_')
+        filename = f"Transcript_{reg_no_safe}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
         response.write(pdf)
         
         return response
@@ -3029,8 +3031,9 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         buffer.close()
         
         response = HttpResponse(content_type='application/pdf')
-        filename = f"Transcript_{candidate.full_name.replace(' ', '_')}.pdf"
-        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        reg_no_safe = (candidate.registration_number or 'unknown').replace('/', '_')
+        filename = f"Transcript_{reg_no_safe}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
         response.write(pdf)
         
         return response

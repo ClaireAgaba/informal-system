@@ -219,6 +219,7 @@ class CandidateCreateUpdateSerializer(serializers.ModelSerializer):
             'passport_photo',
             'identification_document', 'qualification_document',
             'enrollment_level', 'reg_number', 'status', 'block_portal_results',
+            'transcript_serial_number',
         ]
 
     def validate_intake(self, value):

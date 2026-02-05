@@ -67,6 +67,16 @@ class Candidate(models.Model):
         help_text='Unique payment code in format: IUV00225000001'
     )
     
+    # Transcript Serial Number
+    transcript_serial_number = models.CharField(
+        max_length=50,
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name='Transcript Serial Number',
+        help_text='Unique transcript serial number (TR SNo)'
+    )
+    
     # Submission Status
     is_submitted = models.BooleanField(
         default=False,

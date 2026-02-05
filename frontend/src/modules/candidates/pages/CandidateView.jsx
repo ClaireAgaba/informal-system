@@ -52,6 +52,9 @@ const CandidateView = () => {
   const [showChangeRegCategoryModal, setShowChangeRegCategoryModal] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+  const [showTRSNoModal, setShowTRSNoModal] = useState(false);
+  const [trSNoValue, setTRSNoValue] = useState('');
+  const [savingTRSNo, setSavingTRSNo] = useState(false);
 
   // Load current user from localStorage
   useEffect(() => {
@@ -413,6 +416,17 @@ const CandidateView = () => {
                     Change Registration Category
                   </button>
                   <button
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                    onClick={() => {
+                      setShowActionsDropdown(false);
+                      setTRSNoValue(candidate.transcript_serial_number || '');
+                      setShowTRSNoModal(true);
+                    }}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Add TR SNo
+                  </button>
+                  <button
                     className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center"
                     onClick={async () => {
                       setShowActionsDropdown(false);
@@ -528,6 +542,12 @@ const CandidateView = () => {
                   <span className="text-gray-600">Nationality</span>
                   <span className="font-medium text-gray-900">
                     {candidate.nationality}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Transcript Serial No</span>
+                  <span className="font-medium text-gray-900">
+                    {candidate.transcript_serial_number || '-'}
                   </span>
                 </div>
                 {candidate.is_refugee && (
@@ -1359,6 +1379,75 @@ const CandidateView = () => {
           candidate={candidate}
           onClose={() => setShowChangeRegCategoryModal(false)}
         />
+      )}
+
+      {/* TR SNo Modal */}
+      {showTRSNoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={() => setShowTRSNoModal(false)}
+          />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {candidate.transcript_serial_number ? 'Update' : 'Add'} Transcript Serial Number
+              </h3>
+              <button
+                onClick={() => setShowTRSNoModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                TR SNo (Numbers only)
+              </label>
+              <input
+                type="text"
+                value={trSNoValue}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  setTRSNoValue(value);
+                }}
+                placeholder="Enter transcript serial number"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowTRSNoModal(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!trSNoValue.trim()) {
+                    toast.error('Please enter a transcript serial number');
+                    return;
+                  }
+                  try {
+                    setSavingTRSNo(true);
+                    await candidateApi.patch(id, { transcript_serial_number: trSNoValue });
+                    toast.success('Transcript serial number updated successfully');
+                    queryClient.invalidateQueries(['candidate', id]);
+                    setShowTRSNoModal(false);
+                  } catch (error) {
+                    toast.error(error.response?.data?.transcript_serial_number?.[0] || 'Failed to update transcript serial number');
+                  } finally {
+                    setSavingTRSNo(false);
+                  }
+                }}
+                disabled={savingTRSNo}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {savingTRSNo ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
