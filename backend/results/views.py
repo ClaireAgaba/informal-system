@@ -1665,12 +1665,18 @@ class FormalResultViewSet(viewsets.ViewSet):
         # Create PDF buffer
         buffer = BytesIO()
         
+        # Get award from candidate's level
+        qr_award = ""
+        first_result = formal_results.first()
+        if first_result and first_result.level:
+            qr_award = first_result.level.award or ""
+        
         # Generate QR Code with candidate info (JSON format for scanner compatibility)
         qr_data = json.dumps({
             "name": candidate.full_name or "",
             "regno": candidate.registration_number or "",
             "occupation": candidate.occupation.occ_name if candidate.occupation else "",
-            "award": ""
+            "award": qr_award
         })
         qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=6, border=1)
         qr.add_data(qr_data)
