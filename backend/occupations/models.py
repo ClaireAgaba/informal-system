@@ -211,6 +211,12 @@ class OccupationModule(models.Model):
         help_text="Select the level for this module"
     )
     
+    credit_units = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Credit Units (CU)',
+        help_text="Number of credit units for this module"
+    )
+    
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -305,6 +311,12 @@ class OccupationPaper(models.Model):
         choices=PAPER_TYPE_CHOICES,
         verbose_name='Paper Type',
         help_text="Select whether this is a Theory or Practical paper"
+    )
+    
+    credit_units = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Credit Units (CU)',
+        help_text="Number of credit units for this paper"
     )
     
     is_active = models.BooleanField(default=True)

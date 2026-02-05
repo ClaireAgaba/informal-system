@@ -49,6 +49,7 @@ const ModuleCreate = () => {
     const moduleData = {
       ...data,
       occupation: occupationId,
+      credit_units: data.credit_units ? parseInt(data.credit_units) : 0,
       is_active: data.is_active === 'true',
     };
     createMutation.mutate(moduleData);
@@ -138,6 +139,22 @@ const ModuleCreate = () => {
                   {errors.level && (
                     <p className="text-red-500 text-xs mt-1">{errors.level.message}</p>
                   )}
+                </div>
+
+                {/* Credit Units */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Credit Units (CU)
+                  </label>
+                  <input
+                    type="number"
+                    {...register('credit_units')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="e.g., 3"
+                    min="0"
+                    defaultValue="0"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Number of credit units for this module</p>
                 </div>
 
                 {/* Status */}

@@ -357,6 +357,13 @@ const OccupationView = () => {
                     const isWorkersPas = occupation.occ_category === 'workers_pas';
                     const hasModular = occupation.has_modular;
                     
+                    // Calculate total CU for this level
+                    const levelModules = modules.filter(m => m.level === level.id);
+                    const levelPapers = papers.filter(p => p.level === level.id);
+                    const totalCU = level.structure_type === 'modules'
+                      ? levelModules.reduce((sum, m) => sum + (m.credit_units || 0), 0)
+                      : levelPapers.reduce((sum, p) => sum + (p.credit_units || 0), 0);
+                    
                     return (
                       <div
                         key={level.id}
@@ -426,6 +433,14 @@ const OccupationView = () => {
                                   </div>
                                 </>
                               )}
+                              
+                              {/* Total Credit Units for this level */}
+                              <div className="flex items-center text-sm pt-2 border-t border-gray-100">
+                                <span className="text-gray-500 w-48">Total Credit Units:</span>
+                                <span className="font-semibold text-primary-600">
+                                  {totalCU} CU
+                                </span>
+                              </div>
                             </div>
                           </div>
                           <Button
@@ -493,6 +508,10 @@ const OccupationView = () => {
                                 <div className="flex items-center">
                                   <span className="text-gray-500 w-32">Level:</span>
                                   <span className="text-gray-900">{module.level_name || 'N/A'}</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <span className="text-gray-500 w-32">Credit Units:</span>
+                                  <span className="font-medium text-primary-600">{module.credit_units || 0} CU</span>
                                 </div>
                               </div>
                             </div>
@@ -564,6 +583,10 @@ const OccupationView = () => {
                                 <div className="flex items-center">
                                   <span className="text-gray-500 w-32">Level:</span>
                                   <span className="text-gray-900">{paper.level_name || 'N/A'}</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <span className="text-gray-500 w-32">Credit Units:</span>
+                                  <span className="font-medium text-primary-600">{paper.credit_units || 0} CU</span>
                                 </div>
                                 {paper.module && (
                                   <div className="flex items-center">

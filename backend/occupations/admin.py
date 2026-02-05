@@ -124,7 +124,7 @@ class OccupationLevelAdmin(admin.ModelAdmin):
 @admin.register(OccupationModule)
 class OccupationModuleAdmin(admin.ModelAdmin):
     list_display = ['module_code', 'module_name', 'get_occupation_code', 'get_occupation_name', 
-                    'get_level_name', 'is_active', 'created_at']
+                    'get_level_name', 'credit_units', 'is_active', 'created_at']
     list_filter = ['is_active', 'occupation__occ_category', 'occupation', 'created_at']
     search_fields = ['module_code', 'module_name', 'occupation__occ_code', 'occupation__occ_name']
     readonly_fields = ['created_at', 'updated_at']
@@ -132,8 +132,8 @@ class OccupationModuleAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Module Information', {
-            'fields': ('module_code', 'module_name'),
-            'description': 'Enter the module code and name'
+            'fields': ('module_code', 'module_name', 'credit_units'),
+            'description': 'Enter the module code, name, and credit units'
         }),
         ('Occupation & Level', {
             'fields': ('occupation', 'level'),
@@ -186,7 +186,7 @@ class OccupationModuleAdmin(admin.ModelAdmin):
 @admin.register(OccupationPaper)
 class OccupationPaperAdmin(admin.ModelAdmin):
     list_display = ['paper_code', 'paper_name', 'get_occupation_code', 'get_occupation_name', 
-                    'get_level_name', 'get_module_code', 'paper_type', 'is_active', 'created_at']
+                    'get_level_name', 'get_module_code', 'paper_type', 'credit_units', 'is_active', 'created_at']
     list_filter = ['paper_type', 'is_active', 'occupation__occ_category', 'occupation', 'module', 'created_at']
     search_fields = ['paper_code', 'paper_name', 'occupation__occ_code', 'occupation__occ_name']
     readonly_fields = ['created_at', 'updated_at']
@@ -194,8 +194,8 @@ class OccupationPaperAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Paper Information', {
-            'fields': ('paper_code', 'paper_name', 'paper_type'),
-            'description': 'Enter the paper code, name, and type (Theory or Practical)'
+            'fields': ('paper_code', 'paper_name', 'paper_type', 'credit_units'),
+            'description': 'Enter the paper code, name, type, and credit units'
         }),
         ('Occupation & Level', {
             'fields': ('occupation', 'level', 'module'),

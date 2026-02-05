@@ -128,7 +128,7 @@ class OccupationModuleCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = OccupationModule
-        fields = ['module_code', 'module_name', 'occupation', 'level', 'is_active']
+        fields = ['module_code', 'module_name', 'occupation', 'level', 'credit_units', 'is_active']
     
     def validate_module_code(self, value):
         """Ensure module code is unique"""
@@ -168,7 +168,7 @@ class OccupationPaperCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = OccupationPaper
-        fields = ['paper_code', 'paper_name', 'occupation', 'level', 'module', 'paper_type', 'is_active']
+        fields = ['paper_code', 'paper_name', 'occupation', 'level', 'module', 'paper_type', 'credit_units', 'is_active']
     
     def validate_paper_code(self, value):
         """Ensure paper code is unique"""

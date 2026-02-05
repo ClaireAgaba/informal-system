@@ -52,6 +52,7 @@ const ModuleEdit = () => {
         module_code: module.module_code,
         module_name: module.module_name,
         level: module.level,
+        credit_units: module.credit_units || 0,
         is_active: module.is_active ? 'true' : 'false',
       });
     }
@@ -117,6 +118,7 @@ const ModuleEdit = () => {
     const moduleData = {
       ...data,
       occupation: module.occupation,
+      credit_units: data.credit_units ? parseInt(data.credit_units) : 0,
       is_active: data.is_active === 'true',
     };
     updateMutation.mutate(moduleData);
@@ -243,6 +245,21 @@ const ModuleEdit = () => {
                   {errors.level && (
                     <p className="text-red-500 text-xs mt-1">{errors.level.message}</p>
                   )}
+                </div>
+
+                {/* Credit Units */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Credit Units (CU)
+                  </label>
+                  <input
+                    type="number"
+                    {...register('credit_units')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="e.g., 3"
+                    min="0"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Number of credit units for this module</p>
                 </div>
 
                 {/* Status */}

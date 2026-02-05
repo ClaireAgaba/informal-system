@@ -53,6 +53,7 @@ const PaperEdit = () => {
         paper_type: paper.paper_type,
         level: paper.level,
         module: paper.module || '',
+        credit_units: paper.credit_units || 0,
         is_active: paper.is_active ? 'true' : 'false',
       });
     }
@@ -91,6 +92,7 @@ const PaperEdit = () => {
     const paperData = {
       ...data,
       occupation: paper.occupation,
+      credit_units: data.credit_units ? parseInt(data.credit_units) : 0,
       is_active: data.is_active === 'true',
     };
     updateMutation.mutate(paperData);
@@ -242,6 +244,21 @@ const PaperEdit = () => {
                     </p>
                   </div>
                 )}
+
+                {/* Credit Units */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Credit Units (CU)
+                  </label>
+                  <input
+                    type="number"
+                    {...register('credit_units')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="e.g., 2"
+                    min="0"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Number of credit units for this paper</p>
+                </div>
 
                 {/* Status */}
                 <div>
