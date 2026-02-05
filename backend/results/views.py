@@ -994,7 +994,8 @@ class ModularResultViewSet(viewsets.ViewSet):
         # Content - Page 1 (No TRANSCRIPT title - paper already has it printed)
         elements.append(Spacer(1, 7.5*cm))
 
-        # Candidate Photo (left-aligned) with reg number below
+        # Photo with reg no caption (smaller font 6pt to fit on one line)
+        photo_cell = None
         if candidate.passport_photo:
             photo_path = os.path.join(settings.MEDIA_ROOT, str(candidate.passport_photo))
             if os.path.exists(photo_path):
@@ -1007,24 +1008,20 @@ class ModularResultViewSet(viewsets.ViewSet):
                     pil_image.save(img_buffer, format='PNG')
                     img_buffer.seek(0)
                     candidate_photo = Image(img_buffer, width=2.8*cm, height=3.5*cm)
-                    # Photo with caption in left-aligned table
-                    photo_caption_style = ParagraphStyle('PhotoCaption', parent=styles['Normal'], fontSize=7, fontName='Times-Roman', alignment=TA_LEFT)
+                    # Photo with reg no below in smaller font
+                    photo_caption_style = ParagraphStyle('PhotoCaption', parent=styles['Normal'], fontSize=6, fontName='Times-Roman', alignment=TA_LEFT)
                     photo_data = [[candidate_photo], [Paragraph(candidate.registration_number or "", photo_caption_style)]]
-                    photo_table = Table(photo_data, colWidths=[3*cm])
-                    photo_table.setStyle(TableStyle([
+                    photo_cell = Table(photo_data, colWidths=[3.2*cm])
+                    photo_cell.setStyle(TableStyle([
                         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                         ('LEFTPADDING', (0, 0), (-1, -1), 0),
                         ('TOPPADDING', (0, 1), (0, 1), 2),
                     ]))
-                    # Wrap in outer table for left alignment
-                    outer_photo = Table([[photo_table]], colWidths=[18*cm])
-                    outer_photo.setStyle(TableStyle([('ALIGN', (0, 0), (0, 0), 'LEFT'), ('LEFTPADDING', (0, 0), (0, 0), 0)]))
-                    elements.append(outer_photo)
                 except Exception as e:
                     print(f"Error loading photo: {e}")
 
-        # Bio data - compact labels to fit on one line
+        # Bio data table - NAME/values on left, NATIONALITY on right
         info_data = [
             [Paragraph("<b>NAME:</b>", info_label_style), Paragraph(candidate.full_name or "", info_value_style), 
              Paragraph("<b>NATIONALITY:</b>", info_label_style), Paragraph(candidate.nationality or "Ugandan", info_value_style)],
@@ -1036,16 +1033,26 @@ class ModularResultViewSet(viewsets.ViewSet):
             [Paragraph("<b>OCCUPATION:</b>", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        info_table = Table(info_data, colWidths=[2.8*cm, 5.5*cm, 2.8*cm, 4.4*cm])
+        info_table = Table(info_data, colWidths=[2.8*cm, 4.5*cm, 2.8*cm, 3.5*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 0),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 1),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
             ('LEFTPADDING', (0, 0), (-1, -1), 0),
             ('SPAN', (1, 3), (3, 3)), # Span center name
             ('SPAN', (1, 4), (3, 4)), # Span occupation
         ]))
-        elements.append(info_table)
+
+        # Combine photo and bio data side by side
+        if photo_cell:
+            combined = Table([[photo_cell, info_table]], colWidths=[3.5*cm, 14*cm])
+            combined.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ]))
+            elements.append(combined)
+        else:
+            elements.append(info_table)
 
         elements.append(Spacer(1, 0.2*cm))
         elements.append(Paragraph("ASSESSMENT RESULTS", section_heading_style))
@@ -1700,7 +1707,8 @@ class FormalResultViewSet(viewsets.ViewSet):
         # Content - Page 1 (No TRANSCRIPT title - paper already has it printed)
         elements.append(Spacer(1, 7.5*cm))
 
-        # Candidate Photo (left-aligned) with reg number below
+        # Photo with reg no caption (smaller font 6pt to fit on one line)
+        photo_cell = None
         if candidate.passport_photo:
             photo_path = os.path.join(settings.MEDIA_ROOT, str(candidate.passport_photo))
             if os.path.exists(photo_path):
@@ -1713,24 +1721,20 @@ class FormalResultViewSet(viewsets.ViewSet):
                     pil_image.save(img_buffer, format='PNG')
                     img_buffer.seek(0)
                     candidate_photo = Image(img_buffer, width=2.8*cm, height=3.5*cm)
-                    # Photo with caption in left-aligned table
-                    photo_caption_style = ParagraphStyle('PhotoCaption', parent=styles['Normal'], fontSize=7, fontName='Times-Roman', alignment=TA_LEFT)
+                    # Photo with reg no below in smaller font
+                    photo_caption_style = ParagraphStyle('PhotoCaption', parent=styles['Normal'], fontSize=6, fontName='Times-Roman', alignment=TA_LEFT)
                     photo_data = [[candidate_photo], [Paragraph(candidate.registration_number or "", photo_caption_style)]]
-                    photo_table = Table(photo_data, colWidths=[3*cm])
-                    photo_table.setStyle(TableStyle([
+                    photo_cell = Table(photo_data, colWidths=[3.2*cm])
+                    photo_cell.setStyle(TableStyle([
                         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                         ('LEFTPADDING', (0, 0), (-1, -1), 0),
                         ('TOPPADDING', (0, 1), (0, 1), 2),
                     ]))
-                    # Wrap in outer table for left alignment
-                    outer_photo = Table([[photo_table]], colWidths=[18*cm])
-                    outer_photo.setStyle(TableStyle([('ALIGN', (0, 0), (0, 0), 'LEFT'), ('LEFTPADDING', (0, 0), (0, 0), 0)]))
-                    elements.append(outer_photo)
                 except Exception as e:
                     print(f"Error loading photo: {e}")
 
-        # Bio data - compact labels to fit on one line
+        # Bio data table - NAME/values on left, NATIONALITY on right
         info_data = [
             [Paragraph("<b>NAME:</b>", info_label_style), Paragraph(candidate.full_name or "", info_value_style), 
              Paragraph("<b>NATIONALITY:</b>", info_label_style), Paragraph(candidate.nationality or "Ugandan", info_value_style)],
@@ -1742,16 +1746,26 @@ class FormalResultViewSet(viewsets.ViewSet):
             [Paragraph("<b>OCCUPATION:</b>", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        info_table = Table(info_data, colWidths=[2.8*cm, 5.5*cm, 2.8*cm, 4.4*cm])
+        info_table = Table(info_data, colWidths=[2.8*cm, 4.5*cm, 2.8*cm, 3.5*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 0),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 1),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
             ('LEFTPADDING', (0, 0), (-1, -1), 0),
             ('SPAN', (1, 3), (3, 3)), # Span center name
             ('SPAN', (1, 4), (3, 4)), # Span occupation
         ]))
-        elements.append(info_table)
+
+        # Combine photo and bio data side by side
+        if photo_cell:
+            combined = Table([[photo_cell, info_table]], colWidths=[3.5*cm, 14*cm])
+            combined.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ]))
+            elements.append(combined)
+        else:
+            elements.append(info_table)
 
         elements.append(Spacer(1, 0.2*cm))
         elements.append(Paragraph("ASSESSMENT RESULTS", section_heading_style))
