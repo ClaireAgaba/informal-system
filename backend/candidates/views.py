@@ -92,12 +92,19 @@ class CandidateViewSet(viewsets.ModelViewSet):
         
         # Filter by center for center representatives
         if self.request.user.is_authenticated and self.request.user.user_type == 'center_representative':
-            if hasattr(self.request.user, 'center_rep_profile'):
+            try:
                 center_rep = self.request.user.center_rep_profile
-                queryset = queryset.filter(assessment_center=center_rep.assessment_center)
-                # If center rep is assigned to a specific branch, filter by that branch too
-                if center_rep.assessment_center_branch:
-                    queryset = queryset.filter(assessment_center_branch=center_rep.assessment_center_branch)
+                if center_rep and center_rep.assessment_center:
+                    queryset = queryset.filter(assessment_center=center_rep.assessment_center)
+                    # If center rep is assigned to a specific branch, filter by that branch too
+                    if center_rep.assessment_center_branch:
+                        queryset = queryset.filter(assessment_center_branch=center_rep.assessment_center_branch)
+                else:
+                    # No center assigned - return empty queryset for safety
+                    queryset = queryset.none()
+            except Exception:
+                # No center_rep_profile found - return empty queryset for safety
+                queryset = queryset.none()
         
         return queryset
 
@@ -147,37 +154,47 @@ class CandidateViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Set created_by when creating a candidate"""
         staff = None
-        if hasattr(self.request.user, 'staff'):
+        try:
             staff = self.request.user.staff
+        except Exception:
+            pass
         if self.request.user.is_authenticated and self.request.user.user_type == 'center_representative':
-            if hasattr(self.request.user, 'center_rep_profile'):
+            try:
                 center_rep = self.request.user.center_rep_profile
-                candidate = serializer.save(
-                    created_by=staff,
-                    updated_by=staff,
-                    assessment_center=center_rep.assessment_center,
-                    assessment_center_branch=center_rep.assessment_center_branch,
-                )
-                self._log_activity(candidate, 'candidate_created', 'Candidate created')
-                return
+                if center_rep and center_rep.assessment_center:
+                    candidate = serializer.save(
+                        created_by=staff,
+                        updated_by=staff,
+                        assessment_center=center_rep.assessment_center,
+                        assessment_center_branch=center_rep.assessment_center_branch,
+                    )
+                    self._log_activity(candidate, 'candidate_created', 'Candidate created')
+                    return
+            except Exception:
+                pass
         candidate = serializer.save(created_by=staff, updated_by=staff)
         self._log_activity(candidate, 'candidate_created', 'Candidate created')
     
     def perform_update(self, serializer):
         """Set updated_by when updating a candidate"""
         staff = None
-        if hasattr(self.request.user, 'staff'):
+        try:
             staff = self.request.user.staff
+        except Exception:
+            pass
         if self.request.user.is_authenticated and self.request.user.user_type == 'center_representative':
-            if hasattr(self.request.user, 'center_rep_profile'):
+            try:
                 center_rep = self.request.user.center_rep_profile
-                candidate = serializer.save(
-                    updated_by=staff,
-                    assessment_center=center_rep.assessment_center,
-                    assessment_center_branch=center_rep.assessment_center_branch,
-                )
-                self._log_activity(candidate, 'candidate_updated', 'Candidate updated')
-                return
+                if center_rep and center_rep.assessment_center:
+                    candidate = serializer.save(
+                        updated_by=staff,
+                        assessment_center=center_rep.assessment_center,
+                        assessment_center_branch=center_rep.assessment_center_branch,
+                    )
+                    self._log_activity(candidate, 'candidate_updated', 'Candidate updated')
+                    return
+            except Exception:
+                pass
         candidate = serializer.save(updated_by=staff)
         self._log_activity(candidate, 'candidate_updated', 'Candidate updated')
 
