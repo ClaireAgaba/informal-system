@@ -62,7 +62,7 @@ class OccupationCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Occupation
-        fields = ['occ_code', 'occ_name', 'occ_category', 'sector', 'has_modular', 'is_active']
+        fields = ['occ_code', 'occ_name', 'occ_category', 'award', 'sector', 'has_modular', 'is_active']
     
     def validate_occ_code(self, value):
         """Ensure occupation code is unique"""
@@ -88,7 +88,7 @@ class OccupationListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Occupation
         fields = ['id', 'occ_code', 'occ_name', 'occ_category', 'occ_category_display', 
-                  'sector', 'sector_name', 'has_modular', 'levels_count', 'is_active']
+                  'award', 'sector', 'sector_name', 'has_modular', 'levels_count', 'is_active']
 
 
 class OccupationModuleSerializer(serializers.ModelSerializer):

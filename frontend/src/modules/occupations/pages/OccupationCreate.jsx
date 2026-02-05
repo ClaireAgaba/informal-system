@@ -20,6 +20,7 @@ const OccupationCreate = () => {
       occ_code: '',
       occ_name: '',
       occ_category: '',
+      award: '',
       sector: '',
       has_modular: false,
       is_active: true,
@@ -68,6 +69,7 @@ const OccupationCreate = () => {
       occ_code: formData.occ_code,
       occ_name: formData.occ_name,
       occ_category: formData.occ_category,
+      award: formData.award || null,
       sector: formData.sector ? parseInt(formData.sector) : null,
       has_modular: formData.has_modular || false,
       is_active: formData.is_active !== false,
@@ -157,6 +159,20 @@ const OccupationCreate = () => {
                   {errors.occ_category && (
                     <p className="mt-1 text-sm text-red-600">{errors.occ_category.message}</p>
                   )}
+                </div>
+
+                {/* Award */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Award
+                  </label>
+                  <input
+                    type="text"
+                    {...register('award')}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="e.g., Uganda Vocational Qualification"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Award/Certificate title used on transcripts</p>
                 </div>
 
                 {/* Sector */}

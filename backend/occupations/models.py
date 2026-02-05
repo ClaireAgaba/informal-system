@@ -39,6 +39,13 @@ class Occupation(models.Model):
     occ_code = models.CharField(max_length=50, unique=True, verbose_name='Occupation Code')
     occ_name = models.CharField(max_length=200, verbose_name='Occupation Name')
     occ_category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, verbose_name='Occupation Category')
+    award = models.CharField(
+        max_length=200, 
+        blank=True, 
+        null=True,
+        verbose_name='Award',
+        help_text="Award/Certificate title for this occupation (used on transcripts)"
+    )
     sector = models.ForeignKey(
         Sector, 
         on_delete=models.SET_NULL, 
