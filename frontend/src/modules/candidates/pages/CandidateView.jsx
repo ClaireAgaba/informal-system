@@ -335,7 +335,7 @@ const CandidateView = () => {
             <Download className="w-4 h-4 mr-2" />
             Verified Results
           </Button>
-          {candidate?.registration_category !== 'workers_pas' && (
+          {candidate?.registration_category !== 'workers_pas' && currentUser?.user_type !== 'center_representative' && (
             <Button
               variant="outline"
               size="md"
@@ -385,16 +385,18 @@ const CandidateView = () => {
                     <Calendar className="w-4 h-4 mr-2" />
                     Change Assessment Series
                   </button>
-                  <button
-                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-                    onClick={() => {
-                      setShowActionsDropdown(false);
-                      setShowChangeCenterModal(true);
-                    }}
-                  >
-                    <Building2 className="w-4 h-4 mr-2" />
-                    Change Assessment Center
-                  </button>
+                  {currentUser?.user_type !== 'center_representative' && (
+                    <button
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                      onClick={() => {
+                        setShowActionsDropdown(false);
+                        setShowChangeCenterModal(true);
+                      }}
+                    >
+                      <Building2 className="w-4 h-4 mr-2" />
+                      Change Assessment Center
+                    </button>
+                  )}
                   <button
                     className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
                     onClick={() => {
@@ -415,37 +417,41 @@ const CandidateView = () => {
                     <Tag className="w-4 h-4 mr-2" />
                     Change Registration Category
                   </button>
-                  <button
-                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-                    onClick={() => {
-                      setShowActionsDropdown(false);
-                      setTRSNoValue(candidate.transcript_serial_number || '');
-                      setShowTRSNoModal(true);
-                    }}
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Add TR SNo
-                  </button>
-                  <button
-                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center"
-                    onClick={async () => {
-                      setShowActionsDropdown(false);
-                      if (window.confirm(`Are you sure you want to clear ALL results, enrollments, and fees for ${candidate.full_name}? This action cannot be undone.`)) {
-                        try {
-                          const response = await candidateApi.clearData(id);
-                          const { cleared } = response.data;
-                          toast.success(`Cleared: ${cleared.modular_results + cleared.formal_results + cleared.workers_pas_results} results, ${cleared.enrollments} enrollments`);
-                          queryClient.invalidateQueries(['candidate', id]);
-                          queryClient.invalidateQueries(['candidate-enrollments', id]);
-                        } catch (error) {
-                          toast.error(error.response?.data?.error || 'Failed to clear data');
-                        }
-                      }
-                    }}
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Clear Results, Enrollments & Fees
-                  </button>
+                  {currentUser?.user_type !== 'center_representative' && (
+                    <>
+                      <button
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                        onClick={() => {
+                          setShowActionsDropdown(false);
+                          setTRSNoValue(candidate.transcript_serial_number || '');
+                          setShowTRSNoModal(true);
+                        }}
+                      >
+                        <FileText className="w-4 h-4 mr-2" />
+                        Add TR SNo
+                      </button>
+                      <button
+                        className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center"
+                        onClick={async () => {
+                          setShowActionsDropdown(false);
+                          if (window.confirm(`Are you sure you want to clear ALL results, enrollments, and fees for ${candidate.full_name}? This action cannot be undone.`)) {
+                            try {
+                              const response = await candidateApi.clearData(id);
+                              const { cleared } = response.data;
+                              toast.success(`Cleared: ${cleared.modular_results + cleared.formal_results + cleared.workers_pas_results} results, ${cleared.enrollments} enrollments`);
+                              queryClient.invalidateQueries(['candidate', id]);
+                              queryClient.invalidateQueries(['candidate-enrollments', id]);
+                            } catch (error) {
+                              toast.error(error.response?.data?.error || 'Failed to clear data');
+                            }
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Clear Results, Enrollments & Fees
+                      </button>
+                    </>
+                  )}
                 </div>
               </>
             )}

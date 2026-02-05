@@ -49,6 +49,19 @@ const CandidateList = () => {
   const [changingSeries, setChangingSeries] = useState(false);
   const [showBulkChangeCenterModal, setShowBulkChangeCenterModal] = useState(false);
   const [changingCenter, setChangingCenter] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Load current user from localStorage
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        setCurrentUser(JSON.parse(userStr));
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+  }, []);
   
   // Filter states
   const [filters, setFilters] = useState({
@@ -797,17 +810,19 @@ const CandidateList = () => {
                     <option value="no">No</option>
                   </select>
                 </th>
-                <th className="px-2 py-2">
-                  <select
-                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    value={filters.has_marks}
-                    onChange={(e) => setFilters({ ...filters, has_marks: e.target.value })}
-                  >
-                    <option value="">Select</option>
-                    <option value="yes">Yes</option>
-                    <option value="no">No</option>
-                  </select>
-                </th>
+                {currentUser?.user_type !== 'center_representative' && (
+                  <th className="px-2 py-2">
+                    <select
+                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      value={filters.has_marks}
+                      onChange={(e) => setFilters({ ...filters, has_marks: e.target.value })}
+                    >
+                      <option value="">Select</option>
+                      <option value="yes">Yes</option>
+                      <option value="no">No</option>
+                    </select>
+                  </th>
+                )}
                 <th className="px-2 py-2"></th>
               </tr>
               {/* Header Row */}
@@ -860,9 +875,11 @@ const CandidateList = () => {
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Is Enrolled
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Has Marks
-                </th>
+                {currentUser?.user_type !== 'center_representative' && (
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Has Marks
+                  </th>
+                )}
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -993,15 +1010,17 @@ const CandidateList = () => {
                         <span className="text-gray-400 text-sm">No</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      {candidate.has_marks ? (
-                        <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                          Yes
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 text-sm">No</span>
-                      )}
-                    </td>
+                    {currentUser?.user_type !== 'center_representative' && (
+                      <td className="px-4 py-3 text-center">
+                        {candidate.has_marks ? (
+                          <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                            Yes
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-sm">No</span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end space-x-2">
                         <button
