@@ -28,7 +28,8 @@ const AssessmentCenterList = () => {
   });
 
   const centers = data?.data?.results || [];
-  const totalPages = data?.data?.count ? Math.ceil(data.data.count / pageSize) : 1;
+  const totalCount = data?.data?.count || 0;
+  const totalPages = totalCount ? Math.ceil(totalCount / pageSize) : 1;
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -143,7 +144,9 @@ const AssessmentCenterList = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Assessment Centers</h1>
-            <p className="text-gray-600 mt-1">Manage assessment centers and branches</p>
+            <p className="text-gray-600 mt-1">
+              {totalCount > 0 ? `${totalCount} centers` : 'Manage assessment centers and branches'}
+            </p>
           </div>
           <div className="flex items-center space-x-2">
             {selectedCenters.length > 0 && (
