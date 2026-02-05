@@ -14,6 +14,19 @@ import {
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
+// Helper to get user from localStorage synchronously
+const getUserFromStorage = () => {
+  try {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      return JSON.parse(userStr);
+    }
+  } catch (error) {
+    console.error('Error parsing user data:', error);
+  }
+  return null;
+};
+
 const allNavigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['all'] },
   { name: 'Candidates', href: '/candidates', icon: Users, roles: ['all'] },
@@ -31,22 +44,8 @@ const allNavigation = [
 const DashboardLayout = () => {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-
-  useEffect(() => {
-    // Get user from localStorage
-    const userStr = localStorage.getItem('user');
-    console.log('DashboardLayout - Raw user string:', userStr);
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        console.log('DashboardLayout - Parsed user:', user);
-        setCurrentUser(user);
-      } catch (error) {
-        console.error('Error parsing user data:', error);
-      }
-    }
-  }, []);
+  // Initialize currentUser synchronously to prevent flash of all modules
+  const [currentUser, setCurrentUser] = useState(() => getUserFromStorage());
 
   // Get user display name based on user type
   const getUserDisplayName = () => {
@@ -105,7 +104,8 @@ const DashboardLayout = () => {
 
   // Filter navigation based on user role
   const getAccessibleNavigation = () => {
-    if (!currentUser) return allNavigation;
+    // For security: if no user, return empty navigation
+    if (!currentUser) return [];
     
     return allNavigation.filter(item => {
       // If item is accessible to all roles

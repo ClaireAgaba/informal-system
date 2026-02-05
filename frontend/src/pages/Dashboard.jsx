@@ -98,25 +98,26 @@ const modules = [
   },
 ];
 
+// Helper to get user from localStorage synchronously
+const getUserFromStorage = () => {
+  try {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      return JSON.parse(userStr);
+    }
+  } catch (error) {
+    console.error('Error parsing user data:', error);
+  }
+  return null;
+};
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
+  // Initialize currentUser synchronously to prevent flash of all modules
+  const [currentUser, setCurrentUser] = useState(() => getUserFromStorage());
   const dropdownRef = useRef(null);
-
-  // Load user from localStorage
-  useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        setCurrentUser(user);
-      } catch (error) {
-        console.error('Error parsing user data:', error);
-      }
-    }
-  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -176,10 +177,13 @@ const Dashboard = () => {
 
   // Filter modules based on user type and search query
   const getAccessibleModules = () => {
+    // For security: if no user, return empty modules
+    if (!currentUser) return [];
+    
     let accessibleModules = modules;
     
     // Filter by user type
-    if (currentUser?.user_type === 'center_representative') {
+    if (currentUser.user_type === 'center_representative') {
       // Center reps only see: Candidates, Reports, UVTAB Fees, Complaints
       const allowedModules = ['Candidates', 'Reports', 'UVTAB Fees', 'Complaints'];
       accessibleModules = modules.filter(module => allowedModules.includes(module.name));
