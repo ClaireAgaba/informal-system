@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Search, Eye, Edit, Trash2, RefreshCw, Power, PowerOff } from 'lucide-react';
+import { Users, Plus, Search, Eye, Edit, Trash2, RefreshCw, Power, PowerOff, AlertTriangle, Link } from 'lucide-react';
 import centerRepresentativeApi from '../../services/centerRepresentativeApi';
 
 const CenterRepresentativeList = () => {
   const navigate = useNavigate();
   const [representatives, setRepresentatives] = useState([]);
+  const [orphanedUsers, setOrphanedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
@@ -13,6 +14,7 @@ const CenterRepresentativeList = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [showOrphaned, setShowOrphaned] = useState(false);
   const pageSize = 20;
 
   useEffect(() => {
@@ -24,7 +26,17 @@ const CenterRepresentativeList = () => {
 
   useEffect(() => {
     fetchRepresentatives();
+    fetchOrphanedUsers();
   }, [currentPage, debouncedSearchTerm, statusFilter]);
+
+  const fetchOrphanedUsers = async () => {
+    try {
+      const response = await centerRepresentativeApi.getOrphanedUsers();
+      setOrphanedUsers(response.data.results || []);
+    } catch (error) {
+      console.error('Error fetching orphaned users:', error);
+    }
+  };
 
   const fetchRepresentatives = async () => {
     try {
@@ -151,6 +163,70 @@ const CenterRepresentativeList = () => {
           </select>
         </div>
       </div>
+
+      {/* Orphaned Users Warning */}
+      {orphanedUsers.length > 0 && (
+        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <AlertTriangle className="w-5 h-5 text-yellow-600 mr-2" />
+              <span className="text-yellow-800">
+                <strong>{orphanedUsers.length}</strong> user(s) with type "center_representative" have no profile record. 
+                These users can login but won't appear in searches.
+              </span>
+            </div>
+            <button
+              onClick={() => setShowOrphaned(!showOrphaned)}
+              className="px-3 py-1 text-sm bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
+            >
+              {showOrphaned ? 'Hide' : 'Show'} Details
+            </button>
+          </div>
+          
+          {showOrphaned && (
+            <div className="mt-4">
+              <table className="min-w-full divide-y divide-yellow-200">
+                <thead>
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-yellow-800 uppercase">Username/Email</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-yellow-800 uppercase">Name</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-yellow-800 uppercase">Status</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-yellow-800 uppercase">Date Joined</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-yellow-800 uppercase">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-yellow-100">
+                  {orphanedUsers.map(user => (
+                    <tr key={user.id}>
+                      <td className="px-4 py-2 text-sm text-yellow-900">{user.email || user.username}</td>
+                      <td className="px-4 py-2 text-sm text-yellow-900">
+                        {user.first_name} {user.last_name}
+                      </td>
+                      <td className="px-4 py-2 text-sm">
+                        <span className={`px-2 py-1 rounded text-xs ${user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {user.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-sm text-yellow-900">
+                        {new Date(user.date_joined).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <button
+                          onClick={() => navigate(`/users/center-representatives/link/${user.id}`)}
+                          className="inline-flex items-center px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                        >
+                          <Link className="w-3 h-3 mr-1" />
+                          Create Profile
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">

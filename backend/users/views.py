@@ -262,6 +262,103 @@ class CenterRepresentativeViewSet(viewsets.ModelViewSet):
         active_reps = self.queryset.filter(account_status='active')
         serializer = self.get_serializer(active_reps, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def orphaned_users(self, request):
+        """
+        Get users with user_type='center_representative' but no CenterRepresentative profile.
+        These are users created directly without a profile record.
+        """
+        # Find users with center_representative type who don't have a profile
+        orphaned = User.objects.filter(
+            user_type='center_representative'
+        ).exclude(
+            id__in=CenterRepresentative.objects.values_list('user_id', flat=True)
+        )
+        
+        data = [{
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'is_active': user.is_active,
+            'date_joined': user.date_joined,
+            'has_profile': False,
+        } for user in orphaned]
+        
+        return Response({
+            'count': len(data),
+            'results': data
+        })
+    
+    @action(detail=False, methods=['post'])
+    def link_user(self, request):
+        """
+        Create a CenterRepresentative profile for an existing User.
+        Useful for linking orphaned users created directly in Django admin.
+        """
+        user_id = request.data.get('user_id')
+        assessment_center_id = request.data.get('assessment_center_id')
+        assessment_center_branch_id = request.data.get('assessment_center_branch_id')
+        fullname = request.data.get('fullname')
+        contact = request.data.get('contact')
+        
+        if not all([user_id, assessment_center_id, fullname, contact]):
+            return Response({
+                'error': 'user_id, assessment_center_id, fullname, and contact are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user = User.objects.get(id=user_id, user_type='center_representative')
+        except User.DoesNotExist:
+            return Response({
+                'error': 'User not found or not a center representative'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user already has a profile
+        if CenterRepresentative.objects.filter(user=user).exists():
+            return Response({
+                'error': 'User already has a CenterRepresentative profile'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        from assessment_centers.models import AssessmentCenter, CenterBranch
+        
+        try:
+            center = AssessmentCenter.objects.get(id=assessment_center_id)
+        except AssessmentCenter.DoesNotExist:
+            return Response({
+                'error': 'Assessment center not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        branch = None
+        if assessment_center_branch_id:
+            try:
+                branch = CenterBranch.objects.get(id=assessment_center_branch_id)
+            except CenterBranch.DoesNotExist:
+                pass
+        
+        # Create the profile - email will be auto-generated in save()
+        rep = CenterRepresentative(
+            user=user,
+            fullname=fullname,
+            contact=contact,
+            assessment_center=center,
+            assessment_center_branch=branch,
+            account_status='active' if user.is_active else 'inactive',
+        )
+        # Set email manually since save() won't auto-generate if user exists
+        center_no = center.center_number.lower()
+        if branch:
+            branch_suffix = branch.branch_code.split('-')[-1].lower() if branch.branch_code else ''
+            rep.email = f"{center_no}-{branch_suffix}@uvtab.go.ug"
+        else:
+            rep.email = f"{center_no}@uvtab.go.ug"
+        
+        rep.save()
+        
+        serializer = self.get_serializer(rep)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])

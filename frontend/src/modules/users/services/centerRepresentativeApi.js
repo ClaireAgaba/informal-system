@@ -41,6 +41,14 @@ export const centerRepresentativeApi = {
 
   getActive: () => {
     return apiClient.get(`${BASE_URL}/active/`);
+  },
+
+  getOrphanedUsers: () => {
+    return apiClient.get(`${BASE_URL}/orphaned_users/`);
+  },
+
+  linkUser: (data) => {
+    return apiClient.post(`${BASE_URL}/link_user/`, data);
   }
 };
 

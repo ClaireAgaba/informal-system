@@ -37,6 +37,7 @@ import SupportStaffEdit from '@modules/users/support-staff/pages/SupportStaffEdi
 import CenterRepresentativeList from '@modules/users/center-representatives/pages/CenterRepresentativeList';
 import CenterRepresentativeView from '@modules/users/center-representatives/pages/CenterRepresentativeView';
 import CenterRepresentativeEdit from '@modules/users/center-representatives/pages/CenterRepresentativeEdit';
+import LinkOrphanedUser from '@modules/users/center-representatives/pages/LinkOrphanedUser';
 import ReportsIndex from '@modules/reports/pages/ReportsIndex';
 import Albums from '@modules/reports/pages/Albums';
 import ResultLists from '@modules/reports/pages/ResultLists';
@@ -108,6 +109,7 @@ function App() {
         <Route path="users/support-staff/:id/edit" element={<SupportStaffEdit />} />
         <Route path="users/center-representatives" element={<CenterRepresentativeList />} />
         <Route path="users/center-representatives/create" element={<CenterRepresentativeEdit />} />
+        <Route path="users/center-representatives/link/:userId" element={<LinkOrphanedUser />} />
         <Route path="users/center-representatives/:id" element={<CenterRepresentativeView />} />
         <Route path="users/center-representatives/:id/edit" element={<CenterRepresentativeEdit />} />
 
