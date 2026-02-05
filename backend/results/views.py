@@ -1079,11 +1079,9 @@ class ModularResultViewSet(viewsets.ViewSet):
                 module_cu = result.module.credit_units if result.module and result.module.credit_units else 0
                 candidate_total_cus += module_cu
                 
-                # Get completion date from assessment_series
+                # Get completion date from assessment_series (name already contains full info like "March 2025")
                 if result.assessment_series and not completion_date:
-                    series_name = result.assessment_series.name
-                    series_year = result.assessment_series.year
-                    completion_date = f"{series_name} {series_year}"
+                    completion_date = result.assessment_series.name
                 
                 results_data.append([
                     Paragraph(module_code, info_value_style),
