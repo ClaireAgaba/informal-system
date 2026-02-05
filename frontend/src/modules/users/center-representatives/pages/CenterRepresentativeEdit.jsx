@@ -144,8 +144,10 @@ const CenterRepresentativeEdit = () => {
 
       if (isEditMode) {
         await centerRepresentativeApi.update(id, submitData);
+        alert('Center representative updated successfully!');
       } else {
         await centerRepresentativeApi.create(submitData);
+        alert('Center representative created successfully!');
       }
 
       navigate('/users/center-representatives');
