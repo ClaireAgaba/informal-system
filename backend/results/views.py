@@ -1807,49 +1807,185 @@ class FormalResultViewSet(viewsets.ViewSet):
         elements.append(Paragraph("ASSESSMENT RESULTS", section_heading_style))
         elements.append(Spacer(1, 0.1*cm))
 
-        # Formal Results
+        # Formal Results - check level structure type
         results = FormalResult.objects.filter(candidate=candidate).select_related(
-            'level', 'exam', 'paper', 'assessment_series'
-        ).order_by('level', 'exam', 'paper')
+            'level', 'exam', 'exam__level', 'paper', 'assessment_series'
+        ).order_by('level', 'type')
+        
+        completion_date = None
+        level_total_cus = 0
         
         if results.exists():
-            results_data = [[
-                Paragraph("LEVEL", info_label_style),
-                Paragraph("MODULE/PAPER", info_label_style),
-                Paragraph("TYPE", info_label_style),
-                Paragraph("GRADE", info_label_style)
-            ]]
+            # Get first result to determine structure type
+            first_result = results.first()
+            is_paper_based = first_result.level and first_result.level.structure_type == 'papers'
             
-            for result in results:
-                name = ""
-                if result.exam:
-                    name = result.exam.module_name
-                elif result.paper:
-                    name = result.paper.paper_name
-                    
-                results_data.append([
-                    Paragraph(result.level.level_name if result.level else "-", info_value_style),
-                    Paragraph(name, info_value_style),
-                    Paragraph(result.get_type_display().capitalize(), info_value_style),
-                    Paragraph(result.grade or "-", info_value_style)
-                ])
+            # Get completion date from assessment series
+            if first_result.assessment_series:
+                completion_date = first_result.assessment_series.name
             
-            t = Table(results_data, colWidths=[3*cm, 8*cm, 3*cm, 2.5*cm], repeatRows=1)
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-                ('TOPPADDING', (0, 0), (-1, -1), 4),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-                ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
-            ]))
-            elements.append(t)
+            # Calculate level total CUs
+            if first_result.level:
+                if is_paper_based:
+                    from occupations.models import OccupationPaper
+                    level_papers = OccupationPaper.objects.filter(level=first_result.level)
+                    for paper in level_papers:
+                        if paper.credit_units:
+                            level_total_cus += paper.credit_units
+                else:
+                    from occupations.models import OccupationModule
+                    level_modules = OccupationModule.objects.filter(level=first_result.level)
+                    for mod in level_modules:
+                        if mod.credit_units:
+                            level_total_cus += mod.credit_units
+            
+            if is_paper_based:
+                # PAPER-BASED: Split table - Theory | Practical (each with Code, Module, CU, Grade)
+                theory_results = [r for r in results if r.type == 'theory']
+                practical_results = [r for r in results if r.type == 'practical']
+                
+                # Build theory side
+                theory_data = [[
+                    Paragraph("<b>Code</b>", info_label_style),
+                    Paragraph("<b>Module</b>", info_label_style),
+                    Paragraph("<b>CU</b>", info_label_style),
+                    Paragraph("<b>Grade</b>", info_label_style)
+                ]]
+                for r in theory_results:
+                    code = r.paper.paper_code if r.paper else "-"
+                    name = r.paper.paper_name if r.paper else "-"
+                    cu = r.paper.credit_units if r.paper and r.paper.credit_units else "-"
+                    theory_data.append([
+                        Paragraph(code, info_value_style),
+                        Paragraph(name, info_value_style),
+                        Paragraph(str(cu), info_value_style),
+                        Paragraph(r.grade or "-", info_value_style)
+                    ])
+                
+                # Build practical side
+                practical_data = [[
+                    Paragraph("<b>Code</b>", info_label_style),
+                    Paragraph("<b>Module</b>", info_label_style),
+                    Paragraph("<b>CU</b>", info_label_style),
+                    Paragraph("<b>Grade</b>", info_label_style)
+                ]]
+                for r in practical_results:
+                    code = r.paper.paper_code if r.paper else "-"
+                    name = r.paper.paper_name if r.paper else "-"
+                    cu = r.paper.credit_units if r.paper and r.paper.credit_units else "-"
+                    practical_data.append([
+                        Paragraph(code, info_value_style),
+                        Paragraph(name, info_value_style),
+                        Paragraph(str(cu), info_value_style),
+                        Paragraph(r.grade or "-", info_value_style)
+                    ])
+                
+                # Create side-by-side tables
+                theory_table = Table(theory_data, colWidths=[1.8*cm, 3.5*cm, 1*cm, 1.2*cm])
+                theory_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                    ('TOPPADDING', (0, 0), (-1, -1), 2),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                    ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                ]))
+                
+                practical_table = Table(practical_data, colWidths=[1.8*cm, 3.5*cm, 1*cm, 1.2*cm])
+                practical_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                    ('TOPPADDING', (0, 0), (-1, -1), 2),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                    ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                ]))
+                
+                # Combine with headers
+                combined_header = Table([
+                    [Paragraph("<b>THEORY</b>", ParagraphStyle('Header', parent=styles['Normal'], fontSize=9, fontName='Times-Bold', alignment=TA_CENTER)),
+                     Paragraph("<b>PRACTICAL</b>", ParagraphStyle('Header', parent=styles['Normal'], fontSize=9, fontName='Times-Bold', alignment=TA_CENTER))]
+                ], colWidths=[7.5*cm, 7.5*cm])
+                combined_header.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
+                elements.append(combined_header)
+                
+                combined_tables = Table([[theory_table, practical_table]], colWidths=[7.5*cm, 7.5*cm])
+                combined_tables.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                ]))
+                elements.append(combined_tables)
+                
+            else:
+                # MODULE-BASED: Simple 2-column table (Theory Grade | Practical Grade)
+                # Group results by module
+                module_results = {}
+                modules_trained = []
+                for r in results:
+                    if r.exam:
+                        mod_id = r.exam.id
+                        if mod_id not in module_results:
+                            module_results[mod_id] = {'module': r.exam, 'theory': '-', 'practical': '-'}
+                            modules_trained.append(f"{r.exam.module_name} ({r.exam.credit_units or 0} CU)")
+                        if r.type == 'theory':
+                            module_results[mod_id]['theory'] = r.grade or '-'
+                        else:
+                            module_results[mod_id]['practical'] = r.grade or '-'
+                
+                # Build table
+                module_table_data = [[
+                    Paragraph("<b>Theory</b>", info_label_style),
+                    Paragraph("<b>Grade</b>", info_label_style),
+                    Paragraph("<b>Practical</b>", info_label_style),
+                    Paragraph("<b>Grade</b>", info_label_style)
+                ]]
+                for mod_id, data in module_results.items():
+                    module_table_data.append([
+                        Paragraph("Theory", info_value_style),
+                        Paragraph(data['theory'], info_value_style),
+                        Paragraph("Practical", info_value_style),
+                        Paragraph(data['practical'], info_value_style)
+                    ])
+                
+                t = Table(module_table_data, colWidths=[3.5*cm, 3.5*cm, 3.5*cm, 3.5*cm], repeatRows=1)
+                t.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                    ('TOPPADDING', (0, 0), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                    ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+                ]))
+                elements.append(t)
+                
+                # Modules trained
+                if modules_trained:
+                    elements.append(Spacer(1, 0.2*cm))
+                    elements.append(Paragraph(f"<b>Modules trained:</b> {', '.join(modules_trained)}", info_value_style))
         else:
             elements.append(Paragraph("No results found.", info_value_style))
+        
+        # Footer info
+        elements.append(Spacer(1, 0.3*cm))
+        elements.append(Paragraph(f"<b>Total Credit Units:</b> {level_total_cus}", info_value_style))
+        
+        duration = candidate.occupation.contact_hours if candidate.occupation and candidate.occupation.contact_hours else "-"
+        elements.append(Paragraph(f"<b>Duration:</b> {duration}", info_value_style))
+        
+        award = candidate.occupation.award if candidate.occupation and candidate.occupation.award else "-"
+        elements.append(Paragraph(f"<b>Award:</b> {award}", info_value_style))
+        
+        elements.append(Paragraph(f"<b>Completion Year:</b> {completion_date or '-'}", info_value_style))
             
-        # Footer and Layout for Page 2
-        elements.append(Spacer(1, 1*cm))
+        elements.append(Spacer(1, 0.5*cm))
 
         # Page Break (Stays Portrait but uses portrait_back template with rotation)
         elements.append(NextPageTemplate('portrait_back'))
