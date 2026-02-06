@@ -2099,7 +2099,7 @@ class FormalResultViewSet(viewsets.ViewSet):
             if first_result.level:
                 duration = first_result.level.contact_hours if first_result.level.contact_hours else "-"
                 award = first_result.level.award if first_result.level.award else "-"
-        elements.append(Paragraph(f"<b>Duration:</b> {duration}", info_value_style))
+        elements.append(Paragraph(f"<b>Duration (Contact Hours):</b> {duration}", info_value_style))
         elements.append(Paragraph(f"<b>Award:</b> {award}", info_value_style))
         
         elements.append(Paragraph(f"<b>Completion Year:</b> {completion_date or '-'}", info_value_style))
