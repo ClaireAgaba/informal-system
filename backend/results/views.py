@@ -1,13 +1,40 @@
+# Standard library imports
 import json
+import os
+from io import BytesIO
+from datetime import datetime
+
+# Third-party imports
+import qrcode
+from PIL import Image as PILImage
+from PIL import ImageOps
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib import colors
+from reportlab.lib.units import cm, inch
+from reportlab.platypus import (
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, 
+    Image, PageBreak, Frame, PageTemplate, NextPageTemplate
+)
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
+from reportlab.lib.utils import ImageReader
+
+# Django imports
+from django.conf import settings
+from django.http import HttpResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from django.http import HttpResponse
-from .models import ModularResult, WorkersPasResult
+
+# Local app imports
+from .models import ModularResult, WorkersPasResult, FormalResult
 from .serializers import WorkersPasResultSerializer, WorkersPasResultCreateUpdateSerializer
 from candidates.models import Candidate, EnrollmentModule, EnrollmentPaper, CandidateActivity
-from occupations.models import OccupationModule, ModuleLWA, OccupationPaper
+from occupations.models import (
+    OccupationModule, ModuleLWA, OccupationPaper, 
+    OccupationLevel
+)
 from assessment_series.models import AssessmentSeries
 
 
@@ -262,16 +289,6 @@ class ModularResultViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='verified-pdf')
     def verified_results_pdf(self, request):
         """Generate verified results PDF for candidate"""
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib import colors
-        from reportlab.lib.units import inch
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-        from io import BytesIO
-        from datetime import datetime
-        from django.conf import settings
-        import os
         
         candidate_id = request.query_params.get('candidate_id')
         
@@ -383,14 +400,12 @@ class ModularResultViewSet(viewsets.ViewSet):
             photo_path = os.path.join(settings.MEDIA_ROOT, str(candidate.passport_photo))
             if os.path.exists(photo_path):
                 try:
-                    from PIL import Image as PILImage
                     
                     # Open image with PIL to handle rotation
                     pil_image = PILImage.open(photo_path)
                     
                     # Handle EXIF orientation
                     try:
-                        from PIL import ImageOps
                         pil_image = ImageOps.exif_transpose(pil_image)
                     except:
                         pass
@@ -457,7 +472,6 @@ class ModularResultViewSet(viewsets.ViewSet):
         
         if is_formal:
             # Get formal results
-            from results.models import FormalResult
             formal_results = FormalResult.objects.filter(candidate=candidate).select_related(
                 'exam', 'exam__level', 'paper', 'paper__level', 'assessment_series'
             )
@@ -856,18 +870,6 @@ class ModularResultViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='transcript-pdf')
     def transcript_pdf(self, request):
         """Generate official transcript PDF for candidate"""
-        from reportlab.lib.pagesizes import A4, landscape
-        from reportlab.lib import colors
-        from reportlab.lib.units import cm, inch
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak, Frame, PageTemplate, NextPageTemplate
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
-        from reportlab.lib.utils import ImageReader
-        from io import BytesIO
-        from datetime import datetime
-        from django.conf import settings
-        import os
-        import qrcode
         
         candidate_id = request.query_params.get('candidate_id')
         duplicate_watermark = request.query_params.get('duplicate_watermark', 'false').lower() == 'true'
@@ -953,16 +955,16 @@ class ModularResultViewSet(viewsets.ViewSet):
         def onPortraitBack(canvas, doc):
             # Draw DUPLICATE watermark if needed
             draw_duplicate_watermark(canvas)
-            # Rotate content -90 degrees (Clockwise)
-            canvas.translate(0, A4[1])
-            canvas.rotate(-90)
+            # Rotate content 90 degrees (Counter-Clockwise)
+            canvas.translate(A4[0], 0)
+            canvas.rotate(90)
 
         doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=2.5*cm, leftMargin=1.5*cm, rightMargin=1.5*cm,
                                  title=f'Transcript - {candidate.full_name}', author='UVTAB')
         
         # Create Frames
         frame_portrait = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='portrait')
-        frame_landscape = Frame(doc.leftMargin, doc.bottomMargin, landscape(A4)[0]-2*doc.leftMargin, landscape(A4)[1]-2*doc.bottomMargin, id='landscape')
+        frame_landscape = Frame(doc.leftMargin, doc.bottomMargin, landscape(A4)[0]-2*doc.leftMargin, landscape(A4)[1]-doc.bottomMargin-doc.topMargin, id='landscape')
         
         doc.addPageTemplates([
             PageTemplate(id='portrait', frames=frame_portrait, onPage=onFirstPage),
@@ -1021,8 +1023,6 @@ class ModularResultViewSet(viewsets.ViewSet):
             photo_path = os.path.join(settings.MEDIA_ROOT, str(candidate.passport_photo))
             if os.path.exists(photo_path):
                 try:
-                    from PIL import Image as PILImage
-                    from PIL import ImageOps
                     pil_image = PILImage.open(photo_path)
                     pil_image = ImageOps.exif_transpose(pil_image)
                     img_buffer = BytesIO()
@@ -1148,7 +1148,6 @@ class ModularResultViewSet(viewsets.ViewSet):
 
         # Calculate level total CUs
         if candidate.occupation:
-            from occupations.models import OccupationModule
             level_modules = OccupationModule.objects.filter(occupation=candidate.occupation)
             for mod in level_modules:
                 if mod.credit_units:
@@ -1226,7 +1225,7 @@ class ModularResultViewSet(viewsets.ViewSet):
             try:
                 logo = Image(logo_path, width=1.5*cm, height=1.5*cm)
                 elements.append(logo)
-                elements.append(Spacer(1, 0.2*cm))
+                elements.append(Spacer(1, 0.1*cm))
             except:
                 pass
         
@@ -1244,42 +1243,85 @@ class ModularResultViewSet(viewsets.ViewSet):
             spaceAfter=15
         )
         
-        elements.append(Paragraph("KEY TO GRADES and QUALIFICATIONS AWARD", heading2_style))
-        elements.append(Spacer(1, 0.5*cm))
+        elements.append(Paragraph("KEY TO GRADES", heading2_style))
+        elements.append(Spacer(1, 0.2*cm))
 
-        # Grading Table (Fitted for Portrait - 4.25cm * 4 = 17cm)
+        # Grading Table (Horizontal)
+        # Theory: A+, A, B, B-, C, C-, D, E (8 grades)
+        # Practical: A+, A, B+, B, B-, C, C-, D, D-, E (10 grades)
+        
+        # We need 11 columns (Label + 10 Data)
+        # Total width available ~ 26.7cm
+        # Label: 2.7cm, Data: 2.4cm * 10 = 24cm. Total 26.7cm
+        
         grading_data = [
-            [Paragraph("<b>THEORY SCORES</b>", info_label_style), "", 
-             Paragraph("<b>PRACTICAL SCORES</b>", info_label_style), ""],
-            ["Grade", "Scores%", "Grade", "Scores%"],
-            ["A+", "85-100", "A+", "90-100"],
-            ["A", "80-84", "A", "85-89"],
-            ["B", "70-79", "B+", "75-84"],
-            ["B-", "60-69", "B", "65-74"],
-            ["C", "50-59", "B-", "60-64"],
-            ["C-", "40-49", "C", "55-59"],
-            ["D", "30-39", "C-", "50-54"],
-            ["E", "0-29", "D", "40-49"],
-            ["", "", "D-", "30-39"],
-            ["", "", "E", "0-29"],
+            # Theory Section
+            [Paragraph("<b>THEORY SCORES</b>", info_label_style)] + [""] * 10,
+            [Paragraph("<b>Grade</b>", info_value_style), "A+", "A", "B", "B-", "C", "C-", "D", "E", "", ""],
+            [Paragraph("<b>Score %</b>", info_value_style), "85-100", "80-84", "70-79", "60-69", "50-59", "40-49", "30-39", "0-29", "", ""],
+            
+            # Spacer row
+            [""] * 11,
+            
+            # Practical Section
+            [Paragraph("<b>PRACTICAL SCORES</b>", info_label_style)] + [""] * 10,
+            [Paragraph("<b>Grade</b>", info_value_style), "A+", "A", "B+", "B", "B-", "C", "C-", "D", "D-", "E"],
+            [Paragraph("<b>Score %</b>", info_value_style), "90-100", "85-89", "75-84", "65-74", "60-64", "55-59", "50-54", "40-49", "30-39", "0-29"],
         ]
         
-        # Widths adjusted for Portrait (Max ~18cm)
-        grading_table = Table(grading_data, colWidths=[4.2*cm, 4.2*cm, 4.2*cm, 4.2*cm])
+        col_widths = [2.7*cm] + [2.4*cm]*10
+        
+        grading_table = Table(grading_data, colWidths=col_widths)
         grading_table.setStyle(TableStyle([
-            ('SPAN', (0, 0), (1, 0)),
-            ('SPAN', (2, 0), (3, 0)),
-            ('BACKGROUND', (0, 0), (3, 0), colors.lightgrey),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            # Theory Header
+            ('SPAN', (0, 0), (-1, 0)),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+            
+            # Practical Header
+            ('SPAN', (0, 4), (-1, 4)),
+            ('BACKGROUND', (0, 4), (-1, 4), colors.lightgrey),
+            ('ALIGN', (0, 4), (0, 4), 'LEFT'),
+            
+            # General Grid
+            ('GRID', (0, 0), (-1, 2), 0.5, colors.black), # Theory grid
+            ('GRID', (0, 4), (-1, 6), 0.5, colors.black), # Practical grid
+            
+            # Fonts and Alignment
             ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
-            ('FONTNAME', (0, 1), (-1, 1), 'Times-Bold'), # Header row
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ALIGN', (1, 1), (-1, 2), 'CENTER'), # Center Theory values
+            ('ALIGN', (1, 5), (-1, 6), 'CENTER'), # Center Practical values
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            
+            # Remove borders for spacer row
+            ('LINEBELOW', (0, 2), (-1, 2), 0, colors.white),
+            ('LINEABOVE', (0, 4), (-1, 4), 0, colors.white),
         ]))
         
         elements.append(grading_table)
-        elements.append(Spacer(1, 1*cm))
+        elements.append(Spacer(1, 0.4*cm))
         elements.append(Paragraph("Pass mark is 50% in theory and 65% in practical assessment", ParagraphStyle('PassMark', parent=styles['Normal'], alignment=TA_CENTER, fontName='Times-Bold', fontSize=12)))
+        
+        elements.append(Spacer(1, 2*cm))
+        
+
+        
+        # Duplicate warning (Black bar)
+        dup_text = "Any transcript issued as a replacement shall bear a watermark with the word \"Duplicate\" on the front face."
+        dup_table = Table([[Paragraph(f"<b>{dup_text}</b>", ParagraphStyle('Dup', parent=styles['Normal'], textColor=colors.white, alignment=TA_CENTER, fontName='Times-Bold', fontSize=10))]], colWidths=[17*cm])
+        dup_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.black),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ]))
+        elements.append(dup_table)
+        elements.append(Spacer(1, 0.5*cm))
+        
+        # Copyright and Address
+        elements.append(Paragraph("© 2026 Uganda Vocational and Technical Assessment Board, Plot 891, Kigobe Road, Kyambogo Hill, P.O.Box 1499 Kampala - Uganda", ParagraphStyle('Copyright', parent=styles['Normal'], alignment=TA_CENTER, fontName='Times-Bold', fontSize=9)))
+        elements.append(Paragraph("\"Assessment for Employable Skills\"", ParagraphStyle('Slogan', parent=styles['Normal'], alignment=TA_CENTER, fontName='Times-Italic', fontSize=9, textColor=colors.black)))
 
         doc.build(elements)
         pdf = buffer.getvalue()
@@ -1304,8 +1346,6 @@ class FormalResultViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['post'], url_path='add')
     def add_results(self, request):
         """Add formal results for a candidate"""
-        from .models import FormalResult
-        from occupations.models import OccupationLevel, OccupationModule, OccupationPaper
         
         candidate_id = request.data.get('candidate_id')
         assessment_series_id = request.data.get('assessment_series')
@@ -1519,7 +1559,6 @@ class FormalResultViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['put'], url_path='update')
     def update_results(self, request):
         """Update existing formal results"""
-        from .models import FormalResult
         
         candidate_id = request.data.get('candidate_id')
         results_data = request.data.get('results', [])
@@ -1593,7 +1632,6 @@ class FormalResultViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='list')
     def list_results(self, request):
         """List formal results for a candidate"""
-        from .models import FormalResult
         
         candidate_id = request.query_params.get('candidate_id')
         series_id = request.query_params.get('series_id')
@@ -1666,19 +1704,6 @@ class FormalResultViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='transcript-pdf')
     def transcript_pdf(self, request):
         """Generate official transcript PDF for formal candidate"""
-        from reportlab.lib.pagesizes import A4, landscape
-        from reportlab.lib import colors
-        from reportlab.lib.units import cm, inch
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak, Frame, PageTemplate, NextPageTemplate
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
-        from reportlab.lib.utils import ImageReader
-        from io import BytesIO
-        from datetime import datetime
-        from django.conf import settings
-        import os
-        import qrcode
-        from .models import FormalResult
         
         candidate_id = request.query_params.get('candidate_id')
         duplicate_watermark = request.query_params.get('duplicate_watermark', 'false').lower() == 'true'
@@ -1735,7 +1760,6 @@ class FormalResultViewSet(viewsets.ViewSet):
                     )
             else:
                 # For paper-based levels, check credit units
-                from occupations.models import OccupationPaper
                 earned_cus = sum(r.paper.credit_units for r in formal_results if r.comment == 'Successful' and r.paper and r.paper.credit_units)
                 
                 level_papers = OccupationPaper.objects.filter(level=level, is_active=True)
@@ -1804,16 +1828,16 @@ class FormalResultViewSet(viewsets.ViewSet):
         def onPortraitBack(canvas, doc):
             # Draw DUPLICATE watermark if needed
             draw_duplicate_watermark(canvas)
-            # Rotate content -90 degrees (Clockwise)
-            canvas.translate(0, A4[1])
-            canvas.rotate(-90)
+            # Rotate content 90 degrees (Counter-Clockwise)
+            canvas.translate(A4[0], 0)
+            canvas.rotate(90)
 
         doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=2.5*cm, leftMargin=1.5*cm, rightMargin=1.5*cm,
                                  title=f'Transcript - {candidate.full_name}', author='UVTAB')
         
         # Create Frames
         frame_portrait = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='portrait')
-        frame_landscape = Frame(doc.leftMargin, doc.bottomMargin, landscape(A4)[0]-2*doc.leftMargin, landscape(A4)[1]-2*doc.bottomMargin, id='landscape')
+        frame_landscape = Frame(doc.leftMargin, doc.bottomMargin, landscape(A4)[0]-2*doc.leftMargin, landscape(A4)[1]-doc.bottomMargin-doc.topMargin, id='landscape')
         
         doc.addPageTemplates([
             PageTemplate(id='portrait', frames=frame_portrait, onPage=onFirstPage),
@@ -1872,8 +1896,6 @@ class FormalResultViewSet(viewsets.ViewSet):
             photo_path = os.path.join(settings.MEDIA_ROOT, str(candidate.passport_photo))
             if os.path.exists(photo_path):
                 try:
-                    from PIL import Image as PILImage
-                    from PIL import ImageOps
                     pil_image = PILImage.open(photo_path)
                     pil_image = ImageOps.exif_transpose(pil_image)
                     img_buffer = BytesIO()
@@ -1967,13 +1989,11 @@ class FormalResultViewSet(viewsets.ViewSet):
             # Calculate level total CUs
             if first_result.level:
                 if is_paper_based:
-                    from occupations.models import OccupationPaper
                     level_papers = OccupationPaper.objects.filter(level=first_result.level)
                     for paper in level_papers:
                         if paper.credit_units:
                             level_total_cus += paper.credit_units
                 else:
-                    from occupations.models import OccupationModule
                     level_modules = OccupationModule.objects.filter(level=first_result.level)
                     for mod in level_modules:
                         if mod.credit_units:
@@ -2175,7 +2195,7 @@ class FormalResultViewSet(viewsets.ViewSet):
             try:
                 logo = Image(logo_path, width=1.5*cm, height=1.5*cm)
                 elements.append(logo)
-                elements.append(Spacer(1, 0.2*cm))
+                elements.append(Spacer(1, 0.1*cm))
             except:
                 pass
         
@@ -2193,41 +2213,82 @@ class FormalResultViewSet(viewsets.ViewSet):
             spaceAfter=15
         )
         
-        elements.append(Paragraph("KEY TO GRADES and QUALIFICATIONS AWARD", heading2_style))
-        elements.append(Spacer(1, 0.5*cm))
+        elements.append(Paragraph("KEY TO GRADES", heading2_style))
+        elements.append(Spacer(1, 0.2*cm))
 
-        # Grading Table
+        # Grading Table (Horizontal)
+        # Theory: A+, A, B, B-, C, C-, D, E (8 grades)
+        # Practical: A+, A, B+, B, B-, C, C-, D, D-, E (10 grades)
+        
+        # We need 11 columns (Label + 10 Data)
         grading_data = [
-            [Paragraph("<b>THEORY SCORES</b>", info_label_style), "", 
-             Paragraph("<b>PRACTICAL SCORES</b>", info_label_style), ""],
-            ["Grade", "Scores%", "Grade", "Scores%"],
-            ["A+", "85-100", "A+", "90-100"],
-            ["A", "80-84", "A", "85-89"],
-            ["B", "70-79", "B+", "75-84"],
-            ["B-", "60-69", "B", "65-74"],
-            ["C", "50-59", "B-", "60-64"],
-            ["C-", "40-49", "C", "55-59"],
-            ["D", "30-39", "C-", "50-54"],
-            ["E", "0-29", "D", "40-49"],
-            ["", "", "D-", "30-39"],
-            ["", "", "E", "0-29"],
+            # Theory Section
+            [Paragraph("<b>THEORY SCORES</b>", info_label_style)] + [""] * 10,
+            [Paragraph("<b>Grade</b>", info_value_style), "A+", "A", "B", "B-", "C", "C-", "D", "E", "", ""],
+            [Paragraph("<b>Score %</b>", info_value_style), "85-100", "80-84", "70-79", "60-69", "50-59", "40-49", "30-39", "0-29", "", ""],
+            
+            # Spacer row
+            [""] * 11,
+            
+            # Practical Section
+            [Paragraph("<b>PRACTICAL SCORES</b>", info_label_style)] + [""] * 10,
+            [Paragraph("<b>Grade</b>", info_value_style), "A+", "A", "B+", "B", "B-", "C", "C-", "D", "D-", "E"],
+            [Paragraph("<b>Score %</b>", info_value_style), "90-100", "85-89", "75-84", "65-74", "60-64", "55-59", "50-54", "40-49", "30-39", "0-29"],
         ]
         
-        grading_table = Table(grading_data, colWidths=[4.2*cm, 4.2*cm, 4.2*cm, 4.2*cm])
+        col_widths = [2.7*cm] + [2.4*cm]*10
+        
+        grading_table = Table(grading_data, colWidths=col_widths)
         grading_table.setStyle(TableStyle([
-            ('SPAN', (0, 0), (1, 0)),
-            ('SPAN', (2, 0), (3, 0)),
-            ('BACKGROUND', (0, 0), (3, 0), colors.lightgrey),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            # Theory Header
+            ('SPAN', (0, 0), (-1, 0)),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+            
+            # Practical Header
+            ('SPAN', (0, 4), (-1, 4)),
+            ('BACKGROUND', (0, 4), (-1, 4), colors.lightgrey),
+            ('ALIGN', (0, 4), (0, 4), 'LEFT'),
+            
+            # General Grid
+            ('GRID', (0, 0), (-1, 2), 0.5, colors.black), # Theory grid
+            ('GRID', (0, 4), (-1, 6), 0.5, colors.black), # Practical grid
+            
+            # Fonts and Alignment
             ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
-            ('FONTNAME', (0, 1), (-1, 1), 'Times-Bold'), # Header row
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ALIGN', (1, 1), (-1, 2), 'CENTER'), # Center Theory values
+            ('ALIGN', (1, 5), (-1, 6), 'CENTER'), # Center Practical values
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            
+            # Remove borders for spacer row
+            ('LINEBELOW', (0, 2), (-1, 2), 0, colors.white),
+            ('LINEABOVE', (0, 4), (-1, 4), 0, colors.white),
         ]))
         
         elements.append(grading_table)
-        elements.append(Spacer(1, 1*cm))
+        elements.append(Spacer(1, 0.4*cm))
         elements.append(Paragraph("Pass mark is 50% in theory and 65% in practical assessment", ParagraphStyle('PassMark', parent=styles['Normal'], alignment=TA_CENTER, fontName='Times-Bold', fontSize=12)))
+        
+        elements.append(Spacer(1, 2*cm))
+        
+
+        
+        # Duplicate warning (Black bar)
+        dup_text = "Any transcript issued as a replacement shall bear a watermark with the word \"Duplicate\" on the front face."
+        dup_table = Table([[Paragraph(f"<b>{dup_text}</b>", ParagraphStyle('Dup', parent=styles['Normal'], textColor=colors.white, alignment=TA_CENTER, fontName='Times-Bold', fontSize=10))]], colWidths=[17*cm])
+        dup_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.black),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ]))
+        elements.append(dup_table)
+        elements.append(Spacer(1, 0.5*cm))
+        
+        # Copyright and Address
+        elements.append(Paragraph("© 2026 Uganda Vocational and Technical Assessment Board, Plot 891, Kigobe Road, Kyambogo Hill, P.O.Box 1499 Kampala - Uganda", ParagraphStyle('Copyright', parent=styles['Normal'], alignment=TA_CENTER, fontName='Times-Bold', fontSize=9)))
+        elements.append(Paragraph("\"Assessment for Employable Skills\"", ParagraphStyle('Slogan', parent=styles['Normal'], alignment=TA_CENTER, fontName='Times-Italic', fontSize=9, textColor=colors.black)))
 
         doc.build(elements)
         pdf = buffer.getvalue()
@@ -2419,16 +2480,6 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='verified-pdf')
     def verified_results_pdf(self, request):
         """Generate verified results PDF for Workers PAS candidate"""
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib import colors
-        from reportlab.lib.units import inch
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-        from io import BytesIO
-        from datetime import datetime
-        from django.conf import settings
-        import os
         
         candidate_id = request.query_params.get('candidate_id')
         
@@ -2539,8 +2590,6 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             photo_path = os.path.join(settings.MEDIA_ROOT, str(candidate.passport_photo))
             if os.path.exists(photo_path):
                 try:
-                    from PIL import Image as PILImage
-                    from PIL import ImageOps
                     
                     pil_image = PILImage.open(photo_path)
                     pil_image = ImageOps.exif_transpose(pil_image)
@@ -2885,16 +2934,6 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='transcript-pdf')
     def transcript_pdf(self, request):
         """Generate official transcript PDF for Workers PAS candidate"""
-        from reportlab.lib.pagesizes import A4, landscape
-        from reportlab.lib import colors
-        from reportlab.lib.units import cm, inch
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak, Frame, PageTemplate, NextPageTemplate
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-        from io import BytesIO
-        from datetime import datetime
-        from django.conf import settings
-        import os
         
         candidate_id = request.query_params.get('candidate_id')
         
@@ -2936,16 +2975,16 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             pass
 
         def onPortraitBack(canvas, doc):
-            # Rotate content -90 degrees (Clockwise)
-            canvas.translate(0, A4[1])
-            canvas.rotate(-90)
+            # Rotate content 90 degrees (Counter-Clockwise)
+            canvas.translate(A4[0], 0)
+            canvas.rotate(90)
 
         doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=3*cm, leftMargin=1.5*cm, rightMargin=1.5*cm,
                                  title=f'Transcript - {candidate.full_name}', author='UVTAB')
         
         # Create Frames
         frame_portrait = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='portrait')
-        frame_landscape = Frame(doc.leftMargin, doc.bottomMargin, landscape(A4)[0]-2*doc.leftMargin, landscape(A4)[1]-2*doc.bottomMargin, id='landscape')
+        frame_landscape = Frame(doc.leftMargin, doc.bottomMargin, landscape(A4)[0]-2*doc.leftMargin, landscape(A4)[1]-doc.bottomMargin-doc.topMargin, id='landscape')
         
         doc.addPageTemplates([
             PageTemplate(id='portrait', frames=frame_portrait, onPage=onFirstPage),
@@ -3006,8 +3045,6 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             photo_path = os.path.join(settings.MEDIA_ROOT, str(candidate.passport_photo))
             if os.path.exists(photo_path):
                 try:
-                    from PIL import Image as PILImage
-                    from PIL import ImageOps
                     pil_image = PILImage.open(photo_path)
                     pil_image = ImageOps.exif_transpose(pil_image)
                     img_buffer = BytesIO()
@@ -3105,7 +3142,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             try:
                 logo = Image(logo_path, width=1.5*cm, height=1.5*cm)
                 elements.append(logo)
-                elements.append(Spacer(1, 0.2*cm))
+                elements.append(Spacer(1, 0.1*cm))
             except:
                 pass
         
@@ -3123,40 +3160,82 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             spaceAfter=15
         )
         
-        elements.append(Paragraph("KEY TO GRADES and QUALIFICATIONS AWARD", heading2_style))
-        elements.append(Spacer(1, 0.5*cm))
+        elements.append(Paragraph("KEY TO GRADES", heading2_style))
+        elements.append(Spacer(1, 0.2*cm))
 
+        # Grading Table (Horizontal)
+        # Theory: A+, A, B, B-, C, C-, D, E (8 grades)
+        # Practical: A+, A, B+, B, B-, C, C-, D, D-, E (10 grades)
+        
+        # We need 11 columns (Label + 10 Data)
         grading_data = [
-            [Paragraph("<b>THEORY SCORES</b>", info_label_style), "", 
-             Paragraph("<b>PRACTICAL SCORES</b>", info_label_style), ""],
-            ["Grade", "Scores%", "Grade", "Scores%"],
-            ["A+", "85-100", "A+", "90-100"],
-            ["A", "80-84", "A", "85-89"],
-            ["B", "70-79", "B+", "75-84"],
-            ["B-", "60-69", "B", "65-74"],
-            ["C", "50-59", "B-", "60-64"],
-            ["C-", "40-49", "C", "55-59"],
-            ["D", "30-39", "C-", "50-54"],
-            ["E", "0-29", "D", "40-49"],
-            ["", "", "D-", "30-39"],
-            ["", "", "E", "0-29"],
+            # Theory Section
+            [Paragraph("<b>THEORY SCORES</b>", info_label_style)] + [""] * 10,
+            [Paragraph("<b>Grade</b>", info_value_style), "A+", "A", "B", "B-", "C", "C-", "D", "E", "", ""],
+            [Paragraph("<b>Score %</b>", info_value_style), "85-100", "80-84", "70-79", "60-69", "50-59", "40-49", "30-39", "0-29", "", ""],
+            
+            # Spacer row
+            [""] * 11,
+            
+            # Practical Section
+            [Paragraph("<b>PRACTICAL SCORES</b>", info_label_style)] + [""] * 10,
+            [Paragraph("<b>Grade</b>", info_value_style), "A+", "A", "B+", "B", "B-", "C", "C-", "D", "D-", "E"],
+            [Paragraph("<b>Score %</b>", info_value_style), "90-100", "85-89", "75-84", "65-74", "60-64", "55-59", "50-54", "40-49", "30-39", "0-29"],
         ]
         
-        grading_table = Table(grading_data, colWidths=[4.2*cm, 4.2*cm, 4.2*cm, 4.2*cm])
+        col_widths = [2.7*cm] + [2.4*cm]*10
+        
+        grading_table = Table(grading_data, colWidths=col_widths)
         grading_table.setStyle(TableStyle([
-            ('SPAN', (0, 0), (1, 0)),
-            ('SPAN', (2, 0), (3, 0)),
-            ('BACKGROUND', (0, 0), (3, 0), colors.lightgrey),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            # Theory Header
+            ('SPAN', (0, 0), (-1, 0)),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+            
+            # Practical Header
+            ('SPAN', (0, 4), (-1, 4)),
+            ('BACKGROUND', (0, 4), (-1, 4), colors.lightgrey),
+            ('ALIGN', (0, 4), (0, 4), 'LEFT'),
+            
+            # General Grid
+            ('GRID', (0, 0), (-1, 2), 0.5, colors.black), # Theory grid
+            ('GRID', (0, 4), (-1, 6), 0.5, colors.black), # Practical grid
+            
+            # Fonts and Alignment
             ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
-            ('FONTNAME', (0, 1), (-1, 1), 'Times-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ALIGN', (1, 1), (-1, 2), 'CENTER'), # Center Theory values
+            ('ALIGN', (1, 5), (-1, 6), 'CENTER'), # Center Practical values
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            
+            # Remove borders for spacer row
+            ('LINEBELOW', (0, 2), (-1, 2), 0, colors.white),
+            ('LINEABOVE', (0, 4), (-1, 4), 0, colors.white),
         ]))
         
         elements.append(grading_table)
-        elements.append(Spacer(1, 1*cm))
+        elements.append(Spacer(1, 0.4*cm))
         elements.append(Paragraph("Pass mark is 50% in theory and 65% in practical assessment", ParagraphStyle('PassMark', parent=styles['Normal'], alignment=TA_CENTER, fontName='Times-Bold', fontSize=12)))
+        
+        elements.append(Spacer(1, 2*cm))
+        
+
+        
+        # Duplicate warning (Black bar)
+        dup_text = "Any transcript issued as a replacement shall bear a watermark with the word \"Duplicate\" on the front face."
+        dup_table = Table([[Paragraph(f"<b>{dup_text}</b>", ParagraphStyle('Dup', parent=styles['Normal'], textColor=colors.white, alignment=TA_CENTER, fontName='Times-Bold', fontSize=10))]], colWidths=[17*cm])
+        dup_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.black),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ]))
+        elements.append(dup_table)
+        elements.append(Spacer(1, 0.5*cm))
+        
+        # Copyright and Address
+        elements.append(Paragraph("© 2026 Uganda Vocational and Technical Assessment Board, Plot 891, Kigobe Road, Kyambogo Hill, P.O.Box 1499 Kampala - Uganda", ParagraphStyle('Copyright', parent=styles['Normal'], alignment=TA_CENTER, fontName='Times-Bold', fontSize=9)))
+        elements.append(Paragraph("\"Assessment for Employable Skills\"", ParagraphStyle('Slogan', parent=styles['Normal'], alignment=TA_CENTER, fontName='Times-Italic', fontSize=9, textColor=colors.black)))
 
         doc.build(elements)
         pdf = buffer.getvalue()
