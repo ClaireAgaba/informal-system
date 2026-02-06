@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from django.db.models import Q, Exists, OuterRef
 from django.http import HttpResponse
+from django.core.paginator import Paginator, EmptyPage
 from candidates.models import Candidate
 from results.models import ModularResult, FormalResult
 from configurations.models import ReprintReason
@@ -25,11 +26,21 @@ class AwardsViewSet(viewsets.ViewSet):
         """
         List all candidates who have passed (all results are passing).
         Returns candidates from both modular and formal categories.
+        Supports pagination with 'page' and 'page_size' query params.
         
         Pass marks:
         - Practical: 65%
         - Theory: 50%
         """
+        # Get pagination parameters
+        page = request.query_params.get('page', 1)
+        page_size = request.query_params.get('page_size', 100)
+        try:
+            page = int(page)
+            page_size = min(int(page_size), 100)  # Max 100 per page
+        except (ValueError, TypeError):
+            page = 1
+            page_size = 100
         # Get candidates with modular results where ALL results are passing
         # A result is failing if: mark < 65 for practical, mark < 50 for theory, or mark is null/-1
         modular_candidates = Candidate.objects.filter(
@@ -117,7 +128,22 @@ class AwardsViewSet(viewsets.ViewSet):
                 'tr_sno': candidate.transcript_serial_number or "",
             })
 
-        return Response(data)
+        # Paginate results
+        paginator = Paginator(data, page_size)
+        try:
+            page_obj = paginator.page(page)
+        except EmptyPage:
+            page_obj = paginator.page(paginator.num_pages)
+        
+        return Response({
+            'results': list(page_obj),
+            'count': paginator.count,
+            'num_pages': paginator.num_pages,
+            'current_page': page_obj.number,
+            'page_size': page_size,
+            'has_next': page_obj.has_next(),
+            'has_previous': page_obj.has_previous(),
+        })
 
     @action(detail=False, methods=['post'], url_path='bulk-print-transcripts')
     def bulk_print_transcripts(self, request):
