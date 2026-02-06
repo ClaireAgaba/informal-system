@@ -1169,13 +1169,17 @@ class ModularResultViewSet(viewsets.ViewSet):
             lwa_text = ", ".join(lwa_list) if lwa_list else "-"
             elements.append(Paragraph(lwa_text, ParagraphStyle('LWA', parent=styles['Normal'], fontName='Times-Roman', fontSize=9)))
 
-        # Credit Units summary
+        # Credit Units summary - Total Credit Units left, Credit Units right
         elements.append(Spacer(1, 0.2*cm))
+        cu_right_style = ParagraphStyle('CURight', parent=info_value_style, alignment=TA_RIGHT)
         cu_summary = Table([
             [Paragraph(f"<b>Total Credit Units:</b> {level_total_cus}", info_value_style),
-             Paragraph(f"<b>Credit Units:</b> {candidate_total_cus}", info_value_style)]
-        ], colWidths=[8*cm, 7*cm])
-        cu_summary.setStyle(TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0)]))
+             Paragraph(f"<b>Credit Units:</b> {candidate_total_cus}", cu_right_style)]
+        ], colWidths=[9*cm, 8*cm], hAlign='LEFT')
+        cu_summary.setStyle(TableStyle([
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ]))
         elements.append(cu_summary)
 
         # Duration (Contact hours from level - get from first module's level)
@@ -1187,7 +1191,7 @@ class ModularResultViewSet(viewsets.ViewSet):
                 level = first_result.module.level
                 duration = level.contact_hours if level.contact_hours else "-"
                 level_award = level.award if level.award else "-"
-        elements.append(Paragraph(f"<b>Duration:</b> {duration}", info_value_style))
+        elements.append(Paragraph(f"<b>Duration (Contact Hours):</b> {duration}", info_value_style))
 
         # Award (Modular award from occupation - stays on occupation for modular candidates)
         award = candidate.occupation.award_modular if candidate.occupation and candidate.occupation.award_modular else level_award
@@ -1992,8 +1996,8 @@ class FormalResultViewSet(viewsets.ViewSet):
                     
                     table_data.append(row)
                 
-                # Create table with 8 columns (wider GRADE columns to fit on one line)
-                col_widths = [1.5*cm, 3.8*cm, 0.8*cm, 1.5*cm, 1.5*cm, 3.8*cm, 0.8*cm, 1.5*cm]
+                # Create table with 8 columns (wider CU columns to prevent wrapping)
+                col_widths = [1.5*cm, 3.6*cm, 1*cm, 1.5*cm, 1.5*cm, 3.6*cm, 1*cm, 1.5*cm]
                 t = Table(table_data, colWidths=col_widths)
                 t.setStyle(TableStyle([
                     # Span THEORY and PRACTICAL headers
