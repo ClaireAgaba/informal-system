@@ -82,8 +82,8 @@ class AwardsViewSet(viewsets.ViewSet):
         candidates_qs = (modular_candidates | formal_candidates).select_related(
             'occupation', 'assessment_center'
         ).prefetch_related(
-            Prefetch('modularresult_set', queryset=ModularResult.objects.select_related('assessment_series').order_by('id')[:1]),
-            Prefetch('formalresult_set', queryset=FormalResult.objects.select_related('level', 'assessment_series').order_by('id')[:1]),
+            Prefetch('modular_results', queryset=ModularResult.objects.select_related('assessment_series')),
+            Prefetch('formal_results', queryset=FormalResult.objects.select_related('level', 'assessment_series')),
         ).order_by('-created_at')
 
         # Get total count first
@@ -109,16 +109,16 @@ class AwardsViewSet(viewsets.ViewSet):
             if candidate.registration_category == 'modular':
                 if candidate.occupation:
                     award = candidate.occupation.award_modular or ""
-                modular_results = list(candidate.modularresult_set.all())
-                if modular_results and modular_results[0].assessment_series:
-                    completion_year = modular_results[0].assessment_series.completion_year or modular_results[0].assessment_series.name or ""
+                modular_results_list = list(candidate.modular_results.all())
+                if modular_results_list and modular_results_list[0].assessment_series:
+                    completion_year = modular_results_list[0].assessment_series.completion_year or modular_results_list[0].assessment_series.name or ""
             else:
-                formal_results = list(candidate.formalresult_set.all())
-                if formal_results:
-                    if formal_results[0].level:
-                        award = formal_results[0].level.award or ""
-                    if formal_results[0].assessment_series:
-                        completion_year = formal_results[0].assessment_series.completion_year or formal_results[0].assessment_series.name or ""
+                formal_results_list = list(candidate.formal_results.all())
+                if formal_results_list:
+                    if formal_results_list[0].level:
+                        award = formal_results_list[0].level.award or ""
+                    if formal_results_list[0].assessment_series:
+                        completion_year = formal_results_list[0].assessment_series.completion_year or formal_results_list[0].assessment_series.name or ""
 
             data.append({
                 'id': candidate.id,
