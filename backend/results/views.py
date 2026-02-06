@@ -417,7 +417,7 @@ class ModularResultViewSet(viewsets.ViewSet):
         ]
         
         # Create info table
-        info_table = Table(info_data, colWidths=[1.15*inch, 1.85*inch, 1.15*inch, 1.35*inch])
+        info_table = Table(info_data, colWidths=[1*inch, 1.6*inch, 1*inch, 1.9*inch])
         info_table.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
             ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
@@ -937,10 +937,6 @@ class ModularResultViewSet(viewsets.ViewSet):
             # Draw DUPLICATE watermark if needed
             draw_duplicate_watermark(canvas)
             
-            # Draw QR Code on right side, slightly above bio data section
-            qr_buffer.seek(0)
-            canvas.drawImage(ImageReader(qr_buffer), A4[0] - 2.5*cm, A4[1] - 9*cm, width=1.8*cm, height=1.8*cm)
-            
             # Signature at bottom right (moved down by 2cm)
             signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
             if os.path.exists(signature_path):
@@ -1058,7 +1054,7 @@ class ModularResultViewSet(viewsets.ViewSet):
         ]
 
         # Biodata table - total width should match photo+QR row (17cm)
-        info_table = Table(info_data, colWidths=[2.8*cm, 6*cm, 2.5*cm, 5.7*cm])
+        info_table = Table(info_data, colWidths=[2.5*cm, 4.5*cm, 2.5*cm, 7.5*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 2),
@@ -1740,10 +1736,6 @@ class FormalResultViewSet(viewsets.ViewSet):
             # Draw DUPLICATE watermark if needed
             draw_duplicate_watermark(canvas)
             
-            # Draw QR Code on right side, slightly above bio data section
-            qr_buffer.seek(0)
-            canvas.drawImage(ImageReader(qr_buffer), A4[0] - 2.5*cm, A4[1] - 9*cm, width=1.8*cm, height=1.8*cm)
-            
             # Signature at bottom right (moved down by 2cm)
             signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
             if os.path.exists(signature_path):
@@ -1861,7 +1853,7 @@ class FormalResultViewSet(viewsets.ViewSet):
         ]
 
         # Biodata table - total width should match photo+QR row (17cm)
-        info_table = Table(info_data, colWidths=[2.8*cm, 6*cm, 2.5*cm, 5.7*cm])
+        info_table = Table(info_data, colWidths=[2.5*cm, 4.5*cm, 2.5*cm, 7.5*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 2),
@@ -2974,7 +2966,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         ]
 
         # Biodata table - consistent column widths
-        info_table = Table(info_data, colWidths=[2.8*cm, 6*cm, 2.5*cm, 5.7*cm])
+        info_table = Table(info_data, colWidths=[2.5*cm, 4.5*cm, 2.5*cm, 7.5*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 2),
