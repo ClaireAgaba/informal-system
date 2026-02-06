@@ -5,7 +5,15 @@ from candidates.models import Candidate
 class Command(BaseCommand):
     help = 'Update 2-letter nationality codes to full country names'
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--dryrun',
+            action='store_true',
+            help='Show what would be updated without making changes',
+        )
+
     def handle(self, *args, **options):
+        dryrun = options.get('dryrun', False)
         # Mapping of 2-letter codes to full country names
         nationality_map = {
             'UG': 'Uganda',
@@ -69,6 +77,8 @@ class Command(BaseCommand):
 
         total_updated = 0
         
+        if dryrun:
+            self.stdout.write(self.style.WARNING('DRY RUN - No changes will be made'))
         self.stdout.write(self.style.NOTICE('Starting nationality code update...'))
         self.stdout.write('')
 
@@ -78,12 +88,13 @@ class Command(BaseCommand):
             count = candidates.count()
             
             if count > 0:
-                candidates.update(nationality=full_name)
-                self.stdout.write(f'  Updated {count} candidates: {code} -> {full_name}')
+                if not dryrun:
+                    candidates.update(nationality=full_name)
+                self.stdout.write(f'  {"Would update" if dryrun else "Updated"} {count} candidates: {code} -> {full_name}')
                 total_updated += count
 
         self.stdout.write('')
-        self.stdout.write(self.style.SUCCESS(f'Done! Updated {total_updated} candidates total.'))
+        self.stdout.write(self.style.SUCCESS(f'Done! {"Would update" if dryrun else "Updated"} {total_updated} candidates total.'))
         
         # Show current nationality distribution
         self.stdout.write('')
