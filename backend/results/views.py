@@ -1714,20 +1714,39 @@ class FormalResultViewSet(viewsets.ViewSet):
             )
         
         # Calculate earned credit units from successful results
+        # For module-based: get CU from exam (module), for paper-based: get CU from paper
         earned_cus = 0
+        seen_modules = set()  # Track unique modules to avoid double-counting
         for r in formal_results:
-            if r.comment == 'Successful' and r.paper and r.paper.credit_units:
-                earned_cus += r.paper.credit_units
+            if r.comment == 'Successful':
+                if r.exam and r.exam.credit_units:
+                    # Module-based: count each module once (even if theory+practical)
+                    if r.exam.id not in seen_modules:
+                        earned_cus += r.exam.credit_units
+                        seen_modules.add(r.exam.id)
+                elif r.paper and r.paper.credit_units:
+                    # Paper-based
+                    earned_cus += r.paper.credit_units
         
-        # Calculate total required credit units from level papers
+        # Calculate total required credit units from level
         required_cus = 0
         first_result = formal_results.first()
         if first_result and first_result.level:
-            from occupations.models import OccupationPaper
-            level_papers = OccupationPaper.objects.filter(level=first_result.level)
-            for paper in level_papers:
-                if paper.credit_units:
-                    required_cus += paper.credit_units
+            level = first_result.level
+            if level.structure_type == 'modules':
+                # Module-based: sum credit units from all modules in level
+                from occupations.models import OccupationModule
+                level_modules = OccupationModule.objects.filter(level=level, is_active=True)
+                for module in level_modules:
+                    if module.credit_units:
+                        required_cus += module.credit_units
+            else:
+                # Paper-based: sum credit units from all papers in level
+                from occupations.models import OccupationPaper
+                level_papers = OccupationPaper.objects.filter(level=level, is_active=True)
+                for paper in level_papers:
+                    if paper.credit_units:
+                        required_cus += paper.credit_units
         
         # Check if candidate has enough credit units
         if earned_cus < required_cus:

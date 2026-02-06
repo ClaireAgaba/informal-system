@@ -8,8 +8,55 @@ from django.core.paginator import Paginator, EmptyPage
 from candidates.models import Candidate
 from results.models import ModularResult, FormalResult
 from configurations.models import ReprintReason
+from occupations.models import OccupationModule, OccupationPaper
 from io import BytesIO
 from PyPDF2 import PdfMerger
+
+
+def get_formal_candidate_credit_units(candidate):
+    """
+    Calculate earned and required credit units for a formal candidate.
+    Returns (earned_cus, required_cus) tuple.
+    """
+    formal_results = candidate.formal_results.all()
+    if not formal_results:
+        return 0, 0
+    
+    # Get the level from first result
+    first_result = formal_results[0] if formal_results else None
+    if not first_result or not first_result.level:
+        return 0, 0
+    
+    level = first_result.level
+    
+    # Calculate earned credit units
+    earned_cus = 0
+    seen_modules = set()
+    for r in formal_results:
+        if r.comment == 'Successful':
+            if r.exam and r.exam.credit_units:
+                # Module-based: count each module once
+                if r.exam.id not in seen_modules:
+                    earned_cus += r.exam.credit_units
+                    seen_modules.add(r.exam.id)
+            elif r.paper and r.paper.credit_units:
+                # Paper-based
+                earned_cus += r.paper.credit_units
+    
+    # Calculate required credit units from level
+    required_cus = 0
+    if level.structure_type == 'modules':
+        level_modules = OccupationModule.objects.filter(level=level, is_active=True)
+        for module in level_modules:
+            if module.credit_units:
+                required_cus += module.credit_units
+    else:
+        level_papers = OccupationPaper.objects.filter(level=level, is_active=True)
+        for paper in level_papers:
+            if paper.credit_units:
+                required_cus += paper.credit_units
+    
+    return earned_cus, required_cus
 
 
 class AwardsViewSet(viewsets.ViewSet):
@@ -106,7 +153,9 @@ class AwardsViewSet(viewsets.ViewSet):
             page = 1
 
         # Build response data (only for paginated subset)
+        # Also filter out formal candidates without enough credit units
         data = []
+        qualified_count = 0
         for candidate in candidates:
             # Get award and assessment series from prefetched results
             award = ""
@@ -119,6 +168,12 @@ class AwardsViewSet(viewsets.ViewSet):
                 if modular_results_list and modular_results_list[0].assessment_series:
                     completion_year = modular_results_list[0].assessment_series.completion_year or modular_results_list[0].assessment_series.name or ""
             else:
+                # For formal candidates, check credit units requirement
+                earned_cus, required_cus = get_formal_candidate_credit_units(candidate)
+                if earned_cus < required_cus:
+                    # Skip this candidate - doesn't have enough credit units
+                    continue
+                
                 formal_results_list = list(candidate.formal_results.all())
                 if formal_results_list:
                     if formal_results_list[0].level:
@@ -126,6 +181,7 @@ class AwardsViewSet(viewsets.ViewSet):
                     if formal_results_list[0].assessment_series:
                         completion_year = formal_results_list[0].assessment_series.completion_year or formal_results_list[0].assessment_series.name or ""
 
+            qualified_count += 1
             data.append({
                 'id': candidate.id,
                 'passport_photo': candidate.passport_photo.url if candidate.passport_photo else None,
@@ -149,7 +205,7 @@ class AwardsViewSet(viewsets.ViewSet):
 
         return Response({
             'results': data,
-            'count': total_count,
+            'count': qualified_count,  # Only count candidates who actually qualify
             'num_pages': num_pages,
             'current_page': page,
             'page_size': page_size,
