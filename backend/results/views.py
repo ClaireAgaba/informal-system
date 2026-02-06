@@ -1053,8 +1053,8 @@ class ModularResultViewSet(viewsets.ViewSet):
             [Paragraph("<b>OCCUPATION:</b>", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        # Biodata table - total width should match photo+QR row (17cm)
-        info_table = Table(info_data, colWidths=[2.5*cm, 4.5*cm, 2.5*cm, 7.5*cm])
+        # Biodata table - wider column 2 for names, right columns pushed further right
+        info_table = Table(info_data, colWidths=[2.5*cm, 9.5*cm, 2.5*cm, 3*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 2),
@@ -1852,8 +1852,8 @@ class FormalResultViewSet(viewsets.ViewSet):
             [Paragraph("<b>OCCUPATION:</b>", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        # Biodata table - total width should match photo+QR row (17cm)
-        info_table = Table(info_data, colWidths=[2.5*cm, 4.5*cm, 2.5*cm, 7.5*cm])
+        # Biodata table - wider column 2 for names, right columns pushed further right
+        info_table = Table(info_data, colWidths=[2.5*cm, 9.5*cm, 2.5*cm, 3*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 2),
@@ -2965,8 +2965,8 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             [Paragraph("OCCUPATION:", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        # Biodata table - consistent column widths
-        info_table = Table(info_data, colWidths=[2.5*cm, 4.5*cm, 2.5*cm, 7.5*cm])
+        # Biodata table - wider column 2 for names, right columns pushed further right
+        info_table = Table(info_data, colWidths=[2.5*cm, 9.5*cm, 2.5*cm, 3*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 2),
