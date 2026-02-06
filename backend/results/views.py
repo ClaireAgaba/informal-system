@@ -870,6 +870,7 @@ class ModularResultViewSet(viewsets.ViewSet):
         import qrcode
         
         candidate_id = request.query_params.get('candidate_id')
+        duplicate_watermark = request.query_params.get('duplicate_watermark', 'false').lower() == 'true'
         
         if not candidate_id:
             return Response(
@@ -920,8 +921,26 @@ class ModularResultViewSet(viewsets.ViewSet):
         qr_buffer.seek(0)
         
         # Define Page Templates for mixed orientation
+        def draw_duplicate_watermark(canvas):
+            """Draw diagonal DUPLICATE watermark across the page"""
+            if duplicate_watermark:
+                canvas.saveState()
+                canvas.setFont('Helvetica-Bold', 72)
+                canvas.setFillColor(colors.Color(1, 0, 0, alpha=0.3))  # Semi-transparent red
+                canvas.translate(A4[0]/2, A4[1]/2)
+                canvas.rotate(45)
+                canvas.drawCentredString(0, 0, "DUPLICATE")
+                canvas.restoreState()
+        
         def onFirstPage(canvas, doc):
             canvas.saveState()
+            # Draw DUPLICATE watermark if needed
+            draw_duplicate_watermark(canvas)
+            
+            # Draw QR Code on right side, slightly above bio data section
+            qr_buffer.seek(0)
+            canvas.drawImage(ImageReader(qr_buffer), A4[0] - 2.5*cm, A4[1] - 9*cm, width=1.8*cm, height=1.8*cm)
+            
             # Signature at bottom right (moved down by 2cm)
             signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
             if os.path.exists(signature_path):
@@ -932,9 +951,12 @@ class ModularResultViewSet(viewsets.ViewSet):
             canvas.restoreState()
 
         def onLaterPages(canvas, doc):
-            pass
+            # Draw DUPLICATE watermark if needed
+            draw_duplicate_watermark(canvas)
 
         def onPortraitBack(canvas, doc):
+            # Draw DUPLICATE watermark if needed
+            draw_duplicate_watermark(canvas)
             # Rotate content -90 degrees (Clockwise)
             canvas.translate(0, A4[1])
             canvas.rotate(-90)
@@ -1645,6 +1667,7 @@ class FormalResultViewSet(viewsets.ViewSet):
         from .models import FormalResult
         
         candidate_id = request.query_params.get('candidate_id')
+        duplicate_watermark = request.query_params.get('duplicate_watermark', 'false').lower() == 'true'
         
         if not candidate_id:
             return Response(
@@ -1701,8 +1724,26 @@ class FormalResultViewSet(viewsets.ViewSet):
         qr_buffer.seek(0)
         
         # Define Page Templates for mixed orientation
+        def draw_duplicate_watermark(canvas):
+            """Draw diagonal DUPLICATE watermark across the page"""
+            if duplicate_watermark:
+                canvas.saveState()
+                canvas.setFont('Helvetica-Bold', 72)
+                canvas.setFillColor(colors.Color(1, 0, 0, alpha=0.3))  # Semi-transparent red
+                canvas.translate(A4[0]/2, A4[1]/2)
+                canvas.rotate(45)
+                canvas.drawCentredString(0, 0, "DUPLICATE")
+                canvas.restoreState()
+        
         def onFirstPage(canvas, doc):
             canvas.saveState()
+            # Draw DUPLICATE watermark if needed
+            draw_duplicate_watermark(canvas)
+            
+            # Draw QR Code on right side, slightly above bio data section
+            qr_buffer.seek(0)
+            canvas.drawImage(ImageReader(qr_buffer), A4[0] - 2.5*cm, A4[1] - 9*cm, width=1.8*cm, height=1.8*cm)
+            
             # Signature at bottom right (moved down by 2cm)
             signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
             if os.path.exists(signature_path):
@@ -1713,9 +1754,12 @@ class FormalResultViewSet(viewsets.ViewSet):
             canvas.restoreState()
 
         def onLaterPages(canvas, doc):
-            pass
+            # Draw DUPLICATE watermark if needed
+            draw_duplicate_watermark(canvas)
 
         def onPortraitBack(canvas, doc):
+            # Draw DUPLICATE watermark if needed
+            draw_duplicate_watermark(canvas)
             # Rotate content -90 degrees (Clockwise)
             canvas.translate(0, A4[1])
             canvas.rotate(-90)

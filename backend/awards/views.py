@@ -6,6 +6,7 @@ from django.db.models import Q, Exists, OuterRef
 from django.http import HttpResponse
 from candidates.models import Candidate
 from results.models import ModularResult, FormalResult
+from configurations.models import ReprintReason
 from io import BytesIO
 from PyPDF2 import PdfMerger
 
@@ -122,12 +123,28 @@ class AwardsViewSet(viewsets.ViewSet):
     def bulk_print_transcripts(self, request):
         """
         Generate transcripts for multiple candidates and merge into a single PDF.
+        Only allows printing for candidates who haven't been printed yet.
         """
         candidate_ids = request.data.get('candidate_ids', [])
         
         if not candidate_ids:
             return Response(
                 {'error': 'No candidates selected'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if any candidate already has a transcript printed
+        already_printed = Candidate.objects.filter(
+            id__in=candidate_ids,
+            transcript_serial_number__isnull=False
+        ).exclude(transcript_serial_number='')
+        
+        if already_printed.exists():
+            return Response(
+                {
+                    'error': 'All selected candidate(s) already have printed transcripts. Only reprints are allowed through the reprint process.',
+                    'already_printed_count': already_printed.count()
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -200,5 +217,114 @@ class AwardsViewSet(viewsets.ViewSet):
         
         response = HttpResponse(output.read(), content_type='application/pdf')
         response['Content-Disposition'] = 'attachment; filename="Transcripts.pdf"'
+        
+        return response
+
+    @action(detail=False, methods=['post'], url_path='reprint-transcripts')
+    def reprint_transcripts(self, request):
+        """
+        Reprint transcripts for candidates who already have printed transcripts.
+        Requires a reprint reason. If reason requires duplicate watermark (e.g., Lost Transcript),
+        the PDF will have a "DUPLICATE" watermark.
+        """
+        candidate_ids = request.data.get('candidate_ids', [])
+        reason_id = request.data.get('reason_id')
+        
+        if not candidate_ids:
+            return Response(
+                {'error': 'No candidates selected'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not reason_id:
+            return Response(
+                {'error': 'Reprint reason is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get reprint reason
+        try:
+            reprint_reason = ReprintReason.objects.get(id=reason_id, is_active=True)
+        except ReprintReason.DoesNotExist:
+            return Response(
+                {'error': 'Invalid reprint reason'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get candidates
+        candidates = Candidate.objects.filter(id__in=candidate_ids).select_related(
+            'occupation', 'assessment_center'
+        )
+        
+        if not candidates.exists():
+            return Response(
+                {'error': 'No valid candidates found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Import transcript generation functions
+        from results.views import ModularResultViewSet, FormalResultViewSet
+        
+        # Create PDF merger
+        merger = PdfMerger()
+        generated_count = 0
+        
+        # Determine if watermark is needed
+        add_watermark = reprint_reason.requires_duplicate_watermark
+        
+        for candidate in candidates:
+            try:
+                # Create a mock request with the candidate ID and watermark flag
+                class MockRequest:
+                    def __init__(self, user, candidate_id, duplicate_watermark=False):
+                        self.user = user
+                        self.query_params = {
+                            'candidate_id': str(candidate_id),
+                            'duplicate_watermark': 'true' if duplicate_watermark else 'false'
+                        }
+                
+                mock_request = MockRequest(request.user, candidate.id, add_watermark)
+                
+                if candidate.registration_category == 'modular':
+                    # Check if candidate has modular results
+                    if ModularResult.objects.filter(candidate=candidate).exists():
+                        viewset = ModularResultViewSet()
+                        response = viewset.transcript_pdf(mock_request)
+                        
+                        if response.status_code == 200:
+                            pdf_buffer = BytesIO(response.content)
+                            merger.append(pdf_buffer)
+                            generated_count += 1
+                elif candidate.registration_category == 'formal':
+                    # Formal candidate
+                    if FormalResult.objects.filter(candidate=candidate).exists():
+                        viewset = FormalResultViewSet()
+                        response = viewset.transcript_pdf(mock_request)
+                        
+                        if response.status_code == 200:
+                            pdf_buffer = BytesIO(response.content)
+                            merger.append(pdf_buffer)
+                            generated_count += 1
+            except Exception as e:
+                # Log error but continue with other candidates
+                print(f"Error generating transcript for candidate {candidate.id}: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        if generated_count == 0:
+            return Response(
+                {'error': 'No transcripts could be generated'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Write merged PDF to response
+        output = BytesIO()
+        merger.write(output)
+        merger.close()
+        output.seek(0)
+        
+        response = HttpResponse(output.read(), content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="Reprinted_Transcripts.pdf"'
         
         return response

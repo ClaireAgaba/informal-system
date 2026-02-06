@@ -1,8 +1,8 @@
 from rest_framework import viewsets, permissions
-from .models import Region, District, Village, NatureOfDisability, Department
+from .models import Region, District, Village, NatureOfDisability, Department, ReprintReason
 from .serializers import (
     RegionSerializer, DistrictSerializer, VillageSerializer, 
-    NatureOfDisabilitySerializer, DepartmentSerializer
+    NatureOfDisabilitySerializer, DepartmentSerializer, ReprintReasonSerializer
 )
 
 
@@ -58,6 +58,17 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     serializer_class = DepartmentSerializer
     permission_classes = [permissions.AllowAny]  # Temporarily allow unauthenticated access
     filterset_fields = ['is_active']
+    search_fields = ['name', 'description']
+
+
+class ReprintReasonViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for ReprintReason model
+    """
+    queryset = ReprintReason.objects.filter(is_active=True)
+    serializer_class = ReprintReasonSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ['is_active', 'requires_duplicate_watermark']
     search_fields = ['name', 'description']
 
 

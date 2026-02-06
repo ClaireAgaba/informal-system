@@ -148,3 +148,27 @@ class Department(models.Model):
         return app_name in self.module_rights
 
 
+class ReprintReason(models.Model):
+    """
+    Model for managing transcript reprint reasons
+    """
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    requires_duplicate_watermark = models.BooleanField(
+        default=False,
+        help_text="If checked, reprinted transcripts with this reason will have a 'DUPLICATE' watermark"
+    )
+    
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Reprint Reason'
+        verbose_name_plural = 'Reprint Reasons'
+    
+    def __str__(self):
+        return self.name
+
+

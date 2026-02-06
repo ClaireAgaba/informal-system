@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Award, Search, ChevronLeft, ChevronRight, User, Filter, Printer } from 'lucide-react';
+import { Award, Search, ChevronLeft, ChevronRight, User, Filter, Printer, RefreshCw, X, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../../../services/apiClient';
 
@@ -15,6 +15,11 @@ const AwardsList = () => {
   const [selectedCandidates, setSelectedCandidates] = useState([]);
   const [selectAllFiltered, setSelectAllFiltered] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [reprinting, setReprinting] = useState(false);
+  const [showReprintModal, setShowReprintModal] = useState(false);
+  const [reprintReasons, setReprintReasons] = useState([]);
+  const [selectedReprintReason, setSelectedReprintReason] = useState('');
+  const [showValidationError, setShowValidationError] = useState(false);
   const itemsPerPage = 20;
 
   // Filter states
@@ -33,6 +38,7 @@ const AwardsList = () => {
 
   useEffect(() => {
     fetchAwards();
+    fetchReprintReasons();
   }, []);
 
   const fetchAwards = async () => {
@@ -46,6 +52,18 @@ const AwardsList = () => {
       setError('Failed to load awards data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchReprintReasons = async () => {
+    try {
+      const response = await apiClient.get('/configurations/reprint-reasons/');
+      // Handle both paginated and non-paginated responses
+      const data = response.data.results || response.data;
+      setReprintReasons(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error fetching reprint reasons:', err);
+      setReprintReasons([]);
     }
   };
 
@@ -145,11 +163,21 @@ const AwardsList = () => {
 
   // Print transcripts handler
   const handlePrintTranscripts = async () => {
+    const ids = selectAllFiltered 
+      ? filteredAwards.map((a) => a.id) 
+      : selectedCandidates;
+    
+    // Check if any selected candidate already has a printed transcript
+    const selectedAwards = awards.filter((a) => ids.includes(a.id));
+    const alreadyPrinted = selectedAwards.filter((a) => a.printed);
+    
+    if (alreadyPrinted.length > 0) {
+      setShowValidationError(true);
+      return;
+    }
+    
     try {
       setPrinting(true);
-      const ids = selectAllFiltered 
-        ? filteredAwards.map((a) => a.id) 
-        : selectedCandidates;
       
       const response = await apiClient.post('/awards/bulk-print-transcripts/', 
         { candidate_ids: ids },
@@ -169,11 +197,62 @@ const AwardsList = () => {
       
       toast.success(`Generated transcripts for ${ids.length} candidate(s)`);
       handleClearSelection();
+      fetchAwards(); // Refresh to update printed status
     } catch (err) {
       console.error('Error printing transcripts:', err);
-      toast.error('Failed to generate transcripts');
+      if (err.response?.data?.error) {
+        toast.error(err.response.data.error);
+      } else {
+        toast.error('Failed to generate transcripts');
+      }
     } finally {
       setPrinting(false);
+    }
+  };
+
+  // Reprint transcripts handler
+  const handleReprintTranscripts = async () => {
+    if (!selectedReprintReason) {
+      toast.error('Please select a reprint reason');
+      return;
+    }
+    
+    const ids = selectAllFiltered 
+      ? filteredAwards.map((a) => a.id) 
+      : selectedCandidates;
+    
+    try {
+      setReprinting(true);
+      
+      const response = await apiClient.post('/awards/reprint-transcripts/', 
+        { candidate_ids: ids, reason_id: selectedReprintReason },
+        { responseType: 'blob' }
+      );
+      
+      // Create download link for PDF
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'Reprinted_Transcripts.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success(`Reprinted transcripts for ${ids.length} candidate(s)`);
+      setShowReprintModal(false);
+      setSelectedReprintReason('');
+      handleClearSelection();
+    } catch (err) {
+      console.error('Error reprinting transcripts:', err);
+      if (err.response?.data?.error) {
+        toast.error(err.response.data.error);
+      } else {
+        toast.error('Failed to reprint transcripts');
+      }
+    } finally {
+      setReprinting(false);
     }
   };
 
@@ -408,6 +487,14 @@ const AwardsList = () => {
                 <Printer className="w-4 h-4 mr-2" />
                 {printing ? 'Printing...' : 'Print Transcripts'}
               </button>
+              <button
+                onClick={() => setShowReprintModal(true)}
+                disabled={reprinting}
+                className="flex items-center px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Reprint Transcript
+              </button>
             </div>
           </div>
         </div>
@@ -602,6 +689,98 @@ const AwardsList = () => {
           </div>
         )}
       </div>
+
+      {/* Validation Error Modal */}
+      {showValidationError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={() => setShowValidationError(false)}
+          />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-2 bg-red-100 rounded-full">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-red-800">Validation Error</h3>
+            </div>
+            <p className="text-gray-700 mb-2">
+              All selected candidate(s) already have printed transcripts.
+            </p>
+            <p className="text-gray-600 text-sm mb-6">
+              Only reprints are allowed through the reprint process.
+            </p>
+            <button
+              onClick={() => setShowValidationError(false)}
+              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Reprint Reason Modal */}
+      {showReprintModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={() => {
+              setShowReprintModal(false);
+              setSelectedReprintReason('');
+            }}
+          />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Reprint Transcript</h3>
+              <button
+                onClick={() => {
+                  setShowReprintModal(false);
+                  setSelectedReprintReason('');
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Reprint Reason
+              </label>
+              <select
+                value={selectedReprintReason}
+                onChange={(e) => setSelectedReprintReason(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">-- Select Reason --</option>
+                {reprintReasons.map((reason) => (
+                  <option key={reason.id} value={reason.id}>
+                    {reason.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowReprintModal(false);
+                  setSelectedReprintReason('');
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReprintTranscripts}
+                disabled={reprinting || !selectedReprintReason}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {reprinting ? 'Reprinting...' : 'Reprint'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
