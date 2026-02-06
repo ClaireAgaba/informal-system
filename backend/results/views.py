@@ -1047,9 +1047,10 @@ class ModularResultViewSet(viewsets.ViewSet):
                     print(f"Error loading photo: {e}")
 
         # Bio data table - NAME/values on left, NATIONALITY on right
+        nationality_display = get_nationality_from_country(candidate.candidate_country) if candidate.candidate_country else "Ugandan"
         info_data = [
             [Paragraph("<b>NAME:</b>", info_label_style), Paragraph(candidate.full_name or "", info_value_style), 
-             Paragraph("<b>NATIONALITY:</b>", info_label_style), Paragraph(candidate.nationality or "Ugandan", info_value_style)],
+             Paragraph("<b>NATIONALITY:</b>", info_label_style), Paragraph(nationality_display, info_value_style)],
             [Paragraph("<b>REG NO:</b>", info_label_style), Paragraph(candidate.registration_number or "", info_value_style),
              Paragraph("<b>BIRTHDATE:</b>", info_label_style), Paragraph(candidate.date_of_birth.strftime("%d %b, %Y") if candidate.date_of_birth else "", info_value_style)],
             [Paragraph("<b>GENDER:</b>", info_label_style), Paragraph(candidate.gender.capitalize() if candidate.gender else "", info_value_style),
@@ -1920,9 +1921,10 @@ class FormalResultViewSet(viewsets.ViewSet):
                     print(f"Error loading photo: {e}")
 
         # Bio data table - NAME/values on left, NATIONALITY on right
+        nationality_display = get_nationality_from_country(candidate.candidate_country) if candidate.candidate_country else "Ugandan"
         info_data = [
             [Paragraph("<b>NAME:</b>", info_label_style), Paragraph(candidate.full_name or "", info_value_style), 
-             Paragraph("<b>NATIONALITY:</b>", info_label_style), Paragraph(candidate.nationality or "Ugandan", info_value_style)],
+             Paragraph("<b>NATIONALITY:</b>", info_label_style), Paragraph(nationality_display, info_value_style)],
             [Paragraph("<b>REG NO:</b>", info_label_style), Paragraph(candidate.registration_number or "", info_value_style),
              Paragraph("<b>BIRTHDATE:</b>", info_label_style), Paragraph(candidate.date_of_birth.strftime("%d %b, %Y") if candidate.date_of_birth else "", info_value_style)],
             [Paragraph("<b>GENDER:</b>", info_label_style), Paragraph(candidate.gender.capitalize() if candidate.gender else "", info_value_style),
@@ -2609,7 +2611,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         
         # Build info data
         info_data = [
-            ["NAME:", candidate.full_name or "", "NATIONALITY:", candidate.nationality or "Uganda"],
+            ["NAME:", candidate.full_name or "", "NATIONALITY:", get_nationality_from_country(candidate.candidate_country) if candidate.candidate_country else "Ugandan"],
             ["REG NO:", candidate.registration_number or "", "BIRTHDATE:", candidate.date_of_birth.strftime("%d %b, %Y") if candidate.date_of_birth else ""],
             ["GENDER:", candidate.gender.capitalize() if candidate.gender else "", "PRINTDATE:", datetime.now().strftime("%d-%b-%Y")],
             ["CENTER NAME:", candidate.assessment_center.center_name if candidate.assessment_center else "", "", ""],
@@ -3061,7 +3063,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
 
         info_data = [
             [Paragraph("NAME:", info_label_style), Paragraph(candidate.full_name or "", info_value_style), 
-             Paragraph("NATIONALITY:", info_label_style), Paragraph(candidate.nationality or "Uganda", info_value_style)],
+             Paragraph("NATIONALITY:", info_label_style), Paragraph(get_nationality_from_country(candidate.candidate_country) if candidate.candidate_country else "Ugandan", info_value_style)],
             [Paragraph("REG NO:", info_label_style), Paragraph(candidate.registration_number or "", info_value_style),
              Paragraph("BIRTHDATE:", info_label_style), Paragraph(candidate.date_of_birth.strftime("%d %b, %Y") if candidate.date_of_birth else "", info_value_style)],
             [Paragraph("GENDER:", info_label_style), Paragraph(candidate.gender.capitalize() if candidate.gender else "", info_value_style),

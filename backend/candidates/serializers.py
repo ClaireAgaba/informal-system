@@ -7,6 +7,7 @@ from assessment_series.models import AssessmentSeries
 from users.models import Staff
 from results.models import FormalResult, ModularResult
 from datetime import date
+from utils.nationality_helper import get_nationality_from_country
 
 
 class CandidateListSerializer(serializers.ModelSerializer):
@@ -20,12 +21,13 @@ class CandidateListSerializer(serializers.ModelSerializer):
     has_special_needs = serializers.SerializerMethodField()
     is_enrolled = serializers.SerializerMethodField()
     has_marks = serializers.SerializerMethodField()
+    nationality_display = serializers.SerializerMethodField()
     
     class Meta:
         model = Candidate
         fields = [
             'id', 'registration_number', 'payment_code', 'is_submitted', 'full_name', 'date_of_birth', 'gender',
-            'nationality', 'candidate_country', 'is_refugee', 'refugee_number', 'contact',
+            'nationality', 'candidate_country', 'nationality_display', 'is_refugee', 'refugee_number', 'contact',
             'district_name', 'village_name', 'has_disability', 'has_special_needs',
             'assessment_center', 'registration_category', 'occupation', 'sector',
             'entry_year', 'intake',
@@ -84,6 +86,10 @@ class CandidateListSerializer(serializers.ModelSerializer):
         # Check for modular results
         has_modular_results = ModularResult.objects.filter(candidate=obj).exists()
         return has_formal_results or has_modular_results
+    
+    def get_nationality_display(self, obj):
+        """Get nationality demonym from candidate_country field"""
+        return get_nationality_from_country(obj.candidate_country) if obj.candidate_country else "Ugandan"
 
 
 class CandidateDetailSerializer(serializers.ModelSerializer):
@@ -98,6 +104,7 @@ class CandidateDetailSerializer(serializers.ModelSerializer):
     updated_by_name = serializers.CharField(source='updated_by.fullname', read_only=True)
     verified_by_name = serializers.CharField(source='verified_by.fullname', read_only=True)
     age = serializers.SerializerMethodField()
+    nationality_display = serializers.SerializerMethodField()
     
     class Meta:
         model = Candidate
@@ -163,6 +170,10 @@ class CandidateDetailSerializer(serializers.ModelSerializer):
                 'name': obj.nature_of_disability.name,
             }
         return None
+    
+    def get_nationality_display(self, obj):
+        """Get nationality demonym from candidate_country field"""
+        return get_nationality_from_country(obj.candidate_country) if obj.candidate_country else "Ugandan"
 
 
 class CandidateCreateUpdateSerializer(serializers.ModelSerializer):

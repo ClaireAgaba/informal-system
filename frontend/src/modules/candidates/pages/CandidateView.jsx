@@ -228,13 +228,13 @@ const CandidateView = () => {
     try {
       const url = candidateApi.getTranscriptPDF(id, candidate?.registration_category);
       const response = await fetch(url);
-      
+
       if (!response.ok) {
         const data = await response.json();
         toast.error(data.error || 'Candidate does not qualify for transcript');
         return;
       }
-      
+
       // If successful, open the PDF
       window.open(url, '_blank');
     } catch (error) {
@@ -547,7 +547,7 @@ const CandidateView = () => {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">Nationality</span>
                   <span className="font-medium text-gray-900">
-                    {candidate.nationality}
+                    {candidate.nationality_display || candidate.nationality}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
@@ -722,8 +722,8 @@ const CandidateView = () => {
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
                     className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id
-                        ? 'border-primary-600 text-primary-600'
-                        : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                      ? 'border-primary-600 text-primary-600'
+                      : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
                       }`}
                   >
                     {tab.label}
@@ -746,7 +746,7 @@ const CandidateView = () => {
                       <InfoItem label="Gender" value={candidate.gender} />
                       <InfoItem label="Date of Birth" value={formatDate(candidate.date_of_birth)} />
                       <InfoItem label="Age" value={`${candidate.age || 'N/A'} years`} />
-                      <InfoItem label="Nationality" value={candidate.nationality} />
+                      <InfoItem label="Nationality" value={candidate.nationality_display || candidate.nationality} />
                       <InfoItem
                         label="Candidate Fees"
                         value={
@@ -998,8 +998,8 @@ const CandidateView = () => {
                                     {enrollment.assessment_series_name}
                                   </h4>
                                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${enrollment.is_active
-                                      ? 'bg-green-100 text-green-800'
-                                      : 'bg-gray-100 text-gray-800'
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-gray-100 text-gray-800'
                                     }`}>
                                     {enrollment.is_active ? 'Active' : 'Inactive'}
                                   </span>
