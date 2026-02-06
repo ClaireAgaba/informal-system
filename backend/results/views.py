@@ -1723,8 +1723,8 @@ class FormalResultViewSet(viewsets.ViewSet):
         required_cus = 0
         first_result = formal_results.first()
         if first_result and first_result.level:
-            from occupations.models import Paper
-            level_papers = Paper.objects.filter(level=first_result.level)
+            from occupations.models import OccupationPaper
+            level_papers = OccupationPaper.objects.filter(level=first_result.level)
             for paper in level_papers:
                 if paper.credit_units:
                     required_cus += paper.credit_units
