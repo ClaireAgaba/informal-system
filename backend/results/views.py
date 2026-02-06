@@ -1053,8 +1053,8 @@ class ModularResultViewSet(viewsets.ViewSet):
             [Paragraph("<b>OCCUPATION:</b>", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        # Biodata table - 17cm total width to match photo+QR row
-        info_table = Table(info_data, colWidths=[2.5*cm, 8.5*cm, 2.5*cm, 3.5*cm])
+        # Biodata table - 18.5cm total width
+        info_table = Table(info_data, colWidths=[2.5*cm, 11*cm, 2.5*cm, 2.5*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 2),
@@ -1857,7 +1857,7 @@ class FormalResultViewSet(viewsets.ViewSet):
         ]
 
         # Biodata table - wider column 2 for names, right columns pushed further right
-        info_table = Table(info_data, colWidths=[2.5*cm, 8.5*cm, 2.5*cm, 3.5*cm])
+        info_table = Table(info_data, colWidths=[2.5*cm, 11*cm, 2.5*cm, 2.5*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 2),
@@ -1946,6 +1946,7 @@ class FormalResultViewSet(viewsets.ViewSet):
                 header_style = ParagraphStyle('TableHeader', parent=styles['Normal'], fontSize=10, fontName='Times-Bold', alignment=TA_CENTER)
                 col_header_style = ParagraphStyle('ColHeader', parent=styles['Normal'], fontSize=9, fontName='Times-Bold', alignment=TA_CENTER)
                 data_style = ParagraphStyle('DataStyle', parent=styles['Normal'], fontSize=9, fontName='Times-Roman')
+                data_center_style = ParagraphStyle('DataCenterStyle', parent=styles['Normal'], fontSize=9, fontName='Times-Roman', alignment=TA_CENTER)
                 
                 table_data = []
                 
@@ -1976,8 +1977,8 @@ class FormalResultViewSet(viewsets.ViewSet):
                         row.extend([
                             Paragraph(r.paper.paper_code if r.paper else "-", data_style),
                             Paragraph(r.paper.paper_name if r.paper else "-", data_style),
-                            Paragraph(str(r.paper.credit_units) if r.paper and r.paper.credit_units else "-", data_style),
-                            Paragraph(r.grade or "-", data_style)
+                            Paragraph(str(r.paper.credit_units) if r.paper and r.paper.credit_units else "-", data_center_style),
+                            Paragraph(r.grade or "-", data_center_style)
                         ])
                     else:
                         row.extend([Paragraph("", data_style)] * 4)
@@ -1988,16 +1989,16 @@ class FormalResultViewSet(viewsets.ViewSet):
                         row.extend([
                             Paragraph(r.paper.paper_code if r.paper else "-", data_style),
                             Paragraph(r.paper.paper_name if r.paper else "-", data_style),
-                            Paragraph(str(r.paper.credit_units) if r.paper and r.paper.credit_units else "-", data_style),
-                            Paragraph(r.grade or "-", data_style)
+                            Paragraph(str(r.paper.credit_units) if r.paper and r.paper.credit_units else "-", data_center_style),
+                            Paragraph(r.grade or "-", data_center_style)
                         ])
                     else:
                         row.extend([Paragraph("", data_style)] * 4)
                     
                     table_data.append(row)
                 
-                # Create table with 8 columns - 17cm total width
-                col_widths = [1.5*cm, 4.1*cm, 1.2*cm, 1.7*cm, 1.5*cm, 4.1*cm, 1.2*cm, 1.7*cm]
+                # Create table with 8 columns - CODE cols wider (2.5cm), balanced rest
+                col_widths = [2.5*cm, 3.6*cm, 1.2*cm, 1.2*cm, 2.5*cm, 3.6*cm, 1.2*cm, 1.2*cm]
                 t = Table(table_data, colWidths=col_widths)
                 t.setStyle(TableStyle([
                     # Span THEORY and PRACTICAL headers
@@ -2969,8 +2970,8 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             [Paragraph("OCCUPATION:", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        # Biodata table - wider column 2 for names, right columns pushed further right
-        info_table = Table(info_data, colWidths=[2.5*cm, 8.5*cm, 2.5*cm, 3.5*cm])
+        # Biodata table - 18.5cm total width
+        info_table = Table(info_data, colWidths=[2.5*cm, 11*cm, 2.5*cm, 2.5*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 2),
