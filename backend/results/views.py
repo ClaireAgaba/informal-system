@@ -922,15 +922,11 @@ class ModularResultViewSet(viewsets.ViewSet):
         # Define Page Templates for mixed orientation
         def onFirstPage(canvas, doc):
             canvas.saveState()
-            # Draw QR Code on right side, slightly above bio data section
-            qr_buffer.seek(0)
-            canvas.drawImage(ImageReader(qr_buffer), A4[0] - 2.5*cm, A4[1] - 9*cm, width=1.8*cm, height=1.8*cm)
-            
-            # Signature at bottom right (no EXECUTIVE SECRETARY text)
+            # Signature at bottom right (moved down by 2cm)
             signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
             if os.path.exists(signature_path):
                 try:
-                    canvas.drawImage(signature_path, A4[0] - 6*cm, 1.5*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
+                    canvas.drawImage(signature_path, A4[0] - 6*cm, 1*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
                 except:
                     pass
             canvas.restoreState()
@@ -998,7 +994,7 @@ class ModularResultViewSet(viewsets.ViewSet):
         )
 
         # Content - Page 1 (No TRANSCRIPT title - paper already has it printed)
-        elements.append(Spacer(1, 7.5*cm))
+        elements.append(Spacer(1, 2.5*cm))
 
         # Photo with reg no caption (smaller font 6pt to fit on one line)
         photo_cell = None
@@ -1039,26 +1035,43 @@ class ModularResultViewSet(viewsets.ViewSet):
             [Paragraph("<b>OCCUPATION:</b>", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        info_table = Table(info_data, colWidths=[2.8*cm, 4.5*cm, 2.8*cm, 3.5*cm])
+        # Biodata table - total width should match photo+QR row (17cm)
+        info_table = Table(info_data, colWidths=[2.8*cm, 6*cm, 2.5*cm, 5.7*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 1),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
             ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
             ('SPAN', (1, 3), (3, 3)), # Span center name
             ('SPAN', (1, 4), (3, 4)), # Span occupation
         ]))
 
-        # Combine photo and bio data side by side
+        # Create QR code image element for the document
+        qr_buffer.seek(0)
+        qr_code_image = Image(qr_buffer, width=2*cm, height=2*cm)
+        
+        # Create photo+QR row: photo on left, QR on right
         if photo_cell:
-            combined = Table([[photo_cell, info_table]], colWidths=[3.5*cm, 14*cm])
-            combined.setStyle(TableStyle([
+            # Table with photo left, empty space middle, QR right
+            photo_qr_row = Table([[photo_cell, '', qr_code_image]], colWidths=[3.5*cm, 11*cm, 2.5*cm])
+            photo_qr_row.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 0),
             ]))
-            elements.append(combined)
+            elements.append(photo_qr_row)
         else:
-            elements.append(info_table)
+            # Just QR code on right if no photo
+            qr_row = Table([['', qr_code_image]], colWidths=[14.5*cm, 2.5*cm])
+            qr_row.setStyle(TableStyle([
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            elements.append(qr_row)
+        
+        elements.append(Spacer(1, 0.3*cm))
+        elements.append(info_table)
 
         elements.append(Spacer(1, 0.2*cm))
         elements.append(Paragraph("ASSESSMENT RESULTS", section_heading_style))
@@ -1690,15 +1703,11 @@ class FormalResultViewSet(viewsets.ViewSet):
         # Define Page Templates for mixed orientation
         def onFirstPage(canvas, doc):
             canvas.saveState()
-            # Draw QR Code on right side, slightly above bio data section
-            qr_buffer.seek(0)
-            canvas.drawImage(ImageReader(qr_buffer), A4[0] - 2.5*cm, A4[1] - 9*cm, width=1.8*cm, height=1.8*cm)
-            
-            # Signature at bottom right (no EXECUTIVE SECRETARY text)
+            # Signature at bottom right (moved down by 2cm)
             signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
             if os.path.exists(signature_path):
                 try:
-                    canvas.drawImage(signature_path, A4[0] - 6*cm, 1.5*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
+                    canvas.drawImage(signature_path, A4[0] - 6*cm, -0.5*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
                 except:
                     pass
             canvas.restoreState()
@@ -1766,7 +1775,7 @@ class FormalResultViewSet(viewsets.ViewSet):
         )
 
         # Content - Page 1 (No TRANSCRIPT title - paper already has it printed)
-        elements.append(Spacer(1, 7.5*cm))
+        elements.append(Spacer(1, 5.5*cm))
 
         # Photo with reg no caption (smaller font 6pt to fit on one line)
         photo_cell = None
@@ -1807,26 +1816,43 @@ class FormalResultViewSet(viewsets.ViewSet):
             [Paragraph("<b>OCCUPATION:</b>", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        info_table = Table(info_data, colWidths=[2.8*cm, 4.5*cm, 2.8*cm, 3.5*cm])
+        # Biodata table - total width should match photo+QR row (17cm)
+        info_table = Table(info_data, colWidths=[2.8*cm, 6*cm, 2.5*cm, 5.7*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 1),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
             ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
             ('SPAN', (1, 3), (3, 3)), # Span center name
             ('SPAN', (1, 4), (3, 4)), # Span occupation
         ]))
 
-        # Combine photo and bio data side by side
+        # Create QR code image element for the document
+        qr_buffer.seek(0)
+        qr_code_image = Image(qr_buffer, width=2*cm, height=2*cm)
+        
+        # Create photo+QR row: photo on left, QR on right
         if photo_cell:
-            combined = Table([[photo_cell, info_table]], colWidths=[3.5*cm, 14*cm])
-            combined.setStyle(TableStyle([
+            # Table with photo left, empty space middle, QR right
+            photo_qr_row = Table([[photo_cell, '', qr_code_image]], colWidths=[3.5*cm, 11*cm, 2.5*cm])
+            photo_qr_row.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 0),
             ]))
-            elements.append(combined)
+            elements.append(photo_qr_row)
         else:
-            elements.append(info_table)
+            # Just QR code on right if no photo
+            qr_row = Table([['', qr_code_image]], colWidths=[14.5*cm, 2.5*cm])
+            qr_row.setStyle(TableStyle([
+                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            elements.append(qr_row)
+        
+        elements.append(Spacer(1, 0.3*cm))
+        elements.append(info_table)
 
         elements.append(Spacer(1, 0.2*cm))
         elements.append(Paragraph("ASSESSMENT RESULTS", section_heading_style))
@@ -1877,9 +1903,9 @@ class FormalResultViewSet(viewsets.ViewSet):
                 # Row 1: Code, Module, CU, Grade | Code, Module, CU, Grade
                 # Row 2+: Data rows
                 
-                header_style = ParagraphStyle('TableHeader', parent=styles['Normal'], fontSize=9, fontName='Times-Bold', alignment=TA_CENTER)
-                col_header_style = ParagraphStyle('ColHeader', parent=styles['Normal'], fontSize=8, fontName='Times-Bold')
-                data_style = ParagraphStyle('DataStyle', parent=styles['Normal'], fontSize=8, fontName='Times-Roman')
+                header_style = ParagraphStyle('TableHeader', parent=styles['Normal'], fontSize=10, fontName='Times-Bold', alignment=TA_CENTER)
+                col_header_style = ParagraphStyle('ColHeader', parent=styles['Normal'], fontSize=9, fontName='Times-Bold', alignment=TA_CENTER)
+                data_style = ParagraphStyle('DataStyle', parent=styles['Normal'], fontSize=9, fontName='Times-Roman')
                 
                 table_data = []
                 
@@ -1939,26 +1965,29 @@ class FormalResultViewSet(viewsets.ViewSet):
                     ('SPAN', (4, 0), (7, 0)),
                     # Alignment
                     ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-                    ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
-                    ('ALIGN', (2, 1), (2, -1), 'CENTER'),
-                    ('ALIGN', (3, 1), (3, -1), 'CENTER'),
-                    ('ALIGN', (6, 1), (6, -1), 'CENTER'),
-                    ('ALIGN', (7, 1), (7, -1), 'CENTER'),
+                    ('ALIGN', (0, 1), (-1, 1), 'CENTER'),
+                    ('ALIGN', (0, 2), (0, -1), 'LEFT'),
+                    ('ALIGN', (1, 2), (1, -1), 'LEFT'),
+                    ('ALIGN', (2, 2), (2, -1), 'CENTER'),
+                    ('ALIGN', (3, 2), (3, -1), 'CENTER'),
+                    ('ALIGN', (4, 2), (4, -1), 'LEFT'),
+                    ('ALIGN', (5, 2), (5, -1), 'LEFT'),
+                    ('ALIGN', (6, 2), (6, -1), 'CENTER'),
+                    ('ALIGN', (7, 2), (7, -1), 'CENTER'),
                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    # Outer border (box around entire table)
+                    # Grid borders - clean lines throughout
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                    # Thicker outer border
                     ('BOX', (0, 0), (-1, -1), 1, colors.black),
-                    # Vertical line between Theory and Practical (after column 3)
+                    # Vertical line between Theory and Practical
                     ('LINEAFTER', (3, 0), (3, -1), 1, colors.black),
-                    # Bottom line under column headers row
-                    ('LINEBELOW', (0, 1), (-1, 1), 0.5, colors.black),
                     # Padding
-                    ('TOPPADDING', (0, 0), (-1, -1), 3),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 4),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                    ('TOPPADDING', (0, 0), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 5),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 5),
                     # Font
                     ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 8),
                 ]))
                 elements.append(t)
                 
@@ -2790,18 +2819,18 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         # Define Page Templates for mixed orientation
         def onFirstPage(canvas, doc):
             canvas.saveState()
-            # Signature at absolute bottom
+            # Signature at absolute bottom (moved down by 2cm)
             signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
             if os.path.exists(signature_path):
                 try:
                     # Draw signature image
-                    canvas.drawImage(signature_path, A4[0] - 6*cm, 2*cm, width=4*cm, height=2*cm, mask='auto')
+                    canvas.drawImage(signature_path, A4[0] - 6*cm, 0*cm, width=4*cm, height=2*cm, mask='auto')
                 except:
                     pass
             
             # Draw "EXECUTIVE SECRETARY" text centered under signature
             canvas.setFont("Times-Bold", 10)
-            canvas.drawCentredString(A4[0] - 4*cm, 1.8*cm, "EXECUTIVE SECRETARY")
+            canvas.drawCentredString(A4[0] - 4*cm, -0.2*cm, "EXECUTIVE SECRETARY")
             canvas.restoreState()
 
         def onLaterPages(canvas, doc):
@@ -2867,7 +2896,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         )
 
         # Content - Page 1
-        elements.append(Spacer(1, 9*cm))
+        elements.append(Spacer(1, 7*cm))
         elements.append(Paragraph("TRANSCRIPT", title_style))
         elements.append(Spacer(1, 0.5*cm))
 
@@ -2900,24 +2929,24 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             [Paragraph("OCCUPATION:", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        info_table = Table(info_data, colWidths=[2.5*cm, 6*cm, 3*cm, 4*cm])
+        # Biodata table - consistent column widths
+        info_table = Table(info_data, colWidths=[2.8*cm, 6*cm, 2.5*cm, 5.7*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 2),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
             ('SPAN', (1, 3), (3, 3)), # Span center name
             ('SPAN', (1, 4), (3, 4)), # Span occupation
         ]))
 
+        # Display photo first (on top), then bio data below
         if candidate_photo:
-            combined_data = [[candidate_photo, info_table]]
-            combined_table = Table(combined_data, colWidths=[4*cm, 14*cm])
-            combined_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ]))
-            elements.append(combined_table)
-        else:
-            elements.append(info_table)
+            elements.append(candidate_photo)
+            elements.append(Spacer(1, 0.3*cm))
+        
+        elements.append(info_table)
 
         elements.append(Spacer(1, 0.5*cm))
         elements.append(Paragraph("ASSESSMENT RESULTS", section_heading_style))
