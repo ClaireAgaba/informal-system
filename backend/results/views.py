@@ -1707,7 +1707,7 @@ class FormalResultViewSet(viewsets.ViewSet):
             signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
             if os.path.exists(signature_path):
                 try:
-                    canvas.drawImage(signature_path, A4[0] - 6*cm, -0.5*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
+                    canvas.drawImage(signature_path, A4[0] - 6*cm, 1*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
                 except:
                     pass
             canvas.restoreState()
@@ -1775,7 +1775,7 @@ class FormalResultViewSet(viewsets.ViewSet):
         )
 
         # Content - Page 1 (No TRANSCRIPT title - paper already has it printed)
-        elements.append(Spacer(1, 5.5*cm))
+        elements.append(Spacer(1, 2.5*cm))
 
         # Photo with reg no caption (smaller font 6pt to fit on one line)
         photo_cell = None
@@ -2824,13 +2824,13 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             if os.path.exists(signature_path):
                 try:
                     # Draw signature image
-                    canvas.drawImage(signature_path, A4[0] - 6*cm, 0*cm, width=4*cm, height=2*cm, mask='auto')
+                    canvas.drawImage(signature_path, A4[0] - 6*cm, 1.5*cm, width=4*cm, height=2*cm, mask='auto')
                 except:
                     pass
             
             # Draw "EXECUTIVE SECRETARY" text centered under signature
             canvas.setFont("Times-Bold", 10)
-            canvas.drawCentredString(A4[0] - 4*cm, -0.2*cm, "EXECUTIVE SECRETARY")
+            canvas.drawCentredString(A4[0] - 4*cm, 1.3*cm, "EXECUTIVE SECRETARY")
             canvas.restoreState()
 
         def onLaterPages(canvas, doc):
@@ -2896,7 +2896,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         )
 
         # Content - Page 1
-        elements.append(Spacer(1, 7*cm))
+        elements.append(Spacer(1, 4*cm))
         elements.append(Paragraph("TRANSCRIPT", title_style))
         elements.append(Spacer(1, 0.5*cm))
 
