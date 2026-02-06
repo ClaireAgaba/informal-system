@@ -1053,8 +1053,8 @@ class ModularResultViewSet(viewsets.ViewSet):
             [Paragraph("<b>OCCUPATION:</b>", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        # Biodata table - 18.5cm total width
-        info_table = Table(info_data, colWidths=[2.5*cm, 11*cm, 2.5*cm, 2.5*cm])
+        # Biodata table - 17cm total width
+        info_table = Table(info_data, colWidths=[2.5*cm, 9*cm, 2.5*cm, 3*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 2),
@@ -1127,7 +1127,7 @@ class ModularResultViewSet(viewsets.ViewSet):
                     Paragraph(result.grade or "-", info_value_style)
                 ])
             
-            t = Table(results_data, colWidths=[2.5*cm, 10.5*cm, 2*cm, 2*cm], repeatRows=1)
+            t = Table(results_data, colWidths=[2.5*cm, 10*cm, 2*cm, 2.5*cm], repeatRows=1)
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
@@ -1175,7 +1175,7 @@ class ModularResultViewSet(viewsets.ViewSet):
         cu_summary = Table([
             [Paragraph(f"<b>Total Credit Units:</b> {level_total_cus}", info_value_style),
              Paragraph(f"<b>Credit Units:</b> {candidate_total_cus}", cu_right_style)]
-        ], colWidths=[9*cm, 8*cm], hAlign='LEFT')
+        ], colWidths=[8.5*cm, 8.5*cm], hAlign='LEFT')
         cu_summary.setStyle(TableStyle([
             ('LEFTPADDING', (0, 0), (-1, -1), 0),
             ('RIGHTPADDING', (0, 0), (-1, -1), 0),
@@ -1191,14 +1191,24 @@ class ModularResultViewSet(viewsets.ViewSet):
                 level = first_result.module.level
                 duration = level.contact_hours if level.contact_hours else "-"
                 level_award = level.award if level.award else "-"
-        elements.append(Paragraph(f"<b>Duration (Contact Hours):</b> {duration}", info_value_style))
 
         # Award (Modular award from occupation - stays on occupation for modular candidates)
         award = candidate.occupation.award_modular if candidate.occupation and candidate.occupation.award_modular else level_award
-        elements.append(Paragraph(f"<b>Award:</b> {award}", info_value_style))
 
-        # Completion Year (from assessment series)
-        elements.append(Paragraph(f"<b>Completion Year:</b> {completion_date or '-'}", info_value_style))
+        # Footer table for consistent alignment
+        footer_data = [
+            [Paragraph(f"<b>Duration (Contact Hours):</b> {duration}", info_value_style)],
+            [Paragraph(f"<b>Award:</b> {award}", info_value_style)],
+            [Paragraph(f"<b>Completion Year:</b> {completion_date or '-'}", info_value_style)],
+        ]
+        footer_table = Table(footer_data, colWidths=[17*cm], hAlign='LEFT')
+        footer_table.setStyle(TableStyle([
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 1),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+        ]))
+        elements.append(footer_table)
 
         elements.append(Spacer(1, 0.5*cm))
 
@@ -1856,8 +1866,8 @@ class FormalResultViewSet(viewsets.ViewSet):
             [Paragraph("<b>OCCUPATION:</b>", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        # Biodata table - wider column 2 for names, right columns pushed further right
-        info_table = Table(info_data, colWidths=[2.5*cm, 11*cm, 2.5*cm, 2.5*cm])
+        # Biodata table - 17cm total width
+        info_table = Table(info_data, colWidths=[2.5*cm, 9*cm, 2.5*cm, 3*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 2),
@@ -1997,8 +2007,8 @@ class FormalResultViewSet(viewsets.ViewSet):
                     
                     table_data.append(row)
                 
-                # Create table with 8 columns - CODE cols wider (2.5cm), balanced rest
-                col_widths = [2.5*cm, 3.6*cm, 1.2*cm, 1.2*cm, 2.5*cm, 3.6*cm, 1.2*cm, 1.2*cm]
+                # Create table with 8 columns - 17cm total width
+                col_widths = [2*cm, 3.5*cm, 1.2*cm, 1.8*cm, 2*cm, 3.5*cm, 1.2*cm, 1.8*cm]
                 t = Table(table_data, colWidths=col_widths)
                 t.setStyle(TableStyle([
                     # Span THEORY and PRACTICAL headers
@@ -2088,11 +2098,7 @@ class FormalResultViewSet(viewsets.ViewSet):
         else:
             elements.append(Paragraph("No results found.", info_value_style))
         
-        # Footer info - get duration and award from level
-        elements.append(Spacer(1, 0.3*cm))
-        elements.append(Paragraph(f"<b>Total Credit Units:</b> {level_total_cus}", info_value_style))
-        
-        # Get duration and award from level
+        # Footer info - get duration and award from level (in table for alignment)
         duration = "-"
         award = "-"
         if results.exists():
@@ -2100,10 +2106,22 @@ class FormalResultViewSet(viewsets.ViewSet):
             if first_result.level:
                 duration = first_result.level.contact_hours if first_result.level.contact_hours else "-"
                 award = first_result.level.award if first_result.level.award else "-"
-        elements.append(Paragraph(f"<b>Duration (Contact Hours):</b> {duration}", info_value_style))
-        elements.append(Paragraph(f"<b>Award:</b> {award}", info_value_style))
         
-        elements.append(Paragraph(f"<b>Completion Year:</b> {completion_date or '-'}", info_value_style))
+        elements.append(Spacer(1, 0.3*cm))
+        footer_data = [
+            [Paragraph(f"<b>Total Credit Units:</b> {level_total_cus}", info_value_style)],
+            [Paragraph(f"<b>Duration (Contact Hours):</b> {duration}", info_value_style)],
+            [Paragraph(f"<b>Award:</b> {award}", info_value_style)],
+            [Paragraph(f"<b>Completion Year:</b> {completion_date or '-'}", info_value_style)],
+        ]
+        footer_table = Table(footer_data, colWidths=[17*cm], hAlign='LEFT')
+        footer_table.setStyle(TableStyle([
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 1),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+        ]))
+        elements.append(footer_table)
             
         elements.append(Spacer(1, 0.5*cm))
 
@@ -2970,8 +2988,8 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             [Paragraph("OCCUPATION:", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        # Biodata table - 18.5cm total width
-        info_table = Table(info_data, colWidths=[2.5*cm, 11*cm, 2.5*cm, 2.5*cm])
+        # Biodata table - 17cm total width
+        info_table = Table(info_data, colWidths=[2.5*cm, 9*cm, 2.5*cm, 3*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 2),
