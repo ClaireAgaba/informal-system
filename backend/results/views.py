@@ -1106,7 +1106,7 @@ class ModularResultViewSet(viewsets.ViewSet):
         if results.exists():
             results_data = [[
                 Paragraph("CODE", info_label_style),
-                Paragraph("MODULE NAME", info_label_style),
+                Paragraph("MODULE ASSESSED", info_label_style),
                 Paragraph("CU", info_label_style),
                 Paragraph("GRADE", info_label_style)
             ]]
@@ -1710,6 +1710,29 @@ class FormalResultViewSet(viewsets.ViewSet):
         if not all_successful:
             return Response(
                 {'error': 'Candidate does not qualify for transcript. No successful results found.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Calculate earned credit units from successful results
+        earned_cus = 0
+        for r in formal_results:
+            if r.comment == 'Successful' and r.paper and r.paper.credit_units:
+                earned_cus += r.paper.credit_units
+        
+        # Calculate total required credit units from level papers
+        required_cus = 0
+        first_result = formal_results.first()
+        if first_result and first_result.level:
+            from occupations.models import Paper
+            level_papers = Paper.objects.filter(level=first_result.level)
+            for paper in level_papers:
+                if paper.credit_units:
+                    required_cus += paper.credit_units
+        
+        # Check if candidate has enough credit units
+        if earned_cus < required_cus:
+            return Response(
+                {'error': f'Candidate does not qualify for transcript. Earned credit units ({earned_cus}) are less than required ({required_cus}).'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
