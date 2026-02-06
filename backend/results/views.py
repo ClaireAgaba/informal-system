@@ -957,7 +957,8 @@ class ModularResultViewSet(viewsets.ViewSet):
             canvas.translate(0, A4[1])
             canvas.rotate(-90)
 
-        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=2.5*cm, leftMargin=1.5*cm, rightMargin=1.5*cm)
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=2.5*cm, leftMargin=1.5*cm, rightMargin=1.5*cm,
+                                 title=f'Transcript - {candidate.full_name}', author='UVTAB')
         
         # Create Frames
         frame_portrait = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='portrait')
@@ -1012,7 +1013,7 @@ class ModularResultViewSet(viewsets.ViewSet):
         )
 
         # Content - Page 1 (No TRANSCRIPT title - paper already has it printed)
-        elements.append(Spacer(1, 2.5*cm))
+        elements.append(Spacer(1, 3.5*cm))
 
         # Photo with reg no caption (smaller font 6pt to fit on one line)
         photo_cell = None
@@ -1133,7 +1134,10 @@ class ModularResultViewSet(viewsets.ViewSet):
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                 ('ALIGN', (2, 0), (2, -1), 'CENTER'),  # CU column centered
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                # Outer border only (no internal grid)
+                ('BOX', (0, 0), (-1, -1), 1, colors.black),
+                # Header row border
+                ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
                 ('TOPPADDING', (0, 0), (-1, -1), 4),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
                 ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
@@ -1770,7 +1774,8 @@ class FormalResultViewSet(viewsets.ViewSet):
             canvas.translate(0, A4[1])
             canvas.rotate(-90)
 
-        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=2.5*cm, leftMargin=1.5*cm, rightMargin=1.5*cm)
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=2.5*cm, leftMargin=1.5*cm, rightMargin=1.5*cm,
+                                 title=f'Transcript - {candidate.full_name}', author='UVTAB')
         
         # Create Frames
         frame_portrait = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='portrait')
@@ -1825,7 +1830,7 @@ class FormalResultViewSet(viewsets.ViewSet):
         )
 
         # Content - Page 1 (No TRANSCRIPT title - paper already has it printed)
-        elements.append(Spacer(1, 2.5*cm))
+        elements.append(Spacer(1, 3.5*cm))
 
         # Photo with reg no caption (smaller font 6pt to fit on one line)
         photo_cell = None
@@ -2026,10 +2031,11 @@ class FormalResultViewSet(viewsets.ViewSet):
                     ('ALIGN', (6, 2), (6, -1), 'CENTER'),
                     ('ALIGN', (7, 2), (7, -1), 'CENTER'),
                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                    # Grid borders - clean lines throughout
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-                    # Thicker outer border
+                    # Outer border only (no internal grid)
                     ('BOX', (0, 0), (-1, -1), 1, colors.black),
+                    # Header rows borders (rows 0 and 1)
+                    ('LINEBELOW', (0, 0), (-1, 0), 0.5, colors.black),
+                    ('LINEBELOW', (0, 1), (-1, 1), 1, colors.black),
                     # Vertical line between Theory and Practical
                     ('LINEAFTER', (3, 0), (3, -1), 1, colors.black),
                     # Padding
@@ -2900,7 +2906,8 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             canvas.translate(0, A4[1])
             canvas.rotate(-90)
 
-        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=3*cm, leftMargin=1.5*cm, rightMargin=1.5*cm)
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=3*cm, leftMargin=1.5*cm, rightMargin=1.5*cm,
+                                 title=f'Transcript - {candidate.full_name}', author='UVTAB')
         
         # Create Frames
         frame_portrait = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='portrait')
@@ -2955,7 +2962,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         )
 
         # Content - Page 1
-        elements.append(Spacer(1, 4*cm))
+        elements.append(Spacer(1, 5*cm))
         elements.append(Paragraph("TRANSCRIPT", title_style))
         elements.append(Spacer(1, 0.5*cm))
 
@@ -3039,7 +3046,10 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
                 ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                # Outer border only (no internal grid)
+                ('BOX', (0, 0), (-1, -1), 1, colors.black),
+                # Header row border
+                ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
                 ('TOPPADDING', (0, 0), (-1, -1), 4),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
                 ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
