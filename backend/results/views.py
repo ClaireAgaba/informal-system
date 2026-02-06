@@ -1053,8 +1053,8 @@ class ModularResultViewSet(viewsets.ViewSet):
             [Paragraph("<b>OCCUPATION:</b>", info_label_style), Paragraph(candidate.occupation.occ_name if candidate.occupation else "", info_value_style), "", ""],
         ]
 
-        # Biodata table - wider column 2 for names, right columns pushed further right
-        info_table = Table(info_data, colWidths=[2.5*cm, 9.5*cm, 2.5*cm, 3*cm])
+        # Biodata table - 17cm total width to match photo+QR row
+        info_table = Table(info_data, colWidths=[2.5*cm, 8.5*cm, 2.5*cm, 3.5*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 2),
@@ -1127,7 +1127,7 @@ class ModularResultViewSet(viewsets.ViewSet):
                     Paragraph(result.grade or "-", info_value_style)
                 ])
             
-            t = Table(results_data, colWidths=[2.5*cm, 9*cm, 1.5*cm, 2*cm], repeatRows=1)
+            t = Table(results_data, colWidths=[2.5*cm, 10.5*cm, 2*cm, 2*cm], repeatRows=1)
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
@@ -1857,7 +1857,7 @@ class FormalResultViewSet(viewsets.ViewSet):
         ]
 
         # Biodata table - wider column 2 for names, right columns pushed further right
-        info_table = Table(info_data, colWidths=[2.5*cm, 9.5*cm, 2.5*cm, 3*cm])
+        info_table = Table(info_data, colWidths=[2.5*cm, 8.5*cm, 2.5*cm, 3.5*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 2),
@@ -1996,8 +1996,8 @@ class FormalResultViewSet(viewsets.ViewSet):
                     
                     table_data.append(row)
                 
-                # Create table with 8 columns (wider CU columns to prevent wrapping)
-                col_widths = [1.5*cm, 3.6*cm, 1*cm, 1.5*cm, 1.5*cm, 3.6*cm, 1*cm, 1.5*cm]
+                # Create table with 8 columns - 17cm total width
+                col_widths = [1.5*cm, 4.1*cm, 1.2*cm, 1.7*cm, 1.5*cm, 4.1*cm, 1.2*cm, 1.7*cm]
                 t = Table(table_data, colWidths=col_widths)
                 t.setStyle(TableStyle([
                     # Span THEORY and PRACTICAL headers
@@ -2970,7 +2970,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         ]
 
         # Biodata table - wider column 2 for names, right columns pushed further right
-        info_table = Table(info_data, colWidths=[2.5*cm, 9.5*cm, 2.5*cm, 3*cm])
+        info_table = Table(info_data, colWidths=[2.5*cm, 8.5*cm, 2.5*cm, 3.5*cm])
         info_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('TOPPADDING', (0, 0), (-1, -1), 2),
@@ -3015,7 +3015,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
                     Paragraph(result.grade or "-", info_value_style)
                 ])
             
-            t = Table(results_data, colWidths=[2*cm, 3*cm, 5*cm, 3*cm, 2*cm], repeatRows=1)
+            t = Table(results_data, colWidths=[2*cm, 3.5*cm, 6*cm, 3.5*cm, 2*cm], repeatRows=1)
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
