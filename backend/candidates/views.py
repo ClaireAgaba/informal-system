@@ -12,10 +12,7 @@ from decimal import Decimal
 from datetime import date
 import openpyxl
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
-try:
-    import pycountry
-except ImportError:
-    pycountry = None
+from django_countries import countries
 from .models import Candidate, CandidateEnrollment, EnrollmentModule, EnrollmentPaper, CandidateActivity
 from .serializers import (
     CandidateListSerializer,
@@ -120,28 +117,32 @@ class CandidateViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def nationalities(self, request):
+        """Return list of countries with East Africa prioritized"""
+        # East African countries (using ISO codes)
+        east_africa_codes = ['UG', 'KE', 'TZ', 'RW', 'BI', 'SS']
+        
+        # Get East African countries first (in specific order)
         east_africa = [
-            'Uganda',
-            'Kenya',
-            'Tanzania',
-            'Rwanda',
-            'Burundi',
-            'South Sudan',
+            {'value': code, 'label': countries.name(code)} 
+            for code in east_africa_codes
         ]
-
-        if pycountry is None:
-            ordered = east_africa
-        else:
-            all_countries = sorted({c.name for c in pycountry.countries}, key=lambda x: x.lower())
-            remaining = [c for c in all_countries if c not in set(east_africa)]
-            ordered = east_africa + remaining
-
-        if 'Other' not in ordered:
-            ordered.append('Other')
-
-        return Response(
-            [{'value': name, 'label': name} for name in ordered]
-        )
+        
+        # Get remaining countries (alphabetically by name)
+        remaining_countries = [
+            {'value': code, 'label': name}
+            for code, name in countries
+            if code not in east_africa_codes
+        ]
+        # Sort remaining by label (country name)
+        remaining_countries.sort(key=lambda x: x['label'])
+        
+        # Combine: East Africa first, then rest
+        ordered = east_africa + remaining_countries
+        
+        # Optionally add 'Other' at the end
+        ordered.append({'value': 'OTHER', 'label': 'Other'})
+        
+        return Response(ordered)
     
     def get_serializer_class(self):
         """Return appropriate serializer based on action"""

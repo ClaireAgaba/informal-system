@@ -25,7 +25,7 @@ class CandidateListSerializer(serializers.ModelSerializer):
         model = Candidate
         fields = [
             'id', 'registration_number', 'payment_code', 'is_submitted', 'full_name', 'date_of_birth', 'gender',
-            'nationality', 'is_refugee', 'refugee_number', 'contact',
+            'nationality', 'candidate_country', 'is_refugee', 'refugee_number', 'contact',
             'district_name', 'village_name', 'has_disability', 'has_special_needs',
             'assessment_center', 'registration_category', 'occupation', 'sector',
             'entry_year', 'intake',
@@ -209,7 +209,7 @@ class CandidateCreateUpdateSerializer(serializers.ModelSerializer):
         model = Candidate
         fields = [
             'id',
-            'full_name', 'date_of_birth', 'gender', 'nationality',
+            'full_name', 'date_of_birth', 'gender', 'nationality', 'candidate_country',
             'is_refugee', 'refugee_number', 'contact', 'district', 'village',
             'has_disability', 'nature_of_disability', 'disability_specification',
             'assessment_center', 'assessment_center_branch', 'entry_year', 'intake',

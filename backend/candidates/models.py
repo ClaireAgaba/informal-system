@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.conf import settings
 from datetime import date
 from decimal import Decimal
+from django_countries.fields import CountryField
 from configurations.models import District, Village, NatureOfDisability
 from assessment_centers.models import AssessmentCenter, CenterBranch
 from occupations.models import Occupation
@@ -91,7 +92,15 @@ class Candidate(models.Model):
     nationality = models.CharField(
         max_length=100, 
         default='Uganda',
-        verbose_name='Nationality'
+        verbose_name='Nationality (Legacy)',
+        help_text='Legacy field - will be migrated to candidate_country'
+    )
+    candidate_country = CountryField(
+        blank=True,
+        null=True,
+        default='UG',
+        verbose_name='Country',
+        help_text='Country of nationality'
     )
     
     # Refugee Information
@@ -434,7 +443,10 @@ class Candidate(models.Model):
     def get_nationality_code(self):
         """Get nationality code for registration number"""
         # U for Ugandan, X for other nationalities
-        if self.nationality == 'Uganda':
+        # Use candidate_country (ISO code) if available, fallback to nationality
+        if self.candidate_country:
+            return 'U' if str(self.candidate_country) == 'UG' else 'X'
+        elif self.nationality == 'Uganda':
             return 'U'
         else:
             return 'X'

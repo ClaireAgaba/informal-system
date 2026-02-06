@@ -36,6 +36,7 @@ from occupations.models import (
     OccupationLevel
 )
 from assessment_series.models import AssessmentSeries
+from utils.nationality_helper import get_nationality_from_country
 
 
 def _log_candidate_activity(request, candidate, action, description='', details=None):
@@ -422,8 +423,11 @@ class ModularResultViewSet(viewsets.ViewSet):
                     candidate_photo = None
         
         # Build info data - single block layout like reference
+        # Get nationality demonym from candidate_country field
+        nationality_display = get_nationality_from_country(candidate.candidate_country) if candidate.candidate_country else "Ugandan"
+        
         info_data = [
-            ["NAME:", candidate.full_name or "", "NATIONALITY:", candidate.nationality or "Uganda"],
+            ["NAME:", candidate.full_name or "", "NATIONALITY:", nationality_display],
             ["REG NO:", candidate.registration_number or "", "BIRTHDATE:", candidate.date_of_birth.strftime("%d %b, %Y") if candidate.date_of_birth else ""],
             ["GENDER:", candidate.gender.capitalize() if candidate.gender else "", "PRINTDATE:", datetime.now().strftime("%d-%b-%Y")],
             ["CENTER NAME:", candidate.assessment_center.center_name if candidate.assessment_center else "", "", ""],
