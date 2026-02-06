@@ -76,36 +76,49 @@ class AwardsViewSet(viewsets.ViewSet):
             ))
         )
 
-        # Combine both querysets
-        candidates = (modular_candidates | formal_candidates).select_related(
+        # Combine both querysets with prefetch for efficiency
+        from django.db.models import Prefetch
+        
+        candidates_qs = (modular_candidates | formal_candidates).select_related(
             'occupation', 'assessment_center'
+        ).prefetch_related(
+            Prefetch('modularresult_set', queryset=ModularResult.objects.select_related('assessment_series').order_by('id')[:1]),
+            Prefetch('formalresult_set', queryset=FormalResult.objects.select_related('level', 'assessment_series').order_by('id')[:1]),
         ).order_by('-created_at')
 
-        # Build response data
+        # Get total count first
+        total_count = candidates_qs.count()
+        
+        # Paginate at database level
+        start = (page - 1) * page_size
+        end = start + page_size
+        candidates = list(candidates_qs[start:end])
+        
+        # Calculate pagination info
+        num_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+        has_next = page < num_pages
+        has_previous = page > 1
+
+        # Build response data (only for paginated subset)
         data = []
         for candidate in candidates:
-            # Get award and assessment series from results
+            # Get award and assessment series from prefetched results
             award = ""
-            assessment_series_name = ""
             completion_year = ""
             
             if candidate.registration_category == 'modular':
-                # For modular, get from occupation.award_modular and results
                 if candidate.occupation:
                     award = candidate.occupation.award_modular or ""
-                modular_result = ModularResult.objects.filter(candidate=candidate).select_related('assessment_series').first()
-                if modular_result and modular_result.assessment_series:
-                    assessment_series_name = modular_result.assessment_series.name or ""
-                    completion_year = modular_result.assessment_series.completion_year or ""
+                modular_results = list(candidate.modularresult_set.all())
+                if modular_results and modular_results[0].assessment_series:
+                    completion_year = modular_results[0].assessment_series.completion_year or modular_results[0].assessment_series.name or ""
             else:
-                # For formal, get from the level and results
-                formal_result = FormalResult.objects.filter(candidate=candidate).select_related('level', 'assessment_series').first()
-                if formal_result:
-                    if formal_result.level:
-                        award = formal_result.level.award or ""
-                    if formal_result.assessment_series:
-                        assessment_series_name = formal_result.assessment_series.name or ""
-                        completion_year = formal_result.assessment_series.completion_year or ""
+                formal_results = list(candidate.formalresult_set.all())
+                if formal_results:
+                    if formal_results[0].level:
+                        award = formal_results[0].level.award or ""
+                    if formal_results[0].assessment_series:
+                        completion_year = formal_results[0].assessment_series.completion_year or formal_results[0].assessment_series.name or ""
 
             data.append({
                 'id': candidate.id,
@@ -123,26 +136,19 @@ class AwardsViewSet(viewsets.ViewSet):
                 'intake_code': candidate.intake or "",
                 'assessment_intake': candidate.get_intake_display() if candidate.intake else "",
                 'award': award,
-                'completion_date': completion_year or assessment_series_name,
+                'completion_date': completion_year,
                 'printed': bool(candidate.transcript_serial_number),
                 'tr_sno': candidate.transcript_serial_number or "",
             })
 
-        # Paginate results
-        paginator = Paginator(data, page_size)
-        try:
-            page_obj = paginator.page(page)
-        except EmptyPage:
-            page_obj = paginator.page(paginator.num_pages)
-        
         return Response({
-            'results': list(page_obj),
-            'count': paginator.count,
-            'num_pages': paginator.num_pages,
-            'current_page': page_obj.number,
+            'results': data,
+            'count': total_count,
+            'num_pages': num_pages,
+            'current_page': page,
             'page_size': page_size,
-            'has_next': page_obj.has_next(),
-            'has_previous': page_obj.has_previous(),
+            'has_next': has_next,
+            'has_previous': has_previous,
         })
 
     @action(detail=False, methods=['post'], url_path='bulk-print-transcripts')
