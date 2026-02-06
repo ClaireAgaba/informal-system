@@ -32,15 +32,15 @@ class AwardsViewSet(viewsets.ViewSet):
         - Practical: 65%
         - Theory: 50%
         """
-        # Get pagination parameters
+        # Get pagination parameters (page_size=0 means load all)
         page = request.query_params.get('page', 1)
-        page_size = request.query_params.get('page_size', 100)
+        page_size = request.query_params.get('page_size', 0)  # Default to all
         try:
             page = int(page)
-            page_size = min(int(page_size), 100)  # Max 100 per page
+            page_size = int(page_size)
         except (ValueError, TypeError):
             page = 1
-            page_size = 100
+            page_size = 0
         # Get candidates with modular results where ALL results are passing
         # A result is failing if: mark < 65 for practical, mark < 50 for theory, or mark is null/-1
         modular_candidates = Candidate.objects.filter(
@@ -89,15 +89,21 @@ class AwardsViewSet(viewsets.ViewSet):
         # Get total count first
         total_count = candidates_qs.count()
         
-        # Paginate at database level
-        start = (page - 1) * page_size
-        end = start + page_size
-        candidates = list(candidates_qs[start:end])
-        
-        # Calculate pagination info
-        num_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
-        has_next = page < num_pages
-        has_previous = page > 1
+        # Paginate at database level (page_size=0 means load all)
+        if page_size > 0:
+            start = (page - 1) * page_size
+            end = start + page_size
+            candidates = list(candidates_qs[start:end])
+            num_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+            has_next = page < num_pages
+            has_previous = page > 1
+        else:
+            # Load all candidates
+            candidates = list(candidates_qs)
+            num_pages = 1
+            has_next = False
+            has_previous = False
+            page = 1
 
         # Build response data (only for paginated subset)
         data = []

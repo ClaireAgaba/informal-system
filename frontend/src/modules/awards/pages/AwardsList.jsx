@@ -44,7 +44,7 @@ const AwardsList = () => {
   const fetchAwards = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/awards/?page_size=100');
+      const response = await apiClient.get('/awards/');
       // Handle paginated response
       const data = response.data.results || response.data;
       setAwards(Array.isArray(data) ? data : []);
