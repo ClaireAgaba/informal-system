@@ -1713,47 +1713,39 @@ class FormalResultViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Calculate earned credit units from successful results
-        # For module-based: get CU from exam (module), for paper-based: get CU from paper
-        earned_cus = 0
-        seen_modules = set()  # Track unique modules to avoid double-counting
-        for r in formal_results:
-            if r.comment == 'Successful':
-                if r.exam and r.exam.credit_units:
-                    # Module-based: count each module once (even if theory+practical)
-                    if r.exam.id not in seen_modules:
-                        earned_cus += r.exam.credit_units
-                        seen_modules.add(r.exam.id)
-                elif r.paper and r.paper.credit_units:
-                    # Paper-based
-                    earned_cus += r.paper.credit_units
-        
-        # Calculate total required credit units from level
-        required_cus = 0
+        # Check qualification based on level structure type
         first_result = formal_results.first()
         if first_result and first_result.level:
             level = first_result.level
+            
             if level.structure_type == 'modules':
-                # Module-based: sum credit units from all modules in level
-                from occupations.models import OccupationModule
-                level_modules = OccupationModule.objects.filter(level=level, is_active=True)
-                for module in level_modules:
-                    if module.credit_units:
-                        required_cus += module.credit_units
+                # For module-based levels, formal candidates just need Theory + Practical passed
+                has_theory_passed = any(r.type == 'theory' and r.comment == 'Successful' for r in formal_results)
+                has_practical_passed = any(r.type == 'practical' and r.comment == 'Successful' for r in formal_results)
+                
+                if not (has_theory_passed and has_practical_passed):
+                    missing = []
+                    if not has_theory_passed:
+                        missing.append("Theory")
+                    if not has_practical_passed:
+                        missing.append("Practical")
+                    return Response(
+                        {'error': f'Candidate does not qualify for transcript. Missing successful results for: {", ".join(missing)}.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
             else:
-                # Paper-based: sum credit units from all papers in level
+                # For paper-based levels, check credit units
                 from occupations.models import OccupationPaper
+                earned_cus = sum(r.paper.credit_units for r in formal_results if r.comment == 'Successful' and r.paper and r.paper.credit_units)
+                
                 level_papers = OccupationPaper.objects.filter(level=level, is_active=True)
-                for paper in level_papers:
-                    if paper.credit_units:
-                        required_cus += paper.credit_units
-        
-        # Check if candidate has enough credit units
-        if earned_cus < required_cus:
-            return Response(
-                {'error': f'Candidate does not qualify for transcript. Earned credit units ({earned_cus}) are less than required ({required_cus}).'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+                required_cus = sum(p.credit_units for p in level_papers if p.credit_units)
+                
+                if earned_cus < required_cus:
+                    return Response(
+                        {'error': f'Candidate does not qualify for transcript. Earned credit units ({earned_cus}) are less than required ({required_cus}).'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
         
         # Create PDF buffer
         buffer = BytesIO()

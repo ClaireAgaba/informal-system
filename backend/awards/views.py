@@ -13,50 +13,66 @@ from io import BytesIO
 from PyPDF2 import PdfMerger
 
 
-def get_formal_candidate_credit_units(candidate):
+def formal_candidate_qualifies(candidate):
     """
-    Calculate earned and required credit units for a formal candidate.
-    Returns (earned_cus, required_cus) tuple.
+    Check if a formal candidate qualifies for transcript/awards.
+    
+    For module-based levels: Check if both Theory AND Practical results exist and passed
+    (formal candidates don't take individual modules, just Theory+Practical papers)
+    
+    For paper-based levels: Check if earned CUs >= required CUs
+    
+    Returns (qualifies: bool, message: str) tuple.
     """
-    formal_results = candidate.formal_results.all()
+    formal_results = list(candidate.formal_results.all())
     if not formal_results:
-        return 0, 0
+        return False, "No results found"
     
     # Get the level from first result
-    first_result = formal_results[0] if formal_results else None
-    if not first_result or not first_result.level:
-        return 0, 0
+    first_result = formal_results[0]
+    if not first_result.level:
+        return False, "No level found"
     
     level = first_result.level
     
-    # Calculate earned credit units
-    earned_cus = 0
-    seen_modules = set()
-    for r in formal_results:
-        if r.comment == 'Successful':
-            if r.exam and r.exam.credit_units:
-                # Module-based: count each module once
-                if r.exam.id not in seen_modules:
-                    earned_cus += r.exam.credit_units
-                    seen_modules.add(r.exam.id)
-            elif r.paper and r.paper.credit_units:
-                # Paper-based
-                earned_cus += r.paper.credit_units
-    
-    # Calculate required credit units from level
-    required_cus = 0
     if level.structure_type == 'modules':
-        level_modules = OccupationModule.objects.filter(level=level, is_active=True)
-        for module in level_modules:
-            if module.credit_units:
-                required_cus += module.credit_units
+        # For module-based levels, formal candidates just need Theory + Practical passed
+        has_theory_passed = False
+        has_practical_passed = False
+        
+        for r in formal_results:
+            if r.comment == 'Successful':
+                if r.type == 'theory':
+                    has_theory_passed = True
+                elif r.type == 'practical':
+                    has_practical_passed = True
+        
+        if has_theory_passed and has_practical_passed:
+            return True, "Qualified"
+        else:
+            missing = []
+            if not has_theory_passed:
+                missing.append("Theory")
+            if not has_practical_passed:
+                missing.append("Practical")
+            return False, f"Missing successful results for: {', '.join(missing)}"
     else:
+        # For paper-based levels, check credit units
+        earned_cus = 0
+        for r in formal_results:
+            if r.comment == 'Successful' and r.paper and r.paper.credit_units:
+                earned_cus += r.paper.credit_units
+        
+        required_cus = 0
         level_papers = OccupationPaper.objects.filter(level=level, is_active=True)
         for paper in level_papers:
             if paper.credit_units:
                 required_cus += paper.credit_units
-    
-    return earned_cus, required_cus
+        
+        if earned_cus >= required_cus:
+            return True, "Qualified"
+        else:
+            return False, f"Earned credit units ({earned_cus}) are less than required ({required_cus})"
 
 
 class AwardsViewSet(viewsets.ViewSet):
@@ -168,10 +184,10 @@ class AwardsViewSet(viewsets.ViewSet):
                 if modular_results_list and modular_results_list[0].assessment_series:
                     completion_year = modular_results_list[0].assessment_series.completion_year or modular_results_list[0].assessment_series.name or ""
             else:
-                # For formal candidates, check credit units requirement
-                earned_cus, required_cus = get_formal_candidate_credit_units(candidate)
-                if earned_cus < required_cus:
-                    # Skip this candidate - doesn't have enough credit units
+                # For formal candidates, check qualification
+                qualifies, _ = formal_candidate_qualifies(candidate)
+                if not qualifies:
+                    # Skip this candidate - doesn't qualify
                     continue
                 
                 formal_results_list = list(candidate.formal_results.all())
