@@ -167,20 +167,20 @@ class OccupationModuleViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], url_path='by-occupation')
     def by_occupation(self, request):
-        """Get all modules for a specific occupation"""
+        """Get all active modules for a specific occupation"""
         occupation_id = request.query_params.get('occupation', None) or request.query_params.get('occupation_id', None)
         if occupation_id:
-            modules = self.queryset.filter(occupation_id=occupation_id)
+            modules = self.queryset.filter(occupation_id=occupation_id, is_active=True)
             serializer = self.get_serializer(modules, many=True)
             return Response({'results': serializer.data})
         return Response({'error': 'occupation parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=False, methods=['get'])
     def by_level(self, request):
-        """Get all modules for a specific level"""
+        """Get all active modules for a specific level"""
         level_id = request.query_params.get('level_id', None)
         if level_id:
-            modules = self.queryset.filter(level_id=level_id)
+            modules = self.queryset.filter(level_id=level_id, is_active=True)
             serializer = self.get_serializer(modules, many=True)
             return Response(serializer.data)
         return Response({'error': 'level_id parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
