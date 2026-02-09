@@ -62,7 +62,7 @@ const CandidateList = () => {
       }
     }
   }, []);
-  
+
   // Filter states
   const [filters, setFilters] = useState({
     registration_category: '',
@@ -149,20 +149,20 @@ const CandidateList = () => {
   const handleExport = async () => {
     try {
       setExporting(true);
-      const payload = selectAllPages 
+      const payload = selectAllPages
         ? { export_all: true, ...filters, search: searchQuery }
         : { ids: selectedCandidates };
-      
+
       const response = await candidateApi.export(payload);
-      
+
       // Create download link
-      const blob = new Blob([response.data], { 
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `candidates_export_${new Date().toISOString().slice(0,10)}.xlsx`;
+      link.download = `candidates_export_${new Date().toISOString().slice(0, 10)}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -192,34 +192,34 @@ const CandidateList = () => {
       alert('Please select candidates to de-enroll');
       return;
     }
-    
+
     const confirmed = window.confirm(
       `Are you sure you want to de-enroll ${selectedCandidates.length} candidate(s)? This will remove their enrollments and reset fees. Candidates with marks cannot be de-enrolled.`
     );
-    
+
     if (!confirmed) return;
-    
+
     try {
       setDeEnrolling(true);
       const response = await candidateApi.bulkDeEnroll(selectedCandidates);
       const { success_count, skipped_with_marks, failed } = response.data;
-      
+
       // Show results
       if (success_count > 0) {
         toast.success(`Successfully de-enrolled ${success_count} candidate(s)`);
       }
-      
+
       if (skipped_with_marks?.length > 0) {
         toast.error(
           `${skipped_with_marks.length} candidate(s) skipped - they have marks`,
           { duration: 5000 }
         );
       }
-      
+
       if (failed?.length > 0) {
         toast.error(`${failed.length} candidate(s) failed to de-enroll`);
       }
-      
+
       // Refresh the list
       queryClient.invalidateQueries(['candidates']);
       setSelectedCandidates([]);
@@ -238,23 +238,23 @@ const CandidateList = () => {
       alert('Please select candidates to clear data');
       return;
     }
-    
+
     const confirmed = window.confirm(
       `Are you sure you want to clear ALL results, enrollments, and fees for ${selectedCandidates.length} candidate(s)? This action cannot be undone.`
     );
-    
+
     if (!confirmed) return;
-    
+
     try {
       setClearing(true);
       const response = await candidateApi.bulkClearData(selectedCandidates);
       const { cleared } = response.data;
-      
+
       const totalResults = cleared.modular_results + cleared.formal_results + cleared.workers_pas_results;
       toast.success(
         `Cleared ${totalResults} results and ${cleared.enrollments} enrollments for ${cleared.candidates_processed} candidate(s)`
       );
-      
+
       // Refresh the list
       queryClient.invalidateQueries(['candidates']);
       setSelectedCandidates([]);
@@ -282,16 +282,16 @@ const CandidateList = () => {
       setChangingOccupation(true);
       const response = await candidateApi.bulkChangeOccupation(selectedCandidates, newOccupationId);
       const { successful, failed, failed_details } = response.data;
-      
+
       if (successful > 0) {
         toast.success(`Changed occupation for ${successful} candidate(s)`);
       }
-      
+
       if (failed > 0) {
         const reasons = failed_details.slice(0, 3).map(f => `${f.name}: ${f.reason}`).join('\n');
         toast.error(`Failed for ${failed} candidate(s):\n${reasons}${failed > 3 ? `\n...and ${failed - 3} more` : ''}`);
       }
-      
+
       // Refresh the list
       queryClient.invalidateQueries(['candidates']);
       setSelectedCandidates([]);
@@ -320,16 +320,16 @@ const CandidateList = () => {
       setChangingRegCategory(true);
       const response = await candidateApi.bulkChangeRegistrationCategory(selectedCandidates, newRegCategory);
       const { successful, failed, failed_details } = response.data;
-      
+
       if (successful > 0) {
         toast.success(`Changed registration category for ${successful} candidate(s)`);
       }
-      
+
       if (failed > 0) {
         const reasons = failed_details.slice(0, 3).map(f => `${f.name}: ${f.reason}`).join('\n');
         toast.error(`Failed for ${failed} candidate(s):\n${reasons}${failed > 3 ? `\n...and ${failed - 3} more` : ''}`);
       }
-      
+
       // Refresh the list
       queryClient.invalidateQueries(['candidates']);
       setSelectedCandidates([]);
@@ -358,11 +358,11 @@ const CandidateList = () => {
       setChangingSeries(true);
       const response = await candidateApi.bulkChangeSeries(selectedCandidates, newSeriesId);
       const { updated } = response.data;
-      
+
       toast.success(
         `Moved ${updated.candidates} candidate(s): ${updated.enrollments} enrollments, ${updated.modular_results + updated.formal_results + updated.workers_pas_results} results updated`
       );
-      
+
       // Refresh the list
       queryClient.invalidateQueries(['candidates']);
       setSelectedCandidates([]);
@@ -391,11 +391,11 @@ const CandidateList = () => {
       setChangingCenter(true);
       const response = await candidateApi.bulkChangeCenter(selectedCandidates, newCenterId);
       const { updated } = response.data;
-      
+
       toast.success(
         `Moved ${updated.candidates} candidate(s) to new center. ${updated.fees_moved} fee record(s) updated.`
       );
-      
+
       // Refresh the list
       queryClient.invalidateQueries(['candidates']);
       setSelectedCandidates([]);
@@ -607,7 +607,7 @@ const CandidateList = () => {
                 )}
               </span>
               {selectedCandidates.length === candidates.length && !selectAllPages && totalCount > pageSize && (
-                <button 
+                <button
                   onClick={handleSelectAllPages}
                   className="text-sm text-blue-600 hover:text-blue-800 underline"
                 >
@@ -615,7 +615,7 @@ const CandidateList = () => {
                 </button>
               )}
               {selectAllPages && (
-                <button 
+                <button
                   onClick={handleClearSelection}
                   className="text-sm text-gray-600 hover:text-gray-800 underline"
                 >
@@ -654,14 +654,14 @@ const CandidateList = () => {
                 <option value="enroll">Enroll</option>
                 <option value="de-enroll">{deEnrolling ? 'De-enrolling...' : 'De-enroll'}</option>
                 <option value="change-series">{changingSeries ? 'Changing...' : 'Change Assessment Series'}</option>
-                <option value="change-center">{changingCenter ? 'Changing...' : 'Change Assessment Center'}</option>
+
                 <option value="change-occupation">{changingOccupation ? 'Changing...' : 'Change Occupation'}</option>
                 <option value="change-reg-category">{changingRegCategory ? 'Changing...' : 'Change Registration Category'}</option>
-                <option value="clear-data">{clearing ? 'Clearing...' : 'Clear Results, Enrollments & Fees'}</option>
+
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                  <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/>
+                  <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
                 </svg>
               </div>
             </div>
@@ -906,8 +906,8 @@ const CandidateList = () => {
                 </tr>
               ) : (
                 candidates.map((candidate) => (
-                  <tr 
-                    key={candidate.id} 
+                  <tr
+                    key={candidate.id}
                     className="hover:bg-gray-50 cursor-pointer"
                     onClick={() => navigate(`/candidates/${candidate.id}`)}
                   >
@@ -947,16 +947,15 @@ const CandidateList = () => {
                       {candidate.assessment_center?.center_name || '-'}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        candidate.registration_category === 'modular'
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${candidate.registration_category === 'modular'
                           ? 'bg-blue-100 text-blue-800'
                           : candidate.registration_category === 'formal'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-purple-100 text-purple-800'
-                      }`}>
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-purple-100 text-purple-800'
+                        }`}>
                         {candidate.registration_category === 'modular' ? 'Modular' :
-                         candidate.registration_category === 'formal' ? 'Formal' :
-                         candidate.registration_category === 'workers_pas' ? "Worker's PAS" : '-'}
+                          candidate.registration_category === 'formal' ? 'Formal' :
+                            candidate.registration_category === 'workers_pas' ? "Worker's PAS" : '-'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
@@ -990,15 +989,14 @@ const CandidateList = () => {
                       )}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        candidate.verification_status === 'verified'
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${candidate.verification_status === 'verified'
                           ? 'bg-green-100 text-green-800'
                           : candidate.verification_status === 'declined'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
                         {candidate.verification_status === 'verified' ? 'Verified' :
-                         candidate.verification_status === 'declined' ? 'Declined' : 'Pending'}
+                          candidate.verification_status === 'declined' ? 'Declined' : 'Pending'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">
@@ -1038,7 +1036,7 @@ const CandidateList = () => {
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => {/* Handle delete */}}
+                          onClick={() => {/* Handle delete */ }}
                           className="text-gray-600 hover:text-red-600"
                           title="Delete"
                         >
@@ -1089,7 +1087,7 @@ const CandidateList = () => {
               >
                 <ChevronLeft className="w-4 h-4" />
               </Button>
-              
+
               {[...Array(Math.min(5, totalPages))].map((_, i) => {
                 const pageNum = i + 1;
                 return (
@@ -1103,7 +1101,7 @@ const CandidateList = () => {
                   </Button>
                 );
               })}
-              
+
               <Button
                 variant="outline"
                 size="sm"
@@ -1116,7 +1114,7 @@ const CandidateList = () => {
           </div>
         </div>
       </Card>
-      
+
       {/* Bulk Enroll Modal */}
       <BulkEnrollModal
         isOpen={showBulkEnrollModal}

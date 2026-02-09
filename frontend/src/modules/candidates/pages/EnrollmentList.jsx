@@ -32,7 +32,7 @@ const EnrollmentList = () => {
   const [showFilters, setShowFilters] = useState(true);
   const [selectedEnrollments, setSelectedEnrollments] = useState([]);
   const [selectAllPages, setSelectAllPages] = useState(false);
-  
+
   // Modal states
   const [showChangeSeriesModal, setShowChangeSeriesModal] = useState(false);
   const [showDeEnrollModal, setShowDeEnrollModal] = useState(false);
@@ -46,7 +46,7 @@ const EnrollmentList = () => {
   const [availableLevels, setAvailableLevels] = useState([]);
   const [availableModules, setAvailableModules] = useState([]);
   const [availablePapers, setAvailablePapers] = useState([]);
-  
+
   const [filters, setFilters] = useState({
     registration_category: '',
     assessment_series: '',
@@ -160,7 +160,7 @@ const EnrollmentList = () => {
       toast.error('Please select a new assessment series');
       return;
     }
-    
+
     setIsProcessing(true);
     try {
       const payload = {
@@ -169,10 +169,10 @@ const EnrollmentList = () => {
         enrollment_ids: selectAllPages ? [] : selectedEnrollments,
         filters: selectAllPages ? { ...filters, search: searchQuery } : {},
       };
-      
+
       const response = await candidateApi.bulkChangeEnrollmentSeries(payload);
       toast.success(response.data.message);
-      
+
       // Reset state
       setShowChangeSeriesModal(false);
       setSelectedNewSeries('');
@@ -194,9 +194,9 @@ const EnrollmentList = () => {
         enrollment_ids: selectAllPages ? [] : selectedEnrollments,
         filters: selectAllPages ? { ...filters, search: searchQuery } : {},
       };
-      
+
       const response = await candidateApi.bulkDeEnrollByEnrollment(payload);
-      
+
       if (response.data.skipped_with_marks?.length > 0) {
         toast.warning(
           `${response.data.success_count} de-enrolled, ${response.data.skipped_with_marks.length} skipped (have marks)`
@@ -204,7 +204,7 @@ const EnrollmentList = () => {
       } else {
         toast.success(response.data.message);
       }
-      
+
       // Reset state
       setShowDeEnrollModal(false);
       handleClearSelection();
@@ -225,10 +225,10 @@ const EnrollmentList = () => {
         enrollment_ids: selectAllPages ? [] : selectedEnrollments,
         filters: selectAllPages ? { ...filters, search: searchQuery } : {},
       };
-      
+
       const response = await candidateApi.bulkClearEnrollmentData(payload);
       toast.success(response.data.message);
-      
+
       // Reset state
       setShowClearDataModal(false);
       handleClearSelection();
@@ -248,24 +248,24 @@ const EnrollmentList = () => {
       toast.error('Please filter by occupation first to load levels/modules');
       return;
     }
-    
+
     try {
       // Fetch occupation details for levels
       const occResponse = await occupationApi.getById(occupationId);
       const occupation = occResponse.data;
-      
+
       if (occupation.levels) {
         setAvailableLevels(occupation.levels);
       }
-      
+
       // Fetch modules directly for this occupation
       const modulesResponse = await occupationApi.modules.getAll({ occupation: occupationId });
       setAvailableModules(modulesResponse.data.results || modulesResponse.data || []);
-      
+
       // Fetch papers for Worker's PAS
       const papersResponse = await occupationApi.papers.getAll({ occupation: occupationId });
       setAvailablePapers(papersResponse.data.results || papersResponse.data || []);
-      
+
       setShowUpdateEnrollmentModal(true);
     } catch (error) {
       toast.error('Failed to load occupation data');
@@ -278,7 +278,7 @@ const EnrollmentList = () => {
       toast.error('Please select a level, modules, or papers');
       return;
     }
-    
+
     setIsProcessing(true);
     try {
       const payload = {
@@ -289,9 +289,9 @@ const EnrollmentList = () => {
         module_ids: selectedModules,
         paper_ids: selectedPapers,
       };
-      
+
       const response = await candidateApi.bulkUpdateEnrollment(payload);
-      
+
       if (response.data.skipped?.length > 0) {
         toast.warning(
           `${response.data.updated_count} updated, ${response.data.skipped.length} skipped`
@@ -299,7 +299,7 @@ const EnrollmentList = () => {
       } else {
         toast.success(response.data.message);
       }
-      
+
       // Reset state
       setShowUpdateEnrollmentModal(false);
       setSelectedLevel('');
@@ -458,7 +458,7 @@ const EnrollmentList = () => {
                 )}
               </span>
               {selectedEnrollments.length === enrollments.length && !selectAllPages && totalCount > pageSize && (
-                <button 
+                <button
                   onClick={handleSelectAllPages}
                   className="text-sm text-blue-600 hover:text-blue-800 underline"
                 >
@@ -466,7 +466,7 @@ const EnrollmentList = () => {
                 </button>
               )}
               {(selectAllPages || selectedEnrollments.length > 0) && (
-                <button 
+                <button
                   onClick={handleClearSelection}
                   className="text-sm text-gray-600 hover:text-gray-800 underline"
                 >
@@ -493,15 +493,7 @@ const EnrollmentList = () => {
                 <UserMinus className="w-4 h-4 mr-1" />
                 De-enroll
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowClearDataModal(true)}
-                className="text-red-600 border-red-300 hover:bg-red-50"
-              >
-                <Trash2 className="w-4 h-4 mr-1" />
-                Clear Data
-              </Button>
+
               <Button
                 variant="outline"
                 size="sm"
@@ -583,8 +575,8 @@ const EnrollmentList = () => {
                 </tr>
               ) : (
                 enrollments.map((enrollment) => (
-                  <tr 
-                    key={enrollment.id} 
+                  <tr
+                    key={enrollment.id}
                     className="hover:bg-gray-50 cursor-pointer"
                     onClick={() => navigate(`/candidates/${enrollment.candidate_id}`)}
                   >
@@ -626,7 +618,7 @@ const EnrollmentList = () => {
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm text-gray-600">
-                        {enrollment.registration_category === 'modular' || enrollment.registration_category === 'workers_pas' 
+                        {enrollment.registration_category === 'modular' || enrollment.registration_category === 'workers_pas'
                           ? (enrollment.modules_display || '-')
                           : '-'
                         }
@@ -908,7 +900,7 @@ const EnrollmentList = () => {
                   <strong>{getSelectionCount()}</strong> enrollment(s) selected
                 </p>
               </div>
-              
+
               {/* For Formal - Select Level */}
               {filters.registration_category === 'formal' && (
                 <div>
@@ -929,7 +921,7 @@ const EnrollmentList = () => {
                   </select>
                 </div>
               )}
-              
+
               {/* For Modular - Select Modules */}
               {filters.registration_category === 'modular' && (
                 <div>
@@ -962,7 +954,7 @@ const EnrollmentList = () => {
                   </p>
                 </div>
               )}
-              
+
               {/* For Worker's PAS - Select Papers */}
               {filters.registration_category === 'workers_pas' && (
                 <div>
@@ -995,7 +987,7 @@ const EnrollmentList = () => {
                   </p>
                 </div>
               )}
-              
+
               {/* General message if no category filter */}
               {!filters.registration_category && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">

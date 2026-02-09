@@ -947,7 +947,7 @@ class ModularResultViewSet(viewsets.ViewSet):
             signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
             if os.path.exists(signature_path):
                 try:
-                    canvas.drawImage(signature_path, A4[0] - 6*cm, 1*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
+                    canvas.drawImage(signature_path, A4[0] - 6*cm, 0.4*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
                 except:
                     pass
             canvas.restoreState()
@@ -1821,7 +1821,7 @@ class FormalResultViewSet(viewsets.ViewSet):
             signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
             if os.path.exists(signature_path):
                 try:
-                    canvas.drawImage(signature_path, A4[0] - 6*cm, 1*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
+                    canvas.drawImage(signature_path, A4[0] - 6*cm, 0.4*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
                 except:
                     pass
             canvas.restoreState()
@@ -2968,7 +2968,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             if os.path.exists(signature_path):
                 try:
                     # Draw signature image
-                    canvas.drawImage(signature_path, A4[0] - 6*cm, 1.5*cm, width=4*cm, height=2*cm, mask='auto')
+                    canvas.drawImage(signature_path, A4[0] - 6*cm, 0.4*cm, width=4*cm, height=2*cm, mask='auto', preserveAspectRatio=True)
                 except:
                     pass
             
