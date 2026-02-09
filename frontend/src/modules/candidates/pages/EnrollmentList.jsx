@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -32,6 +32,19 @@ const EnrollmentList = () => {
   const [showFilters, setShowFilters] = useState(true);
   const [selectedEnrollments, setSelectedEnrollments] = useState([]);
   const [selectAllPages, setSelectAllPages] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Load current user from localStorage
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        setCurrentUser(JSON.parse(userStr));
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+  }, []);
 
   // Modal states
   const [showChangeSeriesModal, setShowChangeSeriesModal] = useState(false);
@@ -493,6 +506,17 @@ const EnrollmentList = () => {
                 <UserMinus className="w-4 h-4 mr-1" />
                 De-enroll
               </Button>
+              {currentUser?.user_type !== 'center_representative' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowClearDataModal(true)}
+                  className="text-red-600 border-red-300 hover:bg-red-50"
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  Clear Data
+                </Button>
+              )}
 
               <Button
                 variant="outline"

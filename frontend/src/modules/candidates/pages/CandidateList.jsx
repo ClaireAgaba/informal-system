@@ -654,10 +654,14 @@ const CandidateList = () => {
                 <option value="enroll">Enroll</option>
                 <option value="de-enroll">{deEnrolling ? 'De-enrolling...' : 'De-enroll'}</option>
                 <option value="change-series">{changingSeries ? 'Changing...' : 'Change Assessment Series'}</option>
-
+                {currentUser?.user_type !== 'center_representative' && (
+                  <option value="change-center">{changingCenter ? 'Changing...' : 'Change Assessment Center'}</option>
+                )}
                 <option value="change-occupation">{changingOccupation ? 'Changing...' : 'Change Occupation'}</option>
                 <option value="change-reg-category">{changingRegCategory ? 'Changing...' : 'Change Registration Category'}</option>
-
+                {currentUser?.user_type !== 'center_representative' && (
+                  <option value="clear-data">{clearing ? 'Clearing...' : 'Clear Results, Enrollments & Fees'}</option>
+                )}
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
@@ -948,10 +952,10 @@ const CandidateList = () => {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${candidate.registration_category === 'modular'
-                          ? 'bg-blue-100 text-blue-800'
-                          : candidate.registration_category === 'formal'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-purple-100 text-purple-800'
+                        ? 'bg-blue-100 text-blue-800'
+                        : candidate.registration_category === 'formal'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-purple-100 text-purple-800'
                         }`}>
                         {candidate.registration_category === 'modular' ? 'Modular' :
                           candidate.registration_category === 'formal' ? 'Formal' :
@@ -990,10 +994,10 @@ const CandidateList = () => {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${candidate.verification_status === 'verified'
-                          ? 'bg-green-100 text-green-800'
-                          : candidate.verification_status === 'declined'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-gray-100 text-gray-800'
+                        ? 'bg-green-100 text-green-800'
+                        : candidate.verification_status === 'declined'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-gray-100 text-gray-800'
                         }`}>
                         {candidate.verification_status === 'verified' ? 'Verified' :
                           candidate.verification_status === 'declined' ? 'Declined' : 'Pending'}

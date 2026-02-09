@@ -2089,6 +2089,9 @@ def bulk_change_candidate_series(request):
 @permission_classes([AllowAny])
 def bulk_clear_candidate_data(request):
     """Bulk clear all results, enrollments, and fees for multiple candidates"""
+    if request.user.is_authenticated and request.user.user_type == 'center_representative':
+        return Response({'error': 'Permission denied. Center representatives cannot perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+
     candidate_ids = request.data.get('candidate_ids', [])
     
     if not candidate_ids:
@@ -2139,6 +2142,9 @@ def bulk_clear_candidate_data(request):
 @permission_classes([AllowAny])
 def bulk_change_candidate_center(request):
     """Bulk change assessment center for multiple candidates"""
+    if request.user.is_authenticated and request.user.user_type == 'center_representative':
+        return Response({'error': 'Permission denied. Center representatives cannot perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+
     candidate_ids = request.data.get('candidate_ids', [])
     new_center_id = request.data.get('new_center_id')
     
@@ -2250,6 +2256,9 @@ def bulk_change_candidate_center(request):
 @permission_classes([AllowAny])
 def clear_candidate_data(request, candidate_id):
     """Clear all results, enrollments, and fees for a candidate"""
+    if request.user.is_authenticated and request.user.user_type == 'center_representative':
+        return Response({'error': 'Permission denied. Center representatives cannot perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+
     try:
         candidate = Candidate.objects.get(id=candidate_id)
     except Candidate.DoesNotExist:
@@ -2785,6 +2794,9 @@ def bulk_de_enroll_by_enrollment(request):
 @permission_classes([AllowAny])
 def bulk_clear_enrollment_data(request):
     """Bulk clear results, enrollments, and fees for specific enrollments"""
+    if request.user.is_authenticated and request.user.user_type == 'center_representative':
+        return Response({'error': 'Permission denied. Center representatives cannot perform this action.'}, status=status.HTTP_403_FORBIDDEN)
+
     enrollment_ids = request.data.get('enrollment_ids', [])
     select_all = request.data.get('select_all', False)
     filters = request.data.get('filters', {})
