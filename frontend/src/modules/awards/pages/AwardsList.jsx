@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Award, Search, ChevronLeft, ChevronRight, User, Filter, Printer, RefreshCw, X, AlertTriangle, Download, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -12,6 +12,8 @@ const AwardsList = () => {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedCandidates, setSelectedCandidates] = useState([]);
   const [selectAllFiltered, setSelectAllFiltered] = useState(false);
@@ -21,7 +23,11 @@ const AwardsList = () => {
   const [reprintReasons, setReprintReasons] = useState([]);
   const [selectedReprintReason, setSelectedReprintReason] = useState('');
   const [showValidationError, setShowValidationError] = useState(false);
-  const itemsPerPage = 20;
+  const [uniqueCenters, setUniqueCenters] = useState([]);
+  const [uniqueOccupations, setUniqueOccupations] = useState([]);
+  const [exporting, setExporting] = useState(false);
+  const itemsPerPage = 50;
+  const searchTimerRef = useRef(null);
 
   // Filter states
   const [filters, setFilters] = useState({
@@ -33,22 +39,31 @@ const AwardsList = () => {
     occupation: '',
   });
 
-  // Get unique centers and occupations for filter dropdowns
-  const uniqueCenters = [...new Set(awards.map((a) => a.center_name).filter(Boolean))].sort();
-  const uniqueOccupations = [...new Set(awards.map((a) => a.occupation_name).filter(Boolean))].sort();
+  const buildQueryParams = useCallback((page = 1, overrides = {}) => {
+    const params = new URLSearchParams();
+    params.set('page', page);
+    params.set('page_size', itemsPerPage);
+    const search = overrides.search !== undefined ? overrides.search : searchQuery;
+    if (search) params.set('search', search);
+    const f = overrides.filters || filters;
+    if (f.registration_category) params.set('category', f.registration_category);
+    if (f.entry_year) params.set('entry_year', f.entry_year);
+    if (f.intake) params.set('intake', f.intake);
+    if (f.center) params.set('center', f.center);
+    if (f.occupation) params.set('occupation', f.occupation);
+    if (f.printed) params.set('printed', f.printed);
+    return params.toString();
+  }, [searchQuery, filters]);
 
-  useEffect(() => {
-    fetchAwards();
-    fetchReprintReasons();
-  }, []);
-
-  const fetchAwards = async () => {
+  const fetchAwards = useCallback(async (page = 1, overrides = {}) => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/awards/');
-      // Handle paginated response
-      const data = response.data.results || response.data;
-      setAwards(Array.isArray(data) ? data : []);
+      const qs = buildQueryParams(page, overrides);
+      const response = await apiClient.get(`/awards/?${qs}`);
+      setAwards(response.data.results || []);
+      setTotalCount(response.data.count || 0);
+      setTotalPages(response.data.num_pages || 1);
+      setCurrentPage(response.data.current_page || page);
       setError(null);
     } catch (err) {
       console.error('Error fetching awards:', err);
@@ -56,12 +71,27 @@ const AwardsList = () => {
     } finally {
       setLoading(false);
     }
+  }, [buildQueryParams]);
+
+  const fetchFilterOptions = async () => {
+    try {
+      const response = await apiClient.get('/awards/filter-options/');
+      setUniqueCenters(response.data.centers || []);
+      setUniqueOccupations(response.data.occupations || []);
+    } catch (err) {
+      console.error('Error fetching filter options:', err);
+    }
   };
+
+  useEffect(() => {
+    fetchAwards(1);
+    fetchFilterOptions();
+    fetchReprintReasons();
+  }, []);
 
   const fetchReprintReasons = async () => {
     try {
       const response = await apiClient.get('/configurations/reprint-reasons/');
-      // Handle both paginated and non-paginated responses
       const data = response.data.results || response.data;
       setReprintReasons(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -70,83 +100,66 @@ const AwardsList = () => {
     }
   };
 
+  // Debounced search
+  const handleSearchChange = (value) => {
+    setSearchQuery(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setCurrentPage(1);
+      setSelectedCandidates([]);
+      setSelectAllFiltered(false);
+      fetchAwards(1, { search: value });
+    }, 400);
+  };
+
+  // Apply filters
+  const handleFilterChange = (newFilters) => {
+    setFilters(newFilters);
+    setCurrentPage(1);
+    setSelectedCandidates([]);
+    setSelectAllFiltered(false);
+    fetchAwards(1, { filters: newFilters });
+  };
+
   // Clear filters
   const handleClearFilters = () => {
-    setFilters({
+    const empty = {
       registration_category: '',
       entry_year: '',
       intake: '',
       center: '',
       printed: '',
       occupation: '',
-    });
+    };
+    setFilters(empty);
     setSearchQuery('');
     setCurrentPage(1);
+    setSelectedCandidates([]);
+    setSelectAllFiltered(false);
+    fetchAwards(1, { search: '', filters: empty });
   };
-
-  // Filter awards based on search and filters
-  const filteredAwards = awards.filter((award) => {
-    const searchLower = searchQuery.toLowerCase();
-    
-    // Search filter
-    const matchesSearch = !searchQuery || (
-      award.full_name?.toLowerCase().includes(searchLower) ||
-      award.registration_number?.toLowerCase().includes(searchLower) ||
-      award.center_name?.toLowerCase().includes(searchLower) ||
-      award.occupation_name?.toLowerCase().includes(searchLower) ||
-      award.award?.toLowerCase().includes(searchLower)
-    );
-
-    // Category filter
-    const matchesCategory = !filters.registration_category || 
-      award.registration_category_code === filters.registration_category;
-
-    // Entry year filter
-    const matchesYear = !filters.entry_year || 
-      String(award.entry_year) === filters.entry_year;
-
-    // Intake filter
-    const matchesIntake = !filters.intake || 
-      award.intake_code === filters.intake;
-
-    // Center filter
-    const matchesCenter = !filters.center || 
-      award.center_name === filters.center;
-
-    // Printed filter
-    const matchesPrinted = filters.printed === '' || 
-      (filters.printed === 'yes' && award.printed) ||
-      (filters.printed === 'no' && !award.printed);
-
-    // Occupation filter
-    const matchesOccupation = !filters.occupation || 
-      award.occupation_name === filters.occupation;
-
-    return matchesSearch && matchesCategory && matchesYear && matchesIntake && matchesCenter && matchesPrinted && matchesOccupation;
-  });
-
-  // Pagination
-  const totalPages = Math.ceil(filteredAwards.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedAwards = filteredAwards.slice(startIndex, startIndex + itemsPerPage);
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
+    setSelectedCandidates([]);
+    fetchAwards(page);
   };
+
+  const startIndex = (currentPage - 1) * itemsPerPage;
 
   // Selection handlers
   const handleSelectAll = () => {
-    if (selectedCandidates.length === paginatedAwards.length && !selectAllFiltered) {
+    if (selectedCandidates.length === awards.length && !selectAllFiltered) {
       setSelectedCandidates([]);
       setSelectAllFiltered(false);
     } else {
-      setSelectedCandidates(paginatedAwards.map((a) => a.id));
+      setSelectedCandidates(awards.map((a) => a.id));
     }
   };
 
   const handleSelectAllFiltered = () => {
     setSelectAllFiltered(true);
-    setSelectedCandidates(paginatedAwards.map((a) => a.id));
+    setSelectedCandidates(awards.map((a) => a.id));
   };
 
   const handleClearSelection = () => {
@@ -165,60 +178,69 @@ const AwardsList = () => {
   };
 
   // Export to Excel handler
-  const handleExportExcel = (exportType) => {
-    let dataToExport = [];
+  const handleExportExcel = async (exportType) => {
+    try {
+      setExporting(true);
+      let dataToExport = [];
 
-    if (exportType === 'selected') {
-      const ids = selectAllFiltered
-        ? filteredAwards.map((a) => a.id)
-        : selectedCandidates;
-      dataToExport = filteredAwards.filter((a) => ids.includes(a.id));
-    } else {
-      dataToExport = filteredAwards;
+      if (exportType === 'selected' && !selectAllFiltered) {
+        dataToExport = awards.filter((a) => selectedCandidates.includes(a.id));
+      } else {
+        // Fetch all matching records for export
+        const qs = buildQueryParams(1);
+        const params = new URLSearchParams(qs);
+        params.set('page_size', '0');
+        const response = await apiClient.get(`/awards/?${params.toString()}`);
+        dataToExport = response.data.results || [];
+      }
+
+      if (dataToExport.length === 0) {
+        toast.error('No data to export');
+        return;
+      }
+
+      const exportData = dataToExport.map((award, index) => ({
+        '#': index + 1,
+        'Reg No': award.registration_number || '',
+        'Full Name': award.full_name || '',
+        'Center': award.center_name || '',
+        'Reg Category': award.registration_category || '',
+        'Occupation': award.occupation_name || '',
+        'Entry Year': award.entry_year || '',
+        'Assessment Intake': award.assessment_intake || '',
+        'Award': award.award || '',
+        'Completion Date': award.completion_date || '',
+        'Printed': award.printed ? 'Yes' : 'No',
+        'TR SNo': award.tr_sno || '',
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Awards');
+
+      const colWidths = Object.keys(exportData[0]).map((key) => ({
+        wch: Math.max(key.length, ...exportData.map((row) => String(row[key]).length)) + 2,
+      }));
+      worksheet['!cols'] = colWidths;
+
+      const filename = exportType === 'selected'
+        ? `Awards_Selected_${dataToExport.length}_${new Date().toISOString().slice(0, 10)}.xlsx`
+        : `Awards_All_${dataToExport.length}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+      XLSX.writeFile(workbook, filename);
+      toast.success(`Exported ${dataToExport.length} record(s) to Excel`);
+    } catch (err) {
+      console.error('Export error:', err);
+      toast.error('Failed to export data');
+    } finally {
+      setExporting(false);
     }
-
-    if (dataToExport.length === 0) {
-      toast.error('No data to export');
-      return;
-    }
-
-    const exportData = dataToExport.map((award, index) => ({
-      '#': index + 1,
-      'Reg No': award.registration_number || '',
-      'Full Name': award.full_name || '',
-      'Center': award.center_name || '',
-      'Reg Category': award.registration_category || '',
-      'Occupation': award.occupation_name || '',
-      'Entry Year': award.entry_year || '',
-      'Assessment Intake': award.assessment_intake || '',
-      'Award': award.award || '',
-      'Completion Date': award.completion_date || '',
-      'Printed': award.printed ? 'Yes' : 'No',
-      'TR SNo': award.tr_sno || '',
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Awards');
-
-    // Auto-size columns
-    const colWidths = Object.keys(exportData[0]).map((key) => ({
-      wch: Math.max(key.length, ...exportData.map((row) => String(row[key]).length)) + 2,
-    }));
-    worksheet['!cols'] = colWidths;
-
-    const filename = exportType === 'selected'
-      ? `Awards_Selected_${dataToExport.length}_${new Date().toISOString().slice(0, 10)}.xlsx`
-      : `Awards_All_${dataToExport.length}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-
-    XLSX.writeFile(workbook, filename);
-    toast.success(`Exported ${dataToExport.length} record(s) to Excel`);
   };
 
   // Print transcripts handler
   const handlePrintTranscripts = async () => {
     const ids = selectAllFiltered 
-      ? filteredAwards.map((a) => a.id) 
+      ? awards.map((a) => a.id) 
       : selectedCandidates;
     
     // Check if any selected candidate already has a printed transcript
@@ -251,7 +273,7 @@ const AwardsList = () => {
       
       toast.success(`Generated transcripts for ${ids.length} candidate(s)`);
       handleClearSelection();
-      fetchAwards(); // Refresh to update printed status
+      fetchAwards(currentPage); // Refresh to update printed status
     } catch (err) {
       console.error('Error printing transcripts:', err);
       if (err.response?.data?.error) {
@@ -272,7 +294,7 @@ const AwardsList = () => {
     }
     
     const ids = selectAllFiltered 
-      ? filteredAwards.map((a) => a.id) 
+      ? awards.map((a) => a.id) 
       : selectedCandidates;
     
     try {
@@ -354,10 +376,10 @@ const AwardsList = () => {
             className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm"
           >
             <Download className="w-4 h-4 mr-2" />
-            Export All ({filteredAwards.length})
+            Export All ({totalCount})
           </button>
           <div className="text-sm text-gray-500">
-            Total: <span className="font-semibold text-gray-900">{filteredAwards.length}</span> candidates
+            Total: <span className="font-semibold text-gray-900">{totalCount}</span> candidates
           </div>
         </div>
       </div>
@@ -373,10 +395,7 @@ const AwardsList = () => {
                 type="text"
                 placeholder="Search by name, reg no, center, occupation..."
                 value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(1);
-                }}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
@@ -400,10 +419,7 @@ const AwardsList = () => {
                 </label>
                 <select
                   value={filters.registration_category}
-                  onChange={(e) => {
-                    setFilters({ ...filters, registration_category: e.target.value });
-                    setCurrentPage(1);
-                  }}
+                  onChange={(e) => handleFilterChange({ ...filters, registration_category: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">All</option>
@@ -420,10 +436,7 @@ const AwardsList = () => {
                 <input
                   type="number"
                   value={filters.entry_year}
-                  onChange={(e) => {
-                    setFilters({ ...filters, entry_year: e.target.value });
-                    setCurrentPage(1);
-                  }}
+                  onChange={(e) => handleFilterChange({ ...filters, entry_year: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g. 2025"
                 />
@@ -435,10 +448,7 @@ const AwardsList = () => {
                 </label>
                 <select
                   value={filters.intake}
-                  onChange={(e) => {
-                    setFilters({ ...filters, intake: e.target.value });
-                    setCurrentPage(1);
-                  }}
+                  onChange={(e) => handleFilterChange({ ...filters, intake: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">All</option>
@@ -456,10 +466,7 @@ const AwardsList = () => {
                 </label>
                 <select
                   value={filters.center}
-                  onChange={(e) => {
-                    setFilters({ ...filters, center: e.target.value });
-                    setCurrentPage(1);
-                  }}
+                  onChange={(e) => handleFilterChange({ ...filters, center: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">All</option>
@@ -475,10 +482,7 @@ const AwardsList = () => {
                 </label>
                 <select
                   value={filters.occupation}
-                  onChange={(e) => {
-                    setFilters({ ...filters, occupation: e.target.value });
-                    setCurrentPage(1);
-                  }}
+                  onChange={(e) => handleFilterChange({ ...filters, occupation: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">All</option>
@@ -494,10 +498,7 @@ const AwardsList = () => {
                 </label>
                 <select
                   value={filters.printed}
-                  onChange={(e) => {
-                    setFilters({ ...filters, printed: e.target.value });
-                    setCurrentPage(1);
-                  }}
+                  onChange={(e) => handleFilterChange({ ...filters, printed: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">All</option>
@@ -526,17 +527,17 @@ const AwardsList = () => {
             <div className="flex items-center space-x-4">
               <span className="text-sm font-medium text-blue-900">
                 {selectAllFiltered ? (
-                  <>All {filteredAwards.length} candidates selected</>
+                  <>All {totalCount} candidates selected</>
                 ) : (
                   <>{selectedCandidates.length} candidate(s) selected</>
                 )}
               </span>
-              {selectedCandidates.length === paginatedAwards.length && !selectAllFiltered && filteredAwards.length > itemsPerPage && (
+              {selectedCandidates.length === awards.length && !selectAllFiltered && totalCount > itemsPerPage && (
                 <button 
                   onClick={handleSelectAllFiltered}
                   className="text-sm text-blue-600 hover:text-blue-800 underline"
                 >
-                  Select all {filteredAwards.length} candidates
+                  Select all {totalCount} candidates
                 </button>
               )}
               {(selectedCandidates.length > 0 || selectAllFiltered) && (
@@ -586,7 +587,7 @@ const AwardsList = () => {
                 <th className="px-4 py-3 text-left">
                   <input
                     type="checkbox"
-                    checked={paginatedAwards.length > 0 && selectedCandidates.length === paginatedAwards.length}
+                    checked={awards.length > 0 && selectedCandidates.length === awards.length}
                     onChange={handleSelectAll}
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                   />
@@ -630,14 +631,14 @@ const AwardsList = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {paginatedAwards.length === 0 ? (
+              {awards.length === 0 ? (
                 <tr>
                   <td colSpan="13" className="px-4 py-8 text-center text-gray-500">
                     No candidates found
                   </td>
                 </tr>
               ) : (
-                paginatedAwards.map((award) => (
+                awards.map((award) => (
                   <tr
                     key={award.id}
                     className={`hover:bg-gray-50 cursor-pointer ${selectedCandidates.includes(award.id) ? 'bg-blue-50' : ''}`}
@@ -720,7 +721,7 @@ const AwardsList = () => {
         {totalPages > 1 && (
           <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
             <div className="text-sm text-gray-500">
-              Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredAwards.length)} of {filteredAwards.length} results
+              Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalCount)} of {totalCount} results
             </div>
             <div className="flex items-center space-x-2">
               <button

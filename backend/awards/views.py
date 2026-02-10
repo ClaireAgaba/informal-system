@@ -11,8 +11,6 @@ from configurations.models import ReprintReason
 from occupations.models import OccupationModule, OccupationPaper
 from io import BytesIO
 from PyPDF2 import PdfMerger
-from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
 from django.conf import settings
 
 
@@ -88,34 +86,15 @@ class AwardsViewSet(viewsets.ViewSet):
     """
     permission_classes = [IsAuthenticated]
 
-    @method_decorator(cache_page(60 * 15))
-    def list(self, request):
-        """
-        List all candidates who have passed (all results are passing).
-        Returns candidates from both modular and formal categories.
-        Supports pagination with 'page' and 'page_size' query params.
+    def _get_base_queryset(self):
+        """Build the base queryset of qualifying candidates."""
+        from django.db.models import Prefetch
         
-        Pass marks:
-        - Practical: 65%
-        - Theory: 50%
-        """
-        # Get pagination parameters (page_size=0 means load all)
-        page = request.query_params.get('page', 1)
-        page_size = request.query_params.get('page_size', 0)  # Default to all
-        try:
-            page = int(page)
-            page_size = int(page_size)
-        except (ValueError, TypeError):
-            page = 1
-            page_size = 0
-        # Get candidates with modular results where ALL results are passing
-        # A result is failing if: mark < 65 for practical, mark < 50 for theory, or mark is null/-1
         modular_candidates = Candidate.objects.filter(
             registration_category='modular'
         ).filter(
             Exists(ModularResult.objects.filter(candidate=OuterRef('pk')))
         ).exclude(
-            # Exclude if any result is failing
             Exists(ModularResult.objects.filter(
                 candidate=OuterRef('pk')
             ).filter(
@@ -126,13 +105,11 @@ class AwardsViewSet(viewsets.ViewSet):
             ))
         )
 
-        # Get candidates with formal results where ALL results are passing
         formal_candidates = Candidate.objects.filter(
             registration_category='formal'
         ).filter(
             Exists(FormalResult.objects.filter(candidate=OuterRef('pk')))
         ).exclude(
-            # Exclude if any result is failing
             Exists(FormalResult.objects.filter(
                 candidate=OuterRef('pk')
             ).filter(
@@ -143,99 +120,161 @@ class AwardsViewSet(viewsets.ViewSet):
             ))
         )
 
-        # Combine both querysets with prefetch for efficiency
-        from django.db.models import Prefetch
-        
-        candidates_qs = (modular_candidates | formal_candidates).select_related(
+        return (modular_candidates | formal_candidates).select_related(
             'occupation', 'assessment_center'
         ).prefetch_related(
             Prefetch('modular_results', queryset=ModularResult.objects.select_related('assessment_series')),
             Prefetch('formal_results', queryset=FormalResult.objects.select_related('level', 'assessment_series', 'paper')),
-        ).order_by('-created_at')
+        )
 
-        # Get total count first
-        total_count = candidates_qs.count()
+    def _apply_filters(self, qs, request):
+        """Apply search and filter query params to the queryset."""
+        search = request.query_params.get('search', '').strip()
+        if search:
+            qs = qs.filter(
+                Q(full_name__icontains=search) |
+                Q(registration_number__icontains=search) |
+                Q(assessment_center__center_name__icontains=search) |
+                Q(occupation__occ_name__icontains=search) |
+                Q(transcript_serial_number__icontains=search)
+            )
+
+        category = request.query_params.get('category', '')
+        if category:
+            qs = qs.filter(registration_category=category)
+
+        entry_year = request.query_params.get('entry_year', '')
+        if entry_year:
+            qs = qs.filter(entry_year=entry_year)
+
+        intake = request.query_params.get('intake', '')
+        if intake:
+            qs = qs.filter(intake=intake)
+
+        center = request.query_params.get('center', '')
+        if center:
+            qs = qs.filter(assessment_center__center_name=center)
+
+        occupation = request.query_params.get('occupation', '')
+        if occupation:
+            qs = qs.filter(occupation__occ_name=occupation)
+
+        printed = request.query_params.get('printed', '')
+        if printed == 'yes':
+            qs = qs.filter(transcript_serial_number__isnull=False).exclude(transcript_serial_number='')
+        elif printed == 'no':
+            qs = qs.filter(Q(transcript_serial_number__isnull=True) | Q(transcript_serial_number=''))
+
+        collection_status = request.query_params.get('collection_status', '')
+        if collection_status == 'taken':
+            qs = qs.filter(transcript_collected=True)
+        elif collection_status == 'not_taken':
+            qs = qs.filter(transcript_collected=False)
+
+        return qs
+
+    def _serialize_candidate(self, candidate):
+        """Serialize a single candidate to dict."""
+        award = ""
+        completion_year = ""
         
-        # Paginate at database level (page_size=0 means load all)
+        if candidate.registration_category == 'modular':
+            if candidate.occupation:
+                award = candidate.occupation.award_modular or ""
+            modular_results_list = list(candidate.modular_results.all())
+            if modular_results_list and modular_results_list[0].assessment_series:
+                completion_year = modular_results_list[0].assessment_series.completion_year or modular_results_list[0].assessment_series.name or ""
+        else:
+            qualifies, _ = formal_candidate_qualifies(candidate)
+            if not qualifies:
+                return None
+            
+            formal_results_list = list(candidate.formal_results.all())
+            if formal_results_list:
+                if formal_results_list[0].level:
+                    award = formal_results_list[0].level.award or ""
+                if formal_results_list[0].assessment_series:
+                    completion_year = formal_results_list[0].assessment_series.completion_year or formal_results_list[0].assessment_series.name or ""
+
+        return {
+            'id': candidate.id,
+            'passport_photo': candidate.passport_photo.url if candidate.passport_photo else None,
+            'registration_number': candidate.registration_number or "",
+            'full_name': candidate.full_name or "",
+            'center_name': candidate.assessment_center.center_name if candidate.assessment_center else "",
+            'center_id': candidate.assessment_center.id if candidate.assessment_center else None,
+            'registration_category': candidate.get_registration_category_display() if candidate.registration_category else "",
+            'registration_category_code': candidate.registration_category or "",
+            'occupation_name': candidate.occupation.occ_name if candidate.occupation else "",
+            'occupation_id': candidate.occupation.id if candidate.occupation else None,
+            'entry_year': candidate.entry_year or "",
+            'intake': candidate.get_intake_display() if candidate.intake else "",
+            'intake_code': candidate.intake or "",
+            'assessment_intake': candidate.get_intake_display() if candidate.intake else "",
+            'award': award,
+            'completion_date': completion_year,
+            'printed': bool(candidate.transcript_serial_number),
+            'tr_sno': candidate.transcript_serial_number or "",
+            'transcript_collected': candidate.transcript_collected,
+            'transcript_collector_name': candidate.transcript_collector_name or "",
+            'transcript_collector_phone': candidate.transcript_collector_phone or "",
+            'transcript_collection_date': str(candidate.transcript_collection_date) if candidate.transcript_collection_date else "",
+        }
+
+    def list(self, request):
+        """
+        List candidates who have passed. Server-side pagination, search, and filtering.
+        Default page_size=50. Use page_size=0 to load all (for export).
+        """
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 50))
+
+        candidates_qs = self._get_base_queryset()
+        candidates_qs = self._apply_filters(candidates_qs, request)
+        candidates_qs = candidates_qs.order_by('-created_at')
+
+        total_count = candidates_qs.count()
+
         if page_size > 0:
             start = (page - 1) * page_size
             end = start + page_size
             candidates = list(candidates_qs[start:end])
-            num_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
-            has_next = page < num_pages
-            has_previous = page > 1
         else:
-            # Load all candidates
             candidates = list(candidates_qs)
-            num_pages = 1
-            has_next = False
-            has_previous = False
-            page = 1
 
-        # Build response data (only for paginated subset)
-        # Also filter out formal candidates without enough credit units
         data = []
-        qualified_count = 0
         for candidate in candidates:
-            # Get award and assessment series from prefetched results
-            award = ""
-            completion_year = ""
-            
-            if candidate.registration_category == 'modular':
-                if candidate.occupation:
-                    award = candidate.occupation.award_modular or ""
-                modular_results_list = list(candidate.modular_results.all())
-                if modular_results_list and modular_results_list[0].assessment_series:
-                    completion_year = modular_results_list[0].assessment_series.completion_year or modular_results_list[0].assessment_series.name or ""
-            else:
-                # For formal candidates, check qualification
-                qualifies, _ = formal_candidate_qualifies(candidate)
-                if not qualifies:
-                    # Skip this candidate - doesn't qualify
-                    continue
-                
-                formal_results_list = list(candidate.formal_results.all())
-                if formal_results_list:
-                    if formal_results_list[0].level:
-                        award = formal_results_list[0].level.award or ""
-                    if formal_results_list[0].assessment_series:
-                        completion_year = formal_results_list[0].assessment_series.completion_year or formal_results_list[0].assessment_series.name or ""
+            item = self._serialize_candidate(candidate)
+            if item:
+                data.append(item)
 
-            qualified_count += 1
-            data.append({
-                'id': candidate.id,
-                'passport_photo': candidate.passport_photo.url if candidate.passport_photo else None,
-                'registration_number': candidate.registration_number or "",
-                'full_name': candidate.full_name or "",
-                'center_name': candidate.assessment_center.center_name if candidate.assessment_center else "",
-                'center_id': candidate.assessment_center.id if candidate.assessment_center else None,
-                'registration_category': candidate.get_registration_category_display() if candidate.registration_category else "",
-                'registration_category_code': candidate.registration_category or "",
-                'occupation_name': candidate.occupation.occ_name if candidate.occupation else "",
-                'occupation_id': candidate.occupation.id if candidate.occupation else None,
-                'entry_year': candidate.entry_year or "",
-                'intake': candidate.get_intake_display() if candidate.intake else "",
-                'intake_code': candidate.intake or "",
-                'assessment_intake': candidate.get_intake_display() if candidate.intake else "",
-                'award': award,
-                'completion_date': completion_year,
-                'printed': bool(candidate.transcript_serial_number),
-                'tr_sno': candidate.transcript_serial_number or "",
-                'transcript_collected': candidate.transcript_collected,
-                'transcript_collector_name': candidate.transcript_collector_name or "",
-                'transcript_collector_phone': candidate.transcript_collector_phone or "",
-                'transcript_collection_date': str(candidate.transcript_collection_date) if candidate.transcript_collection_date else "",
-            })
+        num_pages = max(1, (total_count + page_size - 1) // page_size) if page_size > 0 else 1
 
         return Response({
             'results': data,
-            'count': qualified_count,  # Only count candidates who actually qualify
+            'count': total_count,
             'num_pages': num_pages,
             'current_page': page,
             'page_size': page_size,
-            'has_next': has_next,
-            'has_previous': has_previous,
+            'has_next': page < num_pages if page_size > 0 else False,
+            'has_previous': page > 1,
         })
+
+    @action(detail=False, methods=['get'], url_path='filter-options')
+    def filter_options(self, request):
+        """Return unique centers and occupations for filter dropdowns."""
+        candidates_qs = self._get_base_queryset()
+        centers = list(
+            candidates_qs.exclude(assessment_center__isnull=True)
+            .values_list('assessment_center__center_name', flat=True)
+            .distinct().order_by('assessment_center__center_name')
+        )
+        occupations = list(
+            candidates_qs.exclude(occupation__isnull=True)
+            .values_list('occupation__occ_name', flat=True)
+            .distinct().order_by('occupation__occ_name')
+        )
+        return Response({'centers': centers, 'occupations': occupations})
 
     @action(detail=False, methods=['post'], url_path='update-collection-status')
     def update_collection_status(self, request):

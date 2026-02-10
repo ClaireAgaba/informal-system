@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Search, ChevronLeft, ChevronRight, User, Filter, ArrowLeft, Download, X, Edit2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -12,6 +12,8 @@ const TranscriptLogs = () => {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   const [selectedAward, setSelectedAward] = useState(null);
@@ -24,7 +26,10 @@ const TranscriptLogs = () => {
   const [saving, setSaving] = useState(false);
   const [selectedCandidates, setSelectedCandidates] = useState([]);
   const [selectAllFiltered, setSelectAllFiltered] = useState(false);
-  const itemsPerPage = 20;
+  const [uniqueCenters, setUniqueCenters] = useState([]);
+  const [exporting, setExporting] = useState(false);
+  const itemsPerPage = 50;
+  const searchTimerRef = useRef(null);
 
   // Filter states
   const [filters, setFilters] = useState({
@@ -32,21 +37,28 @@ const TranscriptLogs = () => {
     collection_status: '',
   });
 
-  // Get unique centers for filter dropdown
-  const uniqueCenters = [...new Set(awards.map((a) => a.center_name).filter(Boolean))].sort();
+  const buildQueryParams = useCallback((page = 1, overrides = {}) => {
+    const params = new URLSearchParams();
+    params.set('page', page);
+    params.set('page_size', itemsPerPage);
+    params.set('printed', 'yes');
+    const search = overrides.search !== undefined ? overrides.search : searchQuery;
+    if (search) params.set('search', search);
+    const f = overrides.filters || filters;
+    if (f.center) params.set('center', f.center);
+    if (f.collection_status) params.set('collection_status', f.collection_status);
+    return params.toString();
+  }, [searchQuery, filters]);
 
-  useEffect(() => {
-    fetchPrintedAwards();
-  }, []);
-
-  const fetchPrintedAwards = async () => {
+  const fetchPrintedAwards = useCallback(async (page = 1, overrides = {}) => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/awards/');
-      const data = response.data.results || response.data;
-      // Only keep candidates whose transcripts have been printed
-      const printedOnly = (Array.isArray(data) ? data : []).filter((a) => a.printed);
-      setAwards(printedOnly);
+      const qs = buildQueryParams(page, overrides);
+      const response = await apiClient.get(`/awards/?${qs}`);
+      setAwards(response.data.results || []);
+      setTotalCount(response.data.count || 0);
+      setTotalPages(response.data.num_pages || 1);
+      setCurrentPage(response.data.current_page || page);
       setError(null);
     } catch (err) {
       console.error('Error fetching awards:', err);
@@ -54,17 +66,60 @@ const TranscriptLogs = () => {
     } finally {
       setLoading(false);
     }
+  }, [buildQueryParams]);
+
+  const fetchFilterOptions = async () => {
+    try {
+      const response = await apiClient.get('/awards/filter-options/');
+      setUniqueCenters(response.data.centers || []);
+    } catch (err) {
+      console.error('Error fetching filter options:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchPrintedAwards(1);
+    fetchFilterOptions();
+  }, []);
+
+  // Debounced search
+  const handleSearchChange = (value) => {
+    setSearchQuery(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setCurrentPage(1);
+      setSelectedCandidates([]);
+      setSelectAllFiltered(false);
+      fetchPrintedAwards(1, { search: value });
+    }, 400);
+  };
+
+  const handleFilterChange = (newFilters) => {
+    setFilters(newFilters);
+    setCurrentPage(1);
+    setSelectedCandidates([]);
+    setSelectAllFiltered(false);
+    fetchPrintedAwards(1, { filters: newFilters });
   };
 
   // Clear filters
   const handleClearFilters = () => {
-    setFilters({
-      center: '',
-      collection_status: '',
-    });
+    const empty = { center: '', collection_status: '' };
+    setFilters(empty);
     setSearchQuery('');
     setCurrentPage(1);
+    setSelectedCandidates([]);
+    setSelectAllFiltered(false);
+    fetchPrintedAwards(1, { search: '', filters: empty });
   };
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    setSelectedCandidates([]);
+    fetchPrintedAwards(page);
+  };
+
+  const startIndex = (currentPage - 1) * itemsPerPage;
 
   // Open collection modal
   const handleOpenCollectionModal = (award, e) => {
@@ -96,7 +151,7 @@ const TranscriptLogs = () => {
       });
       toast.success('Collection status updated');
       setShowCollectionModal(false);
-      fetchPrintedAwards();
+      fetchPrintedAwards(currentPage);
     } catch (err) {
       console.error('Error updating collection status:', err);
       toast.error(err.response?.data?.error || 'Failed to update collection status');
@@ -105,50 +160,19 @@ const TranscriptLogs = () => {
     }
   };
 
-  // Filter awards based on search and filters
-  const filteredAwards = awards.filter((award) => {
-    const searchLower = searchQuery.toLowerCase();
-
-    const matchesSearch = !searchQuery || (
-      award.full_name?.toLowerCase().includes(searchLower) ||
-      award.registration_number?.toLowerCase().includes(searchLower) ||
-      award.center_name?.toLowerCase().includes(searchLower) ||
-      award.tr_sno?.toLowerCase().includes(searchLower) ||
-      award.transcript_collector_name?.toLowerCase().includes(searchLower)
-    );
-
-    const matchesCenter = !filters.center ||
-      award.center_name === filters.center;
-
-    const matchesCollection = !filters.collection_status ||
-      (filters.collection_status === 'taken' && award.transcript_collected) ||
-      (filters.collection_status === 'not_taken' && !award.transcript_collected);
-
-    return matchesSearch && matchesCenter && matchesCollection;
-  });
-
-  // Pagination
-  const totalPages = Math.ceil(filteredAwards.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedAwards = filteredAwards.slice(startIndex, startIndex + itemsPerPage);
-
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-  };
-
   // Selection handlers
   const handleSelectAll = () => {
-    if (selectedCandidates.length === paginatedAwards.length && !selectAllFiltered) {
+    if (selectedCandidates.length === awards.length && !selectAllFiltered) {
       setSelectedCandidates([]);
       setSelectAllFiltered(false);
     } else {
-      setSelectedCandidates(paginatedAwards.map((a) => a.id));
+      setSelectedCandidates(awards.map((a) => a.id));
     }
   };
 
   const handleSelectAllFiltered = () => {
     setSelectAllFiltered(true);
-    setSelectedCandidates(paginatedAwards.map((a) => a.id));
+    setSelectedCandidates(awards.map((a) => a.id));
   };
 
   const handleClearSelection = () => {
@@ -167,49 +191,58 @@ const TranscriptLogs = () => {
   };
 
   // Export to Excel handler
-  const handleExportExcel = (exportType) => {
-    let dataToExport = [];
+  const handleExportExcel = async (exportType) => {
+    try {
+      setExporting(true);
+      let dataToExport = [];
 
-    if (exportType === 'selected') {
-      const ids = selectAllFiltered
-        ? filteredAwards.map((a) => a.id)
-        : selectedCandidates;
-      dataToExport = filteredAwards.filter((a) => ids.includes(a.id));
-    } else {
-      dataToExport = filteredAwards;
+      if (exportType === 'selected' && !selectAllFiltered) {
+        dataToExport = awards.filter((a) => selectedCandidates.includes(a.id));
+      } else {
+        const qs = buildQueryParams(1);
+        const params = new URLSearchParams(qs);
+        params.set('page_size', '0');
+        const response = await apiClient.get(`/awards/?${params.toString()}`);
+        dataToExport = response.data.results || [];
+      }
+
+      if (dataToExport.length === 0) {
+        toast.error('No data to export');
+        return;
+      }
+
+      const exportData = dataToExport.map((award, index) => ({
+        '#': index + 1,
+        'Reg No': award.registration_number || '',
+        'Name': award.full_name || '',
+        'Center': award.center_name || '',
+        'TR SNo': award.tr_sno || '',
+        'Collection Status': award.transcript_collected ? 'Taken' : 'Not Taken',
+        'Collector Name': award.transcript_collector_name || '',
+        'Collector No': award.transcript_collector_phone || '',
+        'Collection Date': award.transcript_collection_date || '',
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Transcript Logs');
+
+      const colWidths = Object.keys(exportData[0]).map((key) => ({
+        wch: Math.max(key.length, ...exportData.map((row) => String(row[key]).length)) + 2,
+      }));
+      worksheet['!cols'] = colWidths;
+
+      const filename = exportType === 'selected'
+        ? `Transcript_Logs_Selected_${dataToExport.length}_${new Date().toISOString().slice(0, 10)}.xlsx`
+        : `Transcript_Logs_All_${dataToExport.length}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(workbook, filename);
+      toast.success(`Exported ${dataToExport.length} record(s) to Excel`);
+    } catch (err) {
+      console.error('Export error:', err);
+      toast.error('Failed to export data');
+    } finally {
+      setExporting(false);
     }
-
-    if (dataToExport.length === 0) {
-      toast.error('No data to export');
-      return;
-    }
-
-    const exportData = dataToExport.map((award, index) => ({
-      '#': index + 1,
-      'Reg No': award.registration_number || '',
-      'Name': award.full_name || '',
-      'Center': award.center_name || '',
-      'TR SNo': award.tr_sno || '',
-      'Collection Status': award.transcript_collected ? 'Taken' : 'Not Taken',
-      'Collector Name': award.transcript_collector_name || '',
-      'Collector No': award.transcript_collector_phone || '',
-      'Collection Date': award.transcript_collection_date || '',
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Transcript Logs');
-
-    const colWidths = Object.keys(exportData[0]).map((key) => ({
-      wch: Math.max(key.length, ...exportData.map((row) => String(row[key]).length)) + 2,
-    }));
-    worksheet['!cols'] = colWidths;
-
-    const filename = exportType === 'selected'
-      ? `Transcript_Logs_Selected_${dataToExport.length}_${new Date().toISOString().slice(0, 10)}.xlsx`
-      : `Transcript_Logs_All_${dataToExport.length}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    XLSX.writeFile(workbook, filename);
-    toast.success(`Exported ${dataToExport.length} record(s) to Excel`);
   };
 
   if (loading) {
@@ -255,10 +288,10 @@ const TranscriptLogs = () => {
             className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm"
           >
             <Download className="w-4 h-4 mr-2" />
-            Export All ({filteredAwards.length})
+            Export All ({totalCount})
           </button>
           <div className="text-sm text-gray-500">
-            Total: <span className="font-semibold text-gray-900">{filteredAwards.length}</span> printed
+            Total: <span className="font-semibold text-gray-900">{totalCount}</span> printed
           </div>
         </div>
       </div>
@@ -273,10 +306,7 @@ const TranscriptLogs = () => {
                 type="text"
                 placeholder="Search by name, reg no, center, TR SNo, collector name..."
                 value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(1);
-                }}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
@@ -298,10 +328,7 @@ const TranscriptLogs = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Center</label>
                 <select
                   value={filters.center}
-                  onChange={(e) => {
-                    setFilters({ ...filters, center: e.target.value });
-                    setCurrentPage(1);
-                  }}
+                  onChange={(e) => handleFilterChange({ ...filters, center: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">All</option>
@@ -315,10 +342,7 @@ const TranscriptLogs = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Collection Status</label>
                 <select
                   value={filters.collection_status}
-                  onChange={(e) => {
-                    setFilters({ ...filters, collection_status: e.target.value });
-                    setCurrentPage(1);
-                  }}
+                  onChange={(e) => handleFilterChange({ ...filters, collection_status: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">All</option>
@@ -347,17 +371,17 @@ const TranscriptLogs = () => {
             <div className="flex items-center space-x-4">
               <span className="text-sm font-medium text-blue-900">
                 {selectAllFiltered ? (
-                  <>All {filteredAwards.length} candidates selected</>
+                  <>All {totalCount} candidates selected</>
                 ) : (
                   <>{selectedCandidates.length} candidate(s) selected</>
                 )}
               </span>
-              {selectedCandidates.length === paginatedAwards.length && !selectAllFiltered && filteredAwards.length > itemsPerPage && (
+              {selectedCandidates.length === awards.length && !selectAllFiltered && totalCount > itemsPerPage && (
                 <button
                   onClick={handleSelectAllFiltered}
                   className="text-sm text-blue-600 hover:text-blue-800 underline"
                 >
-                  Select all {filteredAwards.length} candidates
+                  Select all {totalCount} candidates
                 </button>
               )}
               <button
@@ -387,7 +411,7 @@ const TranscriptLogs = () => {
                 <th className="px-4 py-3 text-left">
                   <input
                     type="checkbox"
-                    checked={paginatedAwards.length > 0 && selectedCandidates.length === paginatedAwards.length}
+                    checked={awards.length > 0 && selectedCandidates.length === awards.length}
                     onChange={handleSelectAll}
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                   />
@@ -425,14 +449,14 @@ const TranscriptLogs = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {paginatedAwards.length === 0 ? (
+              {awards.length === 0 ? (
                 <tr>
                   <td colSpan="11" className="px-4 py-8 text-center text-gray-500">
                     No printed transcripts found
                   </td>
                 </tr>
               ) : (
-                paginatedAwards.map((award) => (
+                awards.map((award) => (
                   <tr
                     key={award.id}
                     className={`hover:bg-gray-50 ${selectedCandidates.includes(award.id) ? 'bg-blue-50' : ''}`}
@@ -508,7 +532,7 @@ const TranscriptLogs = () => {
         {totalPages > 1 && (
           <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
             <div className="text-sm text-gray-500">
-              Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredAwards.length)} of {filteredAwards.length} results
+              Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalCount)} of {totalCount} results
             </div>
             <div className="flex items-center space-x-2">
               <button
