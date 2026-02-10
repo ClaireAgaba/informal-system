@@ -363,6 +363,57 @@ class CenterRepresentativeViewSet(viewsets.ModelViewSet):
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
+def change_password_view(request):
+    """
+    Change password endpoint - verifies current password and sets new one.
+    Deletes the auth token so the user must re-login.
+    """
+    current_password = request.data.get('current_password')
+    new_password = request.data.get('new_password')
+    confirm_password = request.data.get('confirm_password')
+
+    if not all([current_password, new_password, confirm_password]):
+        return Response(
+            {'error': 'Please provide current password, new password, and confirm password'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if new_password != confirm_password:
+        return Response(
+            {'error': 'New password and confirm password do not match'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if len(new_password) < 6:
+        return Response(
+            {'error': 'New password must be at least 6 characters long'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    user = request.user
+    if not user.check_password(current_password):
+        return Response(
+            {'error': 'Current password is incorrect'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    user.set_password(new_password)
+    user.save()
+
+    # Delete the token to force re-login
+    try:
+        request.user.auth_token.delete()
+    except Exception:
+        pass
+
+    return Response(
+        {'message': 'Password changed successfully. Please login with your new password.'},
+        status=status.HTTP_200_OK
+    )
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
 def logout_view(request):
     """
     Logout endpoint - deletes user token
