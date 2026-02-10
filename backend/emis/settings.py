@@ -208,6 +208,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://deveims.uvtab.go.ug",
     "http://deveims.uvtab.go.ug",
     "https://emis.uvtab.go.ug",
+    "https://staging-emis.uvtab.go.ug",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -216,6 +217,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://deveims.uvtab.go.ug',
     'http://deveims.uvtab.go.ug',
     'https://emis.uvtab.go.ug',
+    'https://staging-emis.uvtab.go.ug',
 ]
 
 # Email configuration

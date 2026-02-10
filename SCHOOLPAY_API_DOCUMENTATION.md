@@ -1,14 +1,15 @@
-# UBTEB Informal System - SchoolPay API Documentation
+# UVTAB Informal System - SchoolPay API Documentation
 
-**Version:** 1.0  
-**Last Updated:** January 2025  
-**Contact:** cagaba@uvtab.go.ug
+**Version:** 2.0  
+**Last Updated:** February 2025  
+**Contact:** cagaba@uvtab.go.ug  
+**Institution:** Uganda Vocational and Technical Assessment Board (UVTAB)
 
 ---
 
 ## Overview
 
-This document provides the technical specifications for integrating SchoolPay with the UBTEB Informal Assessment System. The integration enables candidates to pay their assessment fees through SchoolPay payment channels.
+This document provides the technical specifications for integrating SchoolPay with the UVTAB Informal Assessment System. The integration enables candidates to pay their assessment fees through SchoolPay payment channels.
 
 ---
 
@@ -16,10 +17,10 @@ This document provides the technical specifications for integrating SchoolPay wi
 
 | Environment | Base URL |
 |-------------|----------|
-| Production  | `https://yourdomain.com/api/candidates/payments/schoolpay` |
-| Testing     | `http://localhost:8000/api/candidates/payments/schoolpay` |
+| **Production** | `https://emis.uvtab.go.ug/api/candidates/payments/schoolpay` |
+| **Staging/Testing** | `https://staging-emis.uvtab.go.ug/api/candidates/payments/schoolpay` |
 
-> **Note:** Replace `yourdomain.com` with the actual production domain.
+> **Important:** Use the **Staging** environment for all integration testing. The Production environment has live candidate data and should only be used after successful staging tests.
 
 ---
 
@@ -298,17 +299,17 @@ X-API-Key: <your-api-key>
 
 ### Check Balance (cURL)
 ```bash
-curl -X POST https://yourdomain.com/api/candidates/payments/schoolpay/check-balance/ \
+curl -X POST https://staging-emis.uvtab.go.ug/api/candidates/payments/schoolpay/check-balance/ \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key" \
+  -H "X-API-Key: <your-api-key>" \
   -d '{"payment_code": "IUV00225000001"}'
 ```
 
 ### Payment Callback (cURL)
 ```bash
-curl -X POST https://yourdomain.com/api/candidates/payments/schoolpay/callback/ \
+curl -X POST https://staging-emis.uvtab.go.ug/api/candidates/payments/schoolpay/callback/ \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key" \
+  -H "X-API-Key: <your-api-key>" \
   -d '{
     "payment_code": "IUV00225000001",
     "school_pay_reference": "37414523724",
@@ -323,8 +324,8 @@ curl -X POST https://yourdomain.com/api/candidates/payments/schoolpay/callback/ 
 
 ### Test Connection (cURL)
 ```bash
-curl -X GET https://yourdomain.com/api/candidates/payments/schoolpay/test/ \
-  -H "X-API-Key: your-api-key"
+curl -X GET https://staging-emis.uvtab.go.ug/api/candidates/payments/schoolpay/test/ \
+  -H "X-API-Key: <your-api-key>"
 ```
 
 ---
@@ -332,20 +333,20 @@ curl -X GET https://yourdomain.com/api/candidates/payments/schoolpay/test/ \
 ## Integration Checklist
 
 ### Information We Need From SchoolPay:
-- [ ] SchoolPay server IP addresses (for whitelisting)
-- [ ] API key to be used for authentication
-- [ ] Callback retry policy (if initial callback fails)
-- [ ] Test/Sandbox environment details
-- [ ] Technical support contact
+- [ ] SchoolPay server IP addresses (for IP whitelisting on our side)
+- [ ] Callback retry policy (if initial callback fails, how many retries and at what interval?)
+- [ ] Technical support contact for integration issues
 
 ### Information We Provide to SchoolPay:
 - [x] API endpoints (documented above)
 - [x] Request/response formats (documented above)
-- [x] Payment code format: `IUV[center][year][candidateID]`
-- [x] Currency: UGX
-- [x] Institution: UBTEB - Informal System
-- [ ] Production API URL (to be confirmed)
-- [ ] API key (to be generated and shared securely)
+- [x] Payment code format: `IUV[center][year][candidateID]` (14 characters)
+- [x] Currency: UGX (Ugandan Shillings)
+- [x] Institution: **UVTAB - Informal Assessment System**
+- [x] Production URL: `https://emis.uvtab.go.ug/api/candidates/payments/schoolpay`
+- [x] Staging/Test URL: `https://staging-emis.uvtab.go.ug/api/candidates/payments/schoolpay`
+- [x] API Key: *(shared securely via separate channel)*
+- [x] Business rule: **No partial payments** — full amount only
 
 ---
 
@@ -365,11 +366,34 @@ curl -X GET https://yourdomain.com/api/candidates/payments/schoolpay/test/ \
 
 ---
 
+## Environments
+
+### Production
+- **URL:** `https://emis.uvtab.go.ug/api/candidates/payments/schoolpay`
+- **Data:** Live candidate registrations — do NOT use for testing
+- **API Key:** Same key works on both environments
+
+### Staging (for testing)
+- **URL:** `https://staging-emis.uvtab.go.ug/api/candidates/payments/schoolpay`
+- **Data:** Test candidates pre-loaded for integration testing
+- **Purpose:** Verify check-balance, callback, error handling before going live
+
+### Test Payment Codes (Staging Only)
+
+| Payment Code | Candidate Name | Balance (UGX) | Notes |
+|-------------|----------------|---------------|-------|
+| `IUV99925000001` | Test Candidate One | 80,000 | Standard test candidate |
+| `IUV99925000002` | Test Candidate Two | 120,000 | Higher balance test |
+| `IUV99925000003` | Test Candidate Three | 0 | Already paid / zero balance |
+
+---
+
 ## Support
 
 **Technical Contact:**  
+Name: Claire Agaba  
 Email: cagaba@uvtab.go.ug  
-Organization: UBTEB - Uganda Business and Technical Examinations Board
+Organization: UVTAB - Uganda Vocational and Technical Assessment Board
 
 ---
 
@@ -378,3 +402,4 @@ Organization: UBTEB - Uganda Business and Technical Examinations Board
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | January 2025 | Initial release |
+| 2.0 | February 2025 | Added production & staging URLs, test payment codes, updated checklist |
