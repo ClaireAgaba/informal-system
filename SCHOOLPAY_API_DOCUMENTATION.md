@@ -48,12 +48,12 @@ For security, only requests from whitelisted SchoolPay server IPs will be accept
 ## Payment Code Format
 
 | Component | Description | Example |
-|-----------|-------------|---------|
+|-----------|-------------|----------|
 | Prefix | Always `IUV` | IUV |
-| Center Code | 3 digits | 002 |
-| Year | 2 digits | 25 |
-| Candidate ID | 6 digits | 000001 |
-| **Full Code** | **14 characters** | **IUV00225000001** |
+| Center Code | 4 digits | 0001 |
+| Year | 2 digits | 26 |
+| Candidate ID | 7 digits | 0000001 |
+| **Full Code** | **16 characters** | **IUV0001260000001** |
 
 ---
 
@@ -74,7 +74,7 @@ X-API-Key: <your-api-key>
 **Request Body:**
 ```json
 {
-    "payment_code": "IUV00225000001"
+    "payment_code": "IUV0001260000001"
 }
 ```
 
@@ -82,12 +82,12 @@ X-API-Key: <your-api-key>
 ```json
 {
     "success": true,
-    "student_no": "IUV00225000001",
-    "student_name": "John Doe",
-    "registration_number": "UVT002/U/25/A/HD/F/0001",
-    "school_name": "Assessment Center Name",
-    "outstanding_balance": 80000.00,
-    "total_billed": 80000.00,
+    "student_no": "IUV0001260000001",
+    "student_name": "Ashaba Sarah",
+    "registration_number": "UVT0001/X/26/M/HD/M/0001",
+    "school_name": "Test Assessment Center",
+    "outstanding_balance": 70000.00,
+    "total_billed": 70000.00,
     "amount_paid": 0.00,
     "currency": "UGX",
     "payment_cleared": false
@@ -129,12 +129,12 @@ X-API-Key: <your-api-key>
 **Request Body:**
 ```json
 {
-    "payment_code": "IUV00225000001",
+    "payment_code": "IUV0001260000001",
     "school_pay_reference": "37414523724",
-    "amount": 80000.00,
+    "amount": 70000.00,
     "payment_status": "Pending Approval",
     "attempt_status": "Successful",
-    "payment_date": "2025-01-12T14:30:00",
+    "payment_date": "2026-02-10T14:30:00",
     "phone_number": "256700000000",
     "channel": "MTN Mobile Money"
 }
@@ -144,7 +144,7 @@ X-API-Key: <your-api-key>
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `payment_code` | String | Yes | Candidate's payment code (14 characters) |
+| `payment_code` | String | Yes | Candidate's payment code (16 characters) |
 | `school_pay_reference` | String | Yes | SchoolPay transaction reference |
 | `amount` | Decimal | Yes | Amount paid in UGX |
 | `payment_status` | String | Yes | Payment status from SchoolPay |
@@ -159,9 +159,9 @@ X-API-Key: <your-api-key>
     "success": true,
     "message": "Payment recorded successfully",
     "transaction_id": "37414523724",
-    "candidate_name": "John Doe",
-    "amount_paid": 80000.00,
-    "total_paid": 80000.00,
+    "candidate_name": "Ashaba Sarah",
+    "amount_paid": 70000.00,
+    "total_paid": 70000.00,
     "payment_cleared": true
 }
 ```
@@ -171,9 +171,9 @@ X-API-Key: <your-api-key>
 {
     "success": false,
     "error": "Partial payment not allowed",
-    "message": "Payment amount must be exactly UGX 80000.0. Partial payments are not accepted.",
-    "amount_paid": 40000.00,
-    "required_amount": 80000.00
+    "message": "Payment amount must be exactly UGX 70000.0. Partial payments are not accepted.",
+    "amount_paid": 30000.00,
+    "required_amount": 70000.00
 }
 ```
 
@@ -340,7 +340,7 @@ curl -X GET https://staging-emis.uvtab.go.ug/api/candidates/payments/schoolpay/t
 ### Information We Provide to SchoolPay:
 - [x] API endpoints (documented above)
 - [x] Request/response formats (documented above)
-- [x] Payment code format: `IUV[center][year][candidateID]` (14 characters)
+- [x] Payment code format: `IUV[center][year][candidateID]` (16 characters)
 - [x] Currency: UGX (Ugandan Shillings)
 - [x] Institution: **UVTAB - Informal Assessment System**
 - [x] Production URL: `https://emis.uvtab.go.ug/api/candidates/payments/schoolpay`
