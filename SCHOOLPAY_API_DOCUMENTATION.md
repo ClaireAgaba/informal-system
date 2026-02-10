@@ -302,7 +302,7 @@ X-API-Key: <your-api-key>
 curl -X POST https://staging-emis.uvtab.go.ug/api/candidates/payments/schoolpay/check-balance/ \
   -H "Content-Type: application/json" \
   -H "X-API-Key: <your-api-key>" \
-  -d '{"payment_code": "IUV00225000001"}'
+  -d '{"payment_code": "IUV0001260000001"}'
 ```
 
 ### Payment Callback (cURL)
@@ -311,12 +311,12 @@ curl -X POST https://staging-emis.uvtab.go.ug/api/candidates/payments/schoolpay/
   -H "Content-Type: application/json" \
   -H "X-API-Key: <your-api-key>" \
   -d '{
-    "payment_code": "IUV00225000001",
+    "payment_code": "IUV0001260000001",
     "school_pay_reference": "37414523724",
-    "amount": 80000.00,
+    "amount": 70000.00,
     "payment_status": "Pending Approval",
     "attempt_status": "Successful",
-    "payment_date": "2025-01-12T14:30:00",
+    "payment_date": "2026-02-10T14:30:00",
     "phone_number": "256700000000",
     "channel": "MTN Mobile Money"
   }'
@@ -382,9 +382,8 @@ curl -X GET https://staging-emis.uvtab.go.ug/api/candidates/payments/schoolpay/t
 
 | Payment Code | Candidate Name | Balance (UGX) | Notes |
 |-------------|----------------|---------------|-------|
-| `IUV99925000001` | Test Candidate One | 80,000 | Standard test candidate |
-| `IUV99925000002` | Test Candidate Two | 120,000 | Higher balance test |
-| `IUV99925000003` | Test Candidate Three | 0 | Already paid / zero balance |
+| `IUV0001260000001` | Ashaba Sarah | 70,000 | Level 1, Hair Dresser |
+| `IUV0001260000002` | Akello Edith | 100,000 | Level 2, Hair Dresser (2 papers) |
 
 ---
 
