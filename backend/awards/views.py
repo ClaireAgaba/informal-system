@@ -11,6 +11,9 @@ from configurations.models import ReprintReason
 from occupations.models import OccupationModule, OccupationPaper
 from io import BytesIO
 from PyPDF2 import PdfMerger
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from django.conf import settings
 
 
 def formal_candidate_qualifies(candidate):
@@ -85,6 +88,7 @@ class AwardsViewSet(viewsets.ViewSet):
     """
     permission_classes = [IsAuthenticated]
 
+    @method_decorator(cache_page(60 * 15))
     def list(self, request):
         """
         List all candidates who have passed (all results are passing).
@@ -146,7 +150,7 @@ class AwardsViewSet(viewsets.ViewSet):
             'occupation', 'assessment_center'
         ).prefetch_related(
             Prefetch('modular_results', queryset=ModularResult.objects.select_related('assessment_series')),
-            Prefetch('formal_results', queryset=FormalResult.objects.select_related('level', 'assessment_series')),
+            Prefetch('formal_results', queryset=FormalResult.objects.select_related('level', 'assessment_series', 'paper')),
         ).order_by('-created_at')
 
         # Get total count first
