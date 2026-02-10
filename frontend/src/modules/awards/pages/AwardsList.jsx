@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Award, Search, ChevronLeft, ChevronRight, User, Filter, Printer, RefreshCw, X, AlertTriangle, Download } from 'lucide-react';
+import { Award, Search, ChevronLeft, ChevronRight, User, Filter, Printer, RefreshCw, X, AlertTriangle, Download, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import apiClient from '../../../services/apiClient';
@@ -342,6 +342,13 @@ const AwardsList = () => {
           </div>
         </div>
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => navigate('/awards/transcript-logs')}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Transcript Logs
+          </button>
           <button
             onClick={() => handleExportExcel('all')}
             className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm"

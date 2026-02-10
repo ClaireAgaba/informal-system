@@ -78,6 +78,33 @@ class Candidate(models.Model):
         help_text='Unique transcript serial number (TR SNo)'
     )
     
+    # Transcript Collection Tracking
+    transcript_collected = models.BooleanField(
+        default=False,
+        verbose_name='Transcript Collected',
+        help_text='Whether the printed transcript has been collected'
+    )
+    transcript_collector_name = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        verbose_name='Collector Name',
+        help_text='Name of the person who collected the transcript'
+    )
+    transcript_collector_phone = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        verbose_name='Collector Phone',
+        help_text='Phone number of the person who collected the transcript'
+    )
+    transcript_collection_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='Collection Date',
+        help_text='Date when the transcript was collected'
+    )
+    
     # Submission Status
     is_submitted = models.BooleanField(
         default=False,

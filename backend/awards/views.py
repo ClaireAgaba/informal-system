@@ -221,6 +221,10 @@ class AwardsViewSet(viewsets.ViewSet):
                 'completion_date': completion_year,
                 'printed': bool(candidate.transcript_serial_number),
                 'tr_sno': candidate.transcript_serial_number or "",
+                'transcript_collected': candidate.transcript_collected,
+                'transcript_collector_name': candidate.transcript_collector_name or "",
+                'transcript_collector_phone': candidate.transcript_collector_phone or "",
+                'transcript_collection_date': str(candidate.transcript_collection_date) if candidate.transcript_collection_date else "",
             })
 
         return Response({
@@ -231,6 +235,60 @@ class AwardsViewSet(viewsets.ViewSet):
             'page_size': page_size,
             'has_next': has_next,
             'has_previous': has_previous,
+        })
+
+    @action(detail=False, methods=['post'], url_path='update-collection-status')
+    def update_collection_status(self, request):
+        """
+        Update transcript collection status for a candidate.
+        """
+        candidate_id = request.data.get('candidate_id')
+        collected = request.data.get('collected', False)
+        collector_name = request.data.get('collector_name', '')
+        collector_phone = request.data.get('collector_phone', '')
+        collection_date = request.data.get('collection_date', None)
+
+        if not candidate_id:
+            return Response(
+                {'error': 'candidate_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            candidate = Candidate.objects.get(id=candidate_id)
+        except Candidate.DoesNotExist:
+            return Response(
+                {'error': 'Candidate not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if not candidate.transcript_serial_number:
+            return Response(
+                {'error': 'Candidate does not have a printed transcript'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        candidate.transcript_collected = collected
+        candidate.transcript_collector_name = collector_name if collected else None
+        candidate.transcript_collector_phone = collector_phone if collected else None
+
+        if collected and collection_date:
+            candidate.transcript_collection_date = collection_date
+        elif collected and not collection_date:
+            from django.utils import timezone
+            candidate.transcript_collection_date = timezone.now().date()
+        elif not collected:
+            candidate.transcript_collection_date = None
+
+        candidate.save()
+
+        return Response({
+            'success': True,
+            'message': 'Collection status updated',
+            'transcript_collected': candidate.transcript_collected,
+            'transcript_collector_name': candidate.transcript_collector_name or '',
+            'transcript_collector_phone': candidate.transcript_collector_phone or '',
+            'transcript_collection_date': str(candidate.transcript_collection_date) if candidate.transcript_collection_date else '',
         })
 
     @action(detail=False, methods=['post'], url_path='bulk-print-transcripts')

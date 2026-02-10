@@ -52,6 +52,7 @@ import SeriesResults from '@modules/statistics/pages/SeriesResults';
 import SpecialNeedsAnalytics from '@modules/statistics/pages/SpecialNeedsAnalytics';
 import DitLegacyModule from '@modules/dit-legacy';
 import AwardsList from '@modules/awards/pages/AwardsList';
+import TranscriptLogs from '@modules/awards/pages/TranscriptLogs';
 
 function App() {
   return (
@@ -141,6 +142,7 @@ function App() {
 
         {/* Awards routes */}
         <Route path="awards" element={<AwardsList />} />
+        <Route path="awards/transcript-logs" element={<TranscriptLogs />} />
 
         <Route path="*" element={<div className="p-6"><h1 className="text-2xl">404 - Page Not Found</h1></div>} />
       </Route>
