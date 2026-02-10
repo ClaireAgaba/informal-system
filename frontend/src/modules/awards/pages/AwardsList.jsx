@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Award, Search, ChevronLeft, ChevronRight, User, Filter, Printer, RefreshCw, X, AlertTriangle } from 'lucide-react';
+import { Award, Search, ChevronLeft, ChevronRight, User, Filter, Printer, RefreshCw, X, AlertTriangle, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import apiClient from '../../../services/apiClient';
 
@@ -163,6 +164,57 @@ const AwardsList = () => {
     }
   };
 
+  // Export to Excel handler
+  const handleExportExcel = (exportType) => {
+    let dataToExport = [];
+
+    if (exportType === 'selected') {
+      const ids = selectAllFiltered
+        ? filteredAwards.map((a) => a.id)
+        : selectedCandidates;
+      dataToExport = filteredAwards.filter((a) => ids.includes(a.id));
+    } else {
+      dataToExport = filteredAwards;
+    }
+
+    if (dataToExport.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    const exportData = dataToExport.map((award, index) => ({
+      '#': index + 1,
+      'Reg No': award.registration_number || '',
+      'Full Name': award.full_name || '',
+      'Center': award.center_name || '',
+      'Reg Category': award.registration_category || '',
+      'Occupation': award.occupation_name || '',
+      'Entry Year': award.entry_year || '',
+      'Assessment Intake': award.assessment_intake || '',
+      'Award': award.award || '',
+      'Completion Date': award.completion_date || '',
+      'Printed': award.printed ? 'Yes' : 'No',
+      'TR SNo': award.tr_sno || '',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Awards');
+
+    // Auto-size columns
+    const colWidths = Object.keys(exportData[0]).map((key) => ({
+      wch: Math.max(key.length, ...exportData.map((row) => String(row[key]).length)) + 2,
+    }));
+    worksheet['!cols'] = colWidths;
+
+    const filename = exportType === 'selected'
+      ? `Awards_Selected_${dataToExport.length}_${new Date().toISOString().slice(0, 10)}.xlsx`
+      : `Awards_All_${dataToExport.length}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    XLSX.writeFile(workbook, filename);
+    toast.success(`Exported ${dataToExport.length} record(s) to Excel`);
+  };
+
   // Print transcripts handler
   const handlePrintTranscripts = async () => {
     const ids = selectAllFiltered 
@@ -289,8 +341,17 @@ const AwardsList = () => {
             </p>
           </div>
         </div>
-        <div className="text-sm text-gray-500">
-          Total: <span className="font-semibold text-gray-900">{filteredAwards.length}</span> candidates
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => handleExportExcel('all')}
+            className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export All ({filteredAwards.length})
+          </button>
+          <div className="text-sm text-gray-500">
+            Total: <span className="font-semibold text-gray-900">{filteredAwards.length}</span> candidates
+          </div>
         </div>
       </div>
 
@@ -496,6 +557,13 @@ const AwardsList = () => {
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Reprint Transcript
+              </button>
+              <button
+                onClick={() => handleExportExcel('selected')}
+                className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export Selected
               </button>
             </div>
           </div>

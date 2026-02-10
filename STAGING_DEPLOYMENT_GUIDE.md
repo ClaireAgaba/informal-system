@@ -91,7 +91,7 @@ from decimal import Decimal
 
 # Create a test assessment center (center 999)
 center, _ = AssessmentCenter.objects.get_or_create(
-    center_number='999',
+    center_number='UVT0001',
     defaults={'center_name': 'Test Assessment Center', 'district': 'Kampala'}
 )
 
@@ -102,7 +102,7 @@ center, _ = AssessmentCenter.objects.get_or_create(
 
 print("Test center created:", center)
 print("Now create test candidates via the admin panel at /admin/")
-print("Set payment_code to: IUV99925000001, IUV99925000002, IUV99925000003")
+print("Set payment_code to: IUV000125000001, IUV000125000002, IUV000125000003")
 ```
 
 > **Tip:** It may be easier to create the test candidates through the Django admin panel at `https://staging-emis.uvtab.go.ug/admin/` after deployment is complete.
