@@ -1259,52 +1259,60 @@ class ModularResultViewSet(viewsets.ViewSet):
         # Total width available ~ 26.7cm
         # Label: 2.7cm, Data: 2.4cm * 10 = 24cm. Total 26.7cm
         
-        grading_data = [
-            # Theory Section
-            [Paragraph("<b>THEORY SCORES</b>", info_label_style)] + [""] * 10,
-            [Paragraph("<b>Grade</b>", info_value_style), "A+", "A", "B", "B-", "C", "C-", "D", "E", "", ""],
-            [Paragraph("<b>Score %</b>", info_value_style), "85-100", "80-84", "70-79", "60-69", "50-59", "40-49", "30-39", "0-29", "", ""],
+        # Theory Section (8 grades)
+        theory_data = [
+            [Paragraph("<b>THEORY SCORES</b>", info_label_style)] + [""] * 8,
+            [Paragraph("<b>Grade</b>", info_value_style), "A+", "A", "B", "B-", "C", "C-", "D", "E"],
+            [Paragraph("<b>Score %</b>", info_value_style), "85-100", "80-84", "70-79", "60-69", "50-59", "40-49", "30-39", "0-29"],
+        ]
+        
+        theory_col_widths = [2.7*cm] + [2.4*cm]*8
+        
+        theory_table = Table(theory_data, colWidths=theory_col_widths, hAlign='LEFT')
+        theory_table.setStyle(TableStyle([
+            # Header
+            ('SPAN', (0, 0), (-1, 0)),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
             
-            # Spacer row
-            [""] * 11,
-            
-            # Practical Section
+            # Grid and Borders
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            # Fonts and Alignment
+            ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        
+        elements.append(theory_table)
+        elements.append(Spacer(1, 0.4*cm))
+        
+        # Practical Section (10 grades)
+        practical_data = [
             [Paragraph("<b>PRACTICAL SCORES</b>", info_label_style)] + [""] * 10,
             [Paragraph("<b>Grade</b>", info_value_style), "A+", "A", "B+", "B", "B-", "C", "C-", "D", "D-", "E"],
             [Paragraph("<b>Score %</b>", info_value_style), "90-100", "85-89", "75-84", "65-74", "60-64", "55-59", "50-54", "40-49", "30-39", "0-29"],
         ]
         
-        col_widths = [2.7*cm] + [2.4*cm]*10
+        practical_col_widths = [2.7*cm] + [2.4*cm]*10
         
-        grading_table = Table(grading_data, colWidths=col_widths)
-        grading_table.setStyle(TableStyle([
-            # Theory Header
+        practical_table = Table(practical_data, colWidths=practical_col_widths, hAlign='LEFT')
+        practical_table.setStyle(TableStyle([
+            # Header
             ('SPAN', (0, 0), (-1, 0)),
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
             ('ALIGN', (0, 0), (0, 0), 'LEFT'),
             
-            # Practical Header
-            ('SPAN', (0, 4), (-1, 4)),
-            ('BACKGROUND', (0, 4), (-1, 4), colors.lightgrey),
-            ('ALIGN', (0, 4), (0, 4), 'LEFT'),
-            
-            # General Grid
-            ('GRID', (0, 0), (-1, 2), 0.5, colors.black), # Theory grid
-            ('GRID', (0, 4), (-1, 6), 0.5, colors.black), # Practical grid
-            
+            # Grid and Borders
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
             # Fonts and Alignment
             ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
             ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('ALIGN', (1, 1), (-1, 2), 'CENTER'), # Center Theory values
-            ('ALIGN', (1, 5), (-1, 6), 'CENTER'), # Center Practical values
+            ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            
-            # Remove borders for spacer row
-            ('LINEBELOW', (0, 2), (-1, 2), 0, colors.white),
-            ('LINEABOVE', (0, 4), (-1, 4), 0, colors.white),
         ]))
         
-        elements.append(grading_table)
+        elements.append(practical_table)
         elements.append(Spacer(1, 0.4*cm))
         elements.append(Paragraph("Pass mark is 50% in theory and 65% in practical assessment", ParagraphStyle('PassMark', parent=styles['Normal'], alignment=TA_CENTER, fontName='Times-Bold', fontSize=12)))
         
@@ -2227,52 +2235,60 @@ class FormalResultViewSet(viewsets.ViewSet):
         # Practical: A+, A, B+, B, B-, C, C-, D, D-, E (10 grades)
         
         # We need 11 columns (Label + 10 Data)
-        grading_data = [
-            # Theory Section
-            [Paragraph("<b>THEORY SCORES</b>", info_label_style)] + [""] * 10,
-            [Paragraph("<b>Grade</b>", info_value_style), "A+", "A", "B", "B-", "C", "C-", "D", "E", "", ""],
-            [Paragraph("<b>Score %</b>", info_value_style), "85-100", "80-84", "70-79", "60-69", "50-59", "40-49", "30-39", "0-29", "", ""],
+        # Theory Section (8 grades)
+        theory_data = [
+            [Paragraph("<b>THEORY SCORES</b>", info_label_style)] + [""] * 8,
+            [Paragraph("<b>Grade</b>", info_value_style), "A+", "A", "B", "B-", "C", "C-", "D", "E"],
+            [Paragraph("<b>Score %</b>", info_value_style), "85-100", "80-84", "70-79", "60-69", "50-59", "40-49", "30-39", "0-29"],
+        ]
+        
+        theory_col_widths = [2.7*cm] + [2.4*cm]*8
+        
+        theory_table = Table(theory_data, colWidths=theory_col_widths, hAlign='LEFT')
+        theory_table.setStyle(TableStyle([
+            # Header
+            ('SPAN', (0, 0), (-1, 0)),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
             
-            # Spacer row
-            [""] * 11,
-            
-            # Practical Section
+            # Grid and Borders
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            # Fonts and Alignment
+            ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        
+        elements.append(theory_table)
+        elements.append(Spacer(1, 0.4*cm))
+        
+        # Practical Section (10 grades)
+        practical_data = [
             [Paragraph("<b>PRACTICAL SCORES</b>", info_label_style)] + [""] * 10,
             [Paragraph("<b>Grade</b>", info_value_style), "A+", "A", "B+", "B", "B-", "C", "C-", "D", "D-", "E"],
             [Paragraph("<b>Score %</b>", info_value_style), "90-100", "85-89", "75-84", "65-74", "60-64", "55-59", "50-54", "40-49", "30-39", "0-29"],
         ]
         
-        col_widths = [2.7*cm] + [2.4*cm]*10
+        practical_col_widths = [2.7*cm] + [2.4*cm]*10
         
-        grading_table = Table(grading_data, colWidths=col_widths)
-        grading_table.setStyle(TableStyle([
-            # Theory Header
+        practical_table = Table(practical_data, colWidths=practical_col_widths, hAlign='LEFT')
+        practical_table.setStyle(TableStyle([
+            # Header
             ('SPAN', (0, 0), (-1, 0)),
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
             ('ALIGN', (0, 0), (0, 0), 'LEFT'),
             
-            # Practical Header
-            ('SPAN', (0, 4), (-1, 4)),
-            ('BACKGROUND', (0, 4), (-1, 4), colors.lightgrey),
-            ('ALIGN', (0, 4), (0, 4), 'LEFT'),
-            
-            # General Grid
-            ('GRID', (0, 0), (-1, 2), 0.5, colors.black), # Theory grid
-            ('GRID', (0, 4), (-1, 6), 0.5, colors.black), # Practical grid
-            
+            # Grid and Borders
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
             # Fonts and Alignment
             ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
             ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('ALIGN', (1, 1), (-1, 2), 'CENTER'), # Center Theory values
-            ('ALIGN', (1, 5), (-1, 6), 'CENTER'), # Center Practical values
+            ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            
-            # Remove borders for spacer row
-            ('LINEBELOW', (0, 2), (-1, 2), 0, colors.white),
-            ('LINEABOVE', (0, 4), (-1, 4), 0, colors.white),
         ]))
         
-        elements.append(grading_table)
+        elements.append(practical_table)
         elements.append(Spacer(1, 0.4*cm))
         elements.append(Paragraph("Pass mark is 50% in theory and 65% in practical assessment", ParagraphStyle('PassMark', parent=styles['Normal'], alignment=TA_CENTER, fontName='Times-Bold', fontSize=12)))
         
@@ -3174,52 +3190,60 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         # Practical: A+, A, B+, B, B-, C, C-, D, D-, E (10 grades)
         
         # We need 11 columns (Label + 10 Data)
-        grading_data = [
-            # Theory Section
-            [Paragraph("<b>THEORY SCORES</b>", info_label_style)] + [""] * 10,
-            [Paragraph("<b>Grade</b>", info_value_style), "A+", "A", "B", "B-", "C", "C-", "D", "E", "", ""],
-            [Paragraph("<b>Score %</b>", info_value_style), "85-100", "80-84", "70-79", "60-69", "50-59", "40-49", "30-39", "0-29", "", ""],
+        # Theory Section (8 grades)
+        theory_data = [
+            [Paragraph("<b>THEORY SCORES</b>", info_label_style)] + [""] * 8,
+            [Paragraph("<b>Grade</b>", info_value_style), "A+", "A", "B", "B-", "C", "C-", "D", "E"],
+            [Paragraph("<b>Score %</b>", info_value_style), "85-100", "80-84", "70-79", "60-69", "50-59", "40-49", "30-39", "0-29"],
+        ]
+        
+        theory_col_widths = [2.7*cm] + [2.4*cm]*8
+        
+        theory_table = Table(theory_data, colWidths=theory_col_widths, hAlign='LEFT')
+        theory_table.setStyle(TableStyle([
+            # Header
+            ('SPAN', (0, 0), (-1, 0)),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
             
-            # Spacer row
-            [""] * 11,
-            
-            # Practical Section
+            # Grid and Borders
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            # Fonts and Alignment
+            ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        
+        elements.append(theory_table)
+        elements.append(Spacer(1, 0.4*cm))
+        
+        # Practical Section (10 grades)
+        practical_data = [
             [Paragraph("<b>PRACTICAL SCORES</b>", info_label_style)] + [""] * 10,
             [Paragraph("<b>Grade</b>", info_value_style), "A+", "A", "B+", "B", "B-", "C", "C-", "D", "D-", "E"],
             [Paragraph("<b>Score %</b>", info_value_style), "90-100", "85-89", "75-84", "65-74", "60-64", "55-59", "50-54", "40-49", "30-39", "0-29"],
         ]
         
-        col_widths = [2.7*cm] + [2.4*cm]*10
+        practical_col_widths = [2.7*cm] + [2.4*cm]*10
         
-        grading_table = Table(grading_data, colWidths=col_widths)
-        grading_table.setStyle(TableStyle([
-            # Theory Header
+        practical_table = Table(practical_data, colWidths=practical_col_widths, hAlign='LEFT')
+        practical_table.setStyle(TableStyle([
+            # Header
             ('SPAN', (0, 0), (-1, 0)),
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
             ('ALIGN', (0, 0), (0, 0), 'LEFT'),
             
-            # Practical Header
-            ('SPAN', (0, 4), (-1, 4)),
-            ('BACKGROUND', (0, 4), (-1, 4), colors.lightgrey),
-            ('ALIGN', (0, 4), (0, 4), 'LEFT'),
-            
-            # General Grid
-            ('GRID', (0, 0), (-1, 2), 0.5, colors.black), # Theory grid
-            ('GRID', (0, 4), (-1, 6), 0.5, colors.black), # Practical grid
-            
+            # Grid and Borders
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
             # Fonts and Alignment
             ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
             ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('ALIGN', (1, 1), (-1, 2), 'CENTER'), # Center Theory values
-            ('ALIGN', (1, 5), (-1, 6), 'CENTER'), # Center Practical values
+            ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            
-            # Remove borders for spacer row
-            ('LINEBELOW', (0, 2), (-1, 2), 0, colors.white),
-            ('LINEABOVE', (0, 4), (-1, 4), 0, colors.white),
         ]))
         
-        elements.append(grading_table)
+        elements.append(practical_table)
         elements.append(Spacer(1, 0.4*cm))
         elements.append(Paragraph("Pass mark is 50% in theory and 65% in practical assessment", ParagraphStyle('PassMark', parent=styles['Normal'], alignment=TA_CENTER, fontName='Times-Bold', fontSize=12)))
         
