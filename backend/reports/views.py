@@ -83,67 +83,55 @@ class ReportViewSet(viewsets.ViewSet):
             )
 
         # Filter candidates
+        # Filter candidates based on enrollment in the assessment series
+        # consistently for all registration categories
+        
+        # Base filter for candidates
         filter_params = {
             'assessment_center': assessment_center,
             'registration_category': registration_category,
             'occupation': occupation,
             'is_submitted': True,
-            'verification_status': 'verified'
+            'verification_status': 'verified',
+            'enrollments__assessment_series': assessment_series,
+            'enrollments__is_active': True
         }
         
-        # For formal/workers_pas with level, filter through enrollments
+        # Additional filtering based on level if provided
         if level:
-            # Get candidates enrolled in this level for this assessment series
-            from candidates.models import CandidateEnrollment
-            
-            # For workers_pas, level can be null in enrollment, so we need to handle both cases
             if registration_category == 'workers_pas':
                 # Workers PAS: filter by level OR null level (they can select papers from any level)
-                enrollments = CandidateEnrollment.objects.filter(
-                    assessment_series=assessment_series,
-                    candidate__occupation=occupation  # Filter by occupation
+                # But since we are filtering candidates, we need to use Q objects for the enrollment check
+                # However, since we already have enrollments__assessment_series in filter_params,
+                # we need to be careful not to conflict or double-filter incorrectly.
+                
+                # Let's construct the queryset directly to be safe and clear
+                candidates = Candidate.objects.filter(
+                    assessment_center=assessment_center,
+                    registration_category=registration_category,
+                    occupation=occupation,
+                    is_submitted=True,
+                    verification_status='verified',
+                    enrollments__assessment_series=assessment_series,
+                    enrollments__is_active=True
                 ).filter(
-                    Q(occupation_level=level) | Q(occupation_level__isnull=True)
+                    Q(enrollments__occupation_level=level) | Q(enrollments__occupation_level__isnull=True)
                 )
             else:
-                # Formal: strict level matching
-                enrollments = CandidateEnrollment.objects.filter(
-                    assessment_series=assessment_series,
-                    occupation_level=level,
-                    candidate__occupation=occupation  # Filter by occupation
-                )
+                # Formal/Modular with level: strict level matching
+                filter_params['enrollments__occupation_level'] = level
+                candidates = Candidate.objects.filter(**filter_params)
+        else:
+            # Workers PAS or Modular without specific level (if applicable)
+            # Just use the base params which include assessment series
+            candidates = Candidate.objects.filter(**filter_params)
             
-            enrolled_candidate_ids = list(enrollments.values_list('candidate_id', flat=True))
-            
-            # Debug: Check if we have any enrollments
-            level_name = level.level_name if level else "Any"
-            print(f"DEBUG: Found {len(enrolled_candidate_ids)} enrollments for level {level_name} in {assessment_series.name}")
-            print(f"DEBUG: Enrolled candidate IDs: {enrolled_candidate_ids}")
-            
-            if enrolled_candidate_ids:
-                filter_params['id__in'] = enrolled_candidate_ids
-            else:
-                # No enrollments found, return empty queryset
-                filter_params['id__in'] = []
-        elif registration_category == 'workers_pas':
-            # Workers PAS without level filter - get all enrolled in this series for this occupation
-            from candidates.models import CandidateEnrollment
-            enrollments = CandidateEnrollment.objects.filter(
-                assessment_series=assessment_series,
-                candidate__occupation=occupation  # Filter by occupation
-            )
-            enrolled_candidate_ids = list(enrollments.values_list('candidate_id', flat=True))
-            
-            print(f"DEBUG: Workers PAS without level - Found {len(enrolled_candidate_ids)} enrollments")
-            
-            if enrolled_candidate_ids:
-                filter_params['id__in'] = enrolled_candidate_ids
-            else:
-                filter_params['id__in'] = []
-            
-        candidates = Candidate.objects.filter(**filter_params).select_related(
+        # Ensure distinct results since we're filtering across relationships
+        candidates = candidates.distinct().select_related(
             'occupation', 'assessment_center'
         ).order_by('registration_number')
+            
+
         
         # Debug: Print filter params and candidate count
         print(f"DEBUG: Filter params: {filter_params}")
