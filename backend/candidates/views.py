@@ -358,6 +358,33 @@ class CandidateViewSet(viewsets.ModelViewSet):
                     Q(full_name__icontains=search) |
                     Q(contact__icontains=search)
                 )
+
+            # Add missing filters
+            if request.data.get('entry_year'):
+                queryset = queryset.filter(entry_year=request.data['entry_year'])
+            if request.data.get('intake'):
+                queryset = queryset.filter(intake=request.data['intake'])
+            if request.data.get('sector'):
+                queryset = queryset.filter(occupation__sector_id=request.data['sector'])
+            
+            # Custom filters for is_enrolled and has_marks (adapted from get_queryset)
+            is_enrolled = request.data.get('is_enrolled')
+            if is_enrolled is not None and str(is_enrolled): # Handle potential "undefined" or empty string
+                if str(is_enrolled).lower() == 'yes':
+                    queryset = queryset.filter(enrollments__is_active=True).distinct()
+                elif str(is_enrolled).lower() == 'no':
+                    queryset = queryset.exclude(enrollments__is_active=True)
+            
+            has_marks = request.data.get('has_marks')
+            if has_marks is not None and str(has_marks):
+                if str(has_marks).lower() == 'yes':
+                    queryset = queryset.filter(
+                        Q(formal_results__isnull=False) | Q(modular_results__isnull=False)
+                    ).distinct()
+                elif str(has_marks).lower() == 'no':
+                    queryset = queryset.exclude(
+                        Q(formal_results__isnull=False) | Q(modular_results__isnull=False)
+                    )
         elif candidate_ids:
             queryset = self.get_queryset().filter(id__in=candidate_ids)
         else:
