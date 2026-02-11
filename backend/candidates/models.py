@@ -473,7 +473,7 @@ class Candidate(models.Model):
         # Use candidate_country (ISO code) if available, fallback to nationality
         if self.candidate_country:
             return 'U' if str(self.candidate_country) == 'UG' else 'X'
-        elif self.nationality and self.nationality.lower() in ['uganda', 'ugandan']:
+        elif self.nationality and self.nationality.lower() in ['uganda', 'ugandan', 'ug']:
             return 'U'
         else:
             return 'X'

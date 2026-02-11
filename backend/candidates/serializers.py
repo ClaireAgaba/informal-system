@@ -266,8 +266,21 @@ class CandidateCreateUpdateSerializer(serializers.ModelSerializer):
 
         return value
 
+    def validate_nationality(self, value):
+        if value:
+            # Normalize common variations
+            if value.upper() == 'UG' or value.lower() == 'ugandan':
+                return 'Uganda'
+        return value
+
     def validate(self, data):
         """Convert empty strings to None for foreign keys"""
+        # If nationality is Uganda (normalized), ensure candidate_country is UG
+        nationality = data.get('nationality')
+        if nationality == 'Uganda':
+            if not data.get('candidate_country'):
+                 data['candidate_country'] = 'UG'
+
         fk_fields = ['district', 'village', 'nature_of_disability', 
                      'assessment_center', 'assessment_center_branch', 'occupation']
 
