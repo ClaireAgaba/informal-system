@@ -26,6 +26,7 @@ import {
   Building2,
   Briefcase,
   Tag,
+  Eye,
 } from 'lucide-react';
 import candidateApi from '../services/candidateApi';
 import Button from '@shared/components/Button';
@@ -1484,18 +1485,17 @@ const DocumentItem = ({ label, file, type }) => (
     </div>
     {file && (
       <div className="flex items-center space-x-2">
-        {type === 'image' && (
-          <a
-            href={file}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary-600 hover:text-primary-700"
-          >
-            <Button variant="outline" size="sm">
-              View
-            </Button>
-          </a>
-        )}
+        <a
+          href={file}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary-600 hover:text-primary-700"
+        >
+          <Button variant="outline" size="sm">
+            <Eye className="w-4 h-4 mr-2" />
+            View
+          </Button>
+        </a>
         <a href={file} download>
           <Button variant="outline" size="sm">
             <Download className="w-4 h-4" />
