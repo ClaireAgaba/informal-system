@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { X, Building2, AlertTriangle } from 'lucide-react';
+import { X, Building2, AlertTriangle, Search } from 'lucide-react';
 import candidateApi from '../services/candidateApi';
 import assessmentCenterApi from '@modules/assessment-centers/services/assessmentCenterApi';
 import Button from '@shared/components/Button';
@@ -9,6 +9,7 @@ import Button from '@shared/components/Button';
 const ChangeCenterModal = ({ candidate, onClose }) => {
   const queryClient = useQueryClient();
   const [selectedCenter, setSelectedCenter] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchAllPagesApi = async (fetchPage, params = {}, page = 1, acc = []) => {
     const response = await fetchPage({ ...params, page, page_size: 1000 });
@@ -42,9 +43,9 @@ const ChangeCenterModal = ({ candidate, onClose }) => {
     onSuccess: (response) => {
       queryClient.invalidateQueries(['candidate', candidate.id]);
       queryClient.invalidateQueries(['candidate-enrollments', candidate.id]);
-      
+
       const { old_registration_number, new_registration_number, fees_moved } = response.data;
-      
+
       let message = response.data.message;
       if (old_registration_number !== new_registration_number) {
         message += `\nReg No: ${old_registration_number} → ${new_registration_number}`;
@@ -52,7 +53,7 @@ const ChangeCenterModal = ({ candidate, onClose }) => {
       if (fees_moved > 0) {
         message += `\n${fees_moved} fee record(s) moved`;
       }
-      
+
       toast.success(message, { duration: 5000 });
       onClose();
     },
@@ -95,7 +96,7 @@ const ChangeCenterModal = ({ candidate, onClose }) => {
               <p className="text-sm text-blue-800">
                 <strong>Candidate:</strong> {candidate.full_name}
               </p>
-              {currentCenter && (
+              {currentCenter?.center_name && (
                 <p className="text-sm text-blue-600 mt-1">
                   <strong>Current Center:</strong> {currentCenter.center_name} ({currentCenter.center_number})
                 </p>
@@ -122,21 +123,63 @@ const ChangeCenterModal = ({ candidate, onClose }) => {
               {isLoading ? (
                 <div className="text-sm text-gray-500">Loading centers...</div>
               ) : (
-                <select
-                  value={selectedCenter}
-                  onChange={(e) => setSelectedCenter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  required
-                >
-                  <option value="">-- Select Center --</option>
-                  {centersList
-                    .filter(center => !currentCenter || center.id !== currentCenter.id)
-                    .map((center) => (
-                      <option key={center.id} value={center.id}>
-                        {center.center_name} ({center.center_number})
-                      </option>
-                    ))}
-                </select>
+                <div className="space-y-2">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search center name or number..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full px-3 py-2 pl-9 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                    />
+                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                  </div>
+
+                  <div className="border border-gray-300 rounded-lg max-h-60 overflow-y-auto bg-white">
+                    {centersList
+                      .filter(center =>
+                        (!currentCenter || center.id !== currentCenter.id) &&
+                        (
+                          center.center_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          center.center_number?.toLowerCase().includes(searchTerm.toLowerCase())
+                        )
+                      )
+                      .length > 0 ? (
+                      <div className="divide-y divide-gray-100">
+                        {centersList
+                          .filter(center =>
+                            (!currentCenter || center.id !== currentCenter.id) &&
+                            (
+                              center.center_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              center.center_number?.toLowerCase().includes(searchTerm.toLowerCase())
+                            )
+                          )
+                          .map((center) => (
+                            <div
+                              key={center.id}
+                              onClick={() => setSelectedCenter(center.id)}
+                              className={`px-4 py-2 text-sm cursor-pointer transition-colors ${selectedCenter === center.id
+                                  ? 'bg-blue-50 text-blue-900 font-medium'
+                                  : 'text-gray-700 hover:bg-gray-50'
+                                }`}
+                            >
+                              {center.center_name} ({center.center_number})
+                            </div>
+                          ))}
+                      </div>
+                    ) : (
+                      <div className="p-4 text-center text-sm text-gray-500">
+                        No centers found matching "{searchTerm}"
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedCenter && (
+                    <p className="text-xs text-blue-600 font-medium text-right">
+                      Selection active
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>
