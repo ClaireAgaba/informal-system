@@ -115,7 +115,7 @@ const CandidateCreate = () => {
 
   // Watch district selection
   const selectedDistrict = watch('district');
-  
+
   // Fetch villages filtered by district
   const { data: villagesData } = useQuery({
     queryKey: ['villages', selectedDistrict],
@@ -247,9 +247,9 @@ const CandidateCreate = () => {
       console.error('Save draft error:', error);
       console.error('Error response:', error.response);
       const errorMsg = error.response?.data?.error ||
-                       error.response?.data?.detail || 
-                       JSON.stringify(error.response?.data) || 
-                       error.message;
+        error.response?.data?.detail ||
+        JSON.stringify(error.response?.data) ||
+        error.message;
       toast.error(`Failed to save draft: ${errorMsg}`);
     },
   });
@@ -260,7 +260,7 @@ const CandidateCreate = () => {
       console.log('Starting submit process...');
       // First save as draft if not already saved
       let candidateId = savedDraftId;
-      
+
       if (!candidateId) {
         console.log('Creating new candidate...');
         const saveResponse = await candidateApi.create(data);
@@ -271,7 +271,7 @@ const CandidateCreate = () => {
         console.log('Updating existing candidate:', candidateId);
         await candidateApi.update(candidateId, data);
       }
-      
+
       // Then submit
       console.log('Submitting candidate:', candidateId);
       const submitResponse = await candidateApi.submit(candidateId);
@@ -288,19 +288,19 @@ const CandidateCreate = () => {
     onError: (error) => {
       console.error('Submit error:', error);
       console.error('Error response:', error.response);
-      const errorMsg = error.response?.data?.error || 
-                       error.response?.data?.detail || 
-                       JSON.stringify(error.response?.data) || 
-                       error.message;
+      const errorMsg = error.response?.data?.error ||
+        error.response?.data?.detail ||
+        JSON.stringify(error.response?.data) ||
+        error.message;
       toast.error(`Failed to submit candidate: ${errorMsg}`);
     },
   });
 
   const cleanFormData = (data) => {
     const cleanedData = { ...data };
-    const fkFields = ['district', 'village', 'nature_of_disability', 
-                      'assessment_center', 'assessment_center_branch', 'occupation'];
-    
+    const fkFields = ['district', 'village', 'nature_of_disability',
+      'assessment_center', 'assessment_center_branch', 'occupation'];
+
     fkFields.forEach(field => {
       if (cleanedData[field] === '' || cleanedData[field] === 'None') {
         cleanedData[field] = null;
@@ -308,13 +308,13 @@ const CandidateCreate = () => {
         cleanedData[field] = parseInt(cleanedData[field], 10);
       }
     });
-    
+
     cleanedData.is_refugee = cleanedData.is_refugee === true;
     cleanedData.has_disability = cleanedData.has_disability === true;
-    
-    const textFields = ['disability_specification', 'enrollment_level', 'refugee_number', 
-                        'preferred_assessment_language'];
-    
+
+    const textFields = ['disability_specification', 'enrollment_level', 'refugee_number',
+      'preferred_assessment_language'];
+
     Object.keys(cleanedData).forEach(key => {
       if (cleanedData[key] === '' && typeof cleanedData[key] !== 'boolean') {
         if (!textFields.includes(key)) {
@@ -322,7 +322,7 @@ const CandidateCreate = () => {
         }
       }
     });
-    
+
     return cleanedData;
   };
 
@@ -402,7 +402,7 @@ const CandidateCreate = () => {
                 {activeTab === 'personal-info' && (
                   <div className="space-y-6">
                     <h3 className="text-lg font-semibold text-gray-900">Personal Information</h3>
-                    
+
                     {/* Passport Photo */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -441,7 +441,7 @@ const CandidateCreate = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Full Name */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -549,7 +549,7 @@ const CandidateCreate = () => {
                 {activeTab === 'location' && (
                   <div className="space-y-6">
                     <h3 className="text-lg font-semibold text-gray-900">Location Information</h3>
-                    
+
                     {/* District */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -595,7 +595,7 @@ const CandidateCreate = () => {
                 {activeTab === 'special' && (
                   <div className="space-y-6">
                     <h3 className="text-lg font-semibold text-gray-900">Special Considerations</h3>
-                    
+
                     {/* Is Refugee */}
                     <div className="flex items-center">
                       <input
@@ -675,7 +675,7 @@ const CandidateCreate = () => {
                 {activeTab === 'enrollment' && (
                   <div className="space-y-6">
                     <h3 className="text-lg font-semibold text-gray-900">Enrollment Details</h3>
-                    
+
                     {/* Assessment Center */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -728,7 +728,7 @@ const CandidateCreate = () => {
                         type="number"
                         {...register('entry_year', { required: 'Entry year is required' })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        placeholder="e.g., 2025"
+                        placeholder="e.g., 2026"
                       />
                       {errors.entry_year && (
                         <p className="mt-1 text-sm text-red-600">{errors.entry_year.message}</p>
@@ -832,7 +832,7 @@ const CandidateCreate = () => {
                   <div className="space-y-6">
                     <h3 className="text-lg font-semibold text-gray-900">Documents</h3>
                     <p className="text-sm text-gray-600">Upload required documents (Note: Files will be uploaded when you save)</p>
-                    
+
                     {/* Identification Document */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">

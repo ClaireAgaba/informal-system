@@ -231,7 +231,7 @@ class AwardsViewSet(viewsets.ViewSet):
 
         candidates_qs = self._get_base_queryset()
         candidates_qs = self._apply_filters(candidates_qs, request)
-        candidates_qs = candidates_qs.order_by('-created_at')
+        candidates_qs = candidates_qs.order_by('registration_number')
 
         total_count = candidates_qs.count()
 

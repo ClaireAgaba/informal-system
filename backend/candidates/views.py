@@ -901,7 +901,7 @@ class CandidateViewSet(viewsets.ModelViewSet):
         center_number = candidate.assessment_center.center_number
         
         # 2. Nationality code (U for Uganda, X for others)
-        nationality_code = 'U' if candidate.nationality == 'Uganda' else 'X'
+        nationality_code = candidate.get_nationality_code()
         
         # 3. Entry year (last 2 digits)
         year_code = str(candidate.entry_year)[-2:]
@@ -913,12 +913,7 @@ class CandidateViewSet(viewsets.ModelViewSet):
         occ_code = candidate.occupation.occ_code
         
         # 6. Registration category code
-        reg_cat_map = {
-            'modular': 'M',
-            'formal': 'F',
-            'workers_pas': 'I'
-        }
-        reg_cat_code = reg_cat_map.get(candidate.registration_category, 'M')
+        reg_cat_code = candidate.get_registration_category_code()
         
         # 7. Sequence number (unique per center + occupation)
         # Find the MAX sequence from all existing registration numbers for this center+occupation
