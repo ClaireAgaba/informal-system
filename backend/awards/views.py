@@ -362,7 +362,7 @@ class AwardsViewSet(viewsets.ViewSet):
         # Get candidates
         candidates = Candidate.objects.filter(id__in=candidate_ids).select_related(
             'occupation', 'assessment_center'
-        )
+        ).order_by('registration_number')
         
         if not candidates.exists():
             return Response(
@@ -465,7 +465,7 @@ class AwardsViewSet(viewsets.ViewSet):
         # Get candidates
         candidates = Candidate.objects.filter(id__in=candidate_ids).select_related(
             'occupation', 'assessment_center'
-        )
+        ).order_by('registration_number')
         
         if not candidates.exists():
             return Response(

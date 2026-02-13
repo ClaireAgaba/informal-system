@@ -239,27 +239,27 @@ const AwardsList = () => {
 
   // Print transcripts handler
   const handlePrintTranscripts = async () => {
-    const ids = selectAllFiltered 
-      ? awards.map((a) => a.id) 
+    const ids = selectAllFiltered
+      ? awards.map((a) => a.id)
       : selectedCandidates;
-    
+
     // Check if any selected candidate already has a printed transcript
     const selectedAwards = awards.filter((a) => ids.includes(a.id));
     const alreadyPrinted = selectedAwards.filter((a) => a.printed);
-    
+
     if (alreadyPrinted.length > 0) {
       setShowValidationError(true);
       return;
     }
-    
+
     try {
       setPrinting(true);
-      
-      const response = await apiClient.post('/awards/bulk-print-transcripts/', 
+
+      const response = await apiClient.post('/awards/bulk-print-transcripts/',
         { candidate_ids: ids },
         { responseType: 'blob' }
       );
-      
+
       // Create download link for PDF
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
@@ -270,7 +270,7 @@ const AwardsList = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
+
       toast.success(`Generated transcripts for ${ids.length} candidate(s)`);
       handleClearSelection();
       fetchAwards(currentPage); // Refresh to update printed status
@@ -292,19 +292,19 @@ const AwardsList = () => {
       toast.error('Please select a reprint reason');
       return;
     }
-    
-    const ids = selectAllFiltered 
-      ? awards.map((a) => a.id) 
+
+    const ids = selectAllFiltered
+      ? awards.map((a) => a.id)
       : selectedCandidates;
-    
+
     try {
       setReprinting(true);
-      
-      const response = await apiClient.post('/awards/reprint-transcripts/', 
+
+      const response = await apiClient.post('/awards/reprint-transcripts/',
         { candidate_ids: ids, reason_id: selectedReprintReason },
         { responseType: 'blob' }
       );
-      
+
       // Create download link for PDF
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
@@ -315,7 +315,7 @@ const AwardsList = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
+
       toast.success(`Reprinted transcripts for ${ids.length} candidate(s)`);
       setShowReprintModal(false);
       setSelectedReprintReason('');
@@ -401,9 +401,8 @@ const AwardsList = () => {
             </div>
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center px-4 py-2 rounded-lg border ${
-                showFilters ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-              }`}
+              className={`flex items-center px-4 py-2 rounded-lg border ${showFilters ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
             >
               <Filter className="w-4 h-4 mr-2" />
               Filters
@@ -533,7 +532,7 @@ const AwardsList = () => {
                 )}
               </span>
               {selectedCandidates.length === awards.length && !selectAllFiltered && totalCount > itemsPerPage && (
-                <button 
+                <button
                   onClick={handleSelectAllFiltered}
                   className="text-sm text-blue-600 hover:text-blue-800 underline"
                 >
@@ -541,7 +540,7 @@ const AwardsList = () => {
                 </button>
               )}
               {(selectedCandidates.length > 0 || selectAllFiltered) && (
-                <button 
+                <button
                   onClick={handleClearSelection}
                   className="text-sm text-gray-600 hover:text-gray-800 underline"
                 >
@@ -642,7 +641,7 @@ const AwardsList = () => {
                   <tr
                     key={award.id}
                     className={`hover:bg-gray-50 cursor-pointer ${selectedCandidates.includes(award.id) ? 'bg-blue-50' : ''}`}
-                    onClick={() => navigate(`/candidates/${award.id}`)}
+                    onClick={() => navigate(`/candidates/${award.id}`, { state: { from: 'awards' } })}
                   >
                     <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <input
@@ -675,11 +674,10 @@ const AwardsList = () => {
                       {award.center_name || '-'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        award.registration_category === 'Modular'
+                      <span className={`px-2 py-1 text-xs rounded-full ${award.registration_category === 'Modular'
                           ? 'bg-purple-100 text-purple-700'
                           : 'bg-green-100 text-green-700'
-                      }`}>
+                        }`}>
                         {award.registration_category || '-'}
                       </span>
                     </td>
@@ -699,11 +697,10 @@ const AwardsList = () => {
                       {award.completion_date || '-'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        award.printed
+                      <span className={`px-2 py-1 text-xs rounded-full ${award.printed
                           ? 'bg-green-100 text-green-700'
                           : 'bg-gray-100 text-gray-500'
-                      }`}>
+                        }`}>
                         {award.printed ? 'Yes' : 'No'}
                       </span>
                     </td>
@@ -746,11 +743,10 @@ const AwardsList = () => {
                   <button
                     key={pageNum}
                     onClick={() => handlePageChange(pageNum)}
-                    className={`px-3 py-1 rounded-lg ${
-                      currentPage === pageNum
+                    className={`px-3 py-1 rounded-lg ${currentPage === pageNum
                         ? 'bg-blue-600 text-white'
                         : 'border border-gray-300 hover:bg-gray-100'
-                    }`}
+                      }`}
                   >
                     {pageNum}
                   </button>

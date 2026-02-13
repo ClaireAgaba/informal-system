@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -42,6 +42,8 @@ import CandidateResults from '../components/CandidateResults';
 const CandidateView = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromAwards = location.state?.from === 'awards';
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('bio-data');
   const [showDeclineModal, setShowDeclineModal] = useState(false);
@@ -304,10 +306,10 @@ const CandidateView = () => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate('/candidates')}
+            onClick={() => navigate(fromAwards ? '/awards' : '/candidates')}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Candidates
+            {fromAwards ? 'Back to Awards' : 'Back to Candidates'}
           </Button>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
