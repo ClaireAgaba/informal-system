@@ -602,7 +602,7 @@ const EnrollmentList = () => {
                   <tr
                     key={enrollment.id}
                     className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => navigate(`/candidates/${enrollment.candidate_id}`)}
+                    onClick={() => window.open(`/candidates/${enrollment.candidate_id}`, '_blank')}
                   >
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <button onClick={() => handleSelectEnrollment(enrollment.id)}>
@@ -660,7 +660,7 @@ const EnrollmentList = () => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => navigate(`/candidates/${enrollment.candidate_id}`)}
+                        onClick={() => window.open(`/candidates/${enrollment.candidate_id}`, '_blank')}
                       >
                         <Eye className="w-4 h-4" />
                       </Button>
