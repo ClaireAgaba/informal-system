@@ -913,7 +913,7 @@ const CandidateList = () => {
                   <tr
                     key={candidate.id}
                     className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => navigate(`/candidates/${candidate.id}`)}
+                    onClick={() => window.open(`/candidates/${candidate.id}`, '_blank')}
                   >
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <button onClick={() => handleSelectCandidate(candidate.id)}>
@@ -1026,7 +1026,7 @@ const CandidateList = () => {
                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end space-x-2">
                         <button
-                          onClick={() => navigate(`/candidates/${candidate.id}`)}
+                          onClick={() => window.open(`/candidates/${candidate.id}`, '_blank')}
                           className="text-gray-600 hover:text-primary-600"
                           title="View"
                         >
