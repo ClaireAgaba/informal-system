@@ -6,6 +6,16 @@ import assessmentCenterApi from '../../assessment-centers/services/assessmentCen
 import assessmentSeriesApi from '../../assessment-series/services/assessmentSeriesApi';
 import occupationApi from '../../occupations/services/occupationApi';
 
+const getUserFromStorage = () => {
+  try {
+    const userStr = localStorage.getItem('user');
+    if (userStr) return JSON.parse(userStr);
+  } catch (e) {
+    console.error('Error parsing user from storage:', e);
+  }
+  return null;
+};
+
 const CreateComplaint = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -13,9 +23,13 @@ const CreateComplaint = () => {
   const [centers, setCenters] = useState([]);
   const [series, setSeries] = useState([]);
   const [occupations, setOccupations] = useState([]);
+  const currentUser = getUserFromStorage();
+  const isCenterRep = currentUser?.user_type === 'center_representative';
+  const userCenterId = currentUser?.center_representative?.assessment_center?.id || '';
+  const userCenterName = currentUser?.center_representative?.assessment_center?.center_name || '';
   const [formData, setFormData] = useState({
     category: '',
-    exam_center: '',
+    exam_center: isCenterRep ? String(userCenterId) : '',
     exam_series: '',
     program: '',
     phone: '',
@@ -210,16 +224,23 @@ const CreateComplaint = () => {
                 name="exam_center"
                 value={formData.exam_center}
                 onChange={handleChange}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 ${
-                  errors.exam_center ? 'border-red-500' : 'border-gray-300'
-                }`}
+                disabled={isCenterRep}
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 ${
+                  isCenterRep ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
+                } ${errors.exam_center ? 'border-red-500' : 'border-gray-300'}`}
               >
-                <option value="" className="text-gray-500">Select center</option>
-                {centers.map((center) => (
-                  <option key={center.id} value={center.id} className="text-gray-900">
-                    {center.name}
-                  </option>
-                ))}
+                {isCenterRep ? (
+                  <option value={userCenterId}>{userCenterName}</option>
+                ) : (
+                  <>
+                    <option value="" className="text-gray-500">Select center</option>
+                    {centers.map((center) => (
+                      <option key={center.id} value={center.id} className="text-gray-900">
+                        {center.center_name}
+                      </option>
+                    ))}
+                  </>
+                )}
               </select>
               {errors.exam_center && <p className="mt-1 text-sm text-red-500">{errors.exam_center}</p>}
             </div>
@@ -265,7 +286,7 @@ const CreateComplaint = () => {
                 <option value="" className="text-gray-500">Select occupation</option>
                 {occupations.map((occ) => (
                   <option key={occ.id} value={occ.id} className="text-gray-900">
-                    {occ.name}
+                    {occ.occ_name}
                   </option>
                 ))}
               </select>
