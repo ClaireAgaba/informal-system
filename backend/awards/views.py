@@ -431,6 +431,170 @@ class AwardsViewSet(viewsets.ViewSet):
         
         return response
 
+    @action(detail=False, methods=['post'], url_path='bulk-upload-serial-numbers')
+    def bulk_upload_serial_numbers(self, request):
+        """
+        Bulk upload transcript serial numbers from an Excel file.
+        Expected columns: Registration Number, TR SNo
+        Validates each row and returns detailed results.
+        """
+        import openpyxl
+
+        file = request.FILES.get('file')
+        if not file:
+            return Response(
+                {'error': 'No file uploaded'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate file type
+        if not file.name.endswith(('.xlsx', '.xls')):
+            return Response(
+                {'error': 'Invalid file format. Please upload an Excel file (.xlsx or .xls)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            wb = openpyxl.load_workbook(file, read_only=True)
+            ws = wb.active
+        except Exception as e:
+            return Response(
+                {'error': f'Could not read Excel file: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Read header row
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            return Response(
+                {'error': 'Excel file is empty'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        header = [str(cell).strip().lower() if cell else '' for cell in rows[0]]
+
+        # Find column indices
+        reg_col = None
+        sno_col = None
+        for i, h in enumerate(header):
+            if h in ('registration number', 'reg no', 'regno', 'registration_number'):
+                reg_col = i
+            elif h in ('tr sno', 'trsno', 'tr_sno', 'serial number', 'serial_number', 'serialno'):
+                sno_col = i
+
+        if reg_col is None or sno_col is None:
+            return Response(
+                {'error': 'Excel file must have columns: "Registration Number" and "TR SNo"'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        data_rows = rows[1:]
+        if not data_rows:
+            return Response(
+                {'error': 'Excel file has no data rows'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Build set of qualifying candidate IDs (candidates in awards module)
+        qualifying_ids = set(
+            self._get_base_queryset().values_list('id', flat=True)
+        )
+
+        results = []
+        success_count = 0
+        error_count = 0
+        total_rows = len(data_rows)
+
+        for idx, row in enumerate(data_rows, start=2):
+            reg_no = str(row[reg_col]).strip() if row[reg_col] else ''
+            tr_sno = str(row[sno_col]).strip() if row[sno_col] else ''
+
+            # Skip completely empty rows
+            if not reg_no and not tr_sno:
+                continue
+
+            row_result = {
+                'row': idx,
+                'registration_number': reg_no,
+                'tr_sno': tr_sno,
+            }
+
+            # Validate required fields
+            if not reg_no:
+                row_result['status'] = 'error'
+                row_result['message'] = 'Registration Number is missing'
+                results.append(row_result)
+                error_count += 1
+                continue
+
+            if not tr_sno:
+                row_result['status'] = 'error'
+                row_result['message'] = 'TR SNo is missing'
+                results.append(row_result)
+                error_count += 1
+                continue
+
+            # Find candidate
+            try:
+                candidate = Candidate.objects.get(registration_number=reg_no)
+            except Candidate.DoesNotExist:
+                row_result['status'] = 'error'
+                row_result['message'] = f'Candidate with Reg No "{reg_no}" not found'
+                results.append(row_result)
+                error_count += 1
+                continue
+            except Candidate.MultipleObjectsReturned:
+                row_result['status'] = 'error'
+                row_result['message'] = f'Multiple candidates found with Reg No "{reg_no}"'
+                results.append(row_result)
+                error_count += 1
+                continue
+
+            # Check if candidate qualifies for awards (is in the awards module)
+            if candidate.id not in qualifying_ids:
+                row_result['status'] = 'error'
+                row_result['message'] = f'Candidate "{reg_no}" does not qualify for a transcript. They must be in the awards module first.'
+                results.append(row_result)
+                error_count += 1
+                continue
+
+            # Check if serial number is already assigned to another candidate
+            existing = Candidate.objects.filter(
+                transcript_serial_number=tr_sno
+            ).exclude(id=candidate.id).first()
+            if existing:
+                row_result['status'] = 'error'
+                row_result['message'] = f'Serial No "{tr_sno}" is already assigned to {existing.registration_number} ({existing.full_name})'
+                results.append(row_result)
+                error_count += 1
+                continue
+
+            # Check if candidate already has a serial number
+            if candidate.transcript_serial_number:
+                row_result['status'] = 'error'
+                row_result['message'] = f'Candidate already has Serial No "{candidate.transcript_serial_number}". Cannot override.'
+                results.append(row_result)
+                error_count += 1
+                continue
+
+            # All checks passed — assign serial number
+            candidate.transcript_serial_number = tr_sno
+            candidate.save(update_fields=['transcript_serial_number'])
+            row_result['status'] = 'success'
+            row_result['message'] = 'Serial number assigned successfully'
+            row_result['candidate_name'] = candidate.full_name
+            results.append(row_result)
+            success_count += 1
+
+        wb.close()
+
+        return Response({
+            'total_rows': total_rows,
+            'success_count': success_count,
+            'error_count': error_count,
+            'results': results,
+        })
+
     @action(detail=False, methods=['post'], url_path='reprint-transcripts')
     def reprint_transcripts(self, request):
         """

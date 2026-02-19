@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Search, ChevronLeft, ChevronRight, User, Filter, ArrowLeft, Download, X, Edit2 } from 'lucide-react';
+import { FileText, Search, ChevronLeft, ChevronRight, User, Filter, ArrowLeft, Download, X, Edit2, Upload, CheckCircle, AlertCircle, FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import apiClient from '../../../services/apiClient';
@@ -30,6 +30,15 @@ const TranscriptLogs = () => {
   const [exporting, setExporting] = useState(false);
   const itemsPerPage = 50;
   const searchTimerRef = useRef(null);
+
+  // Bulk upload states
+  const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadResults, setUploadResults] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef(null);
 
   // Filter states
   const [filters, setFilters] = useState({
@@ -245,6 +254,74 @@ const TranscriptLogs = () => {
     }
   };
 
+  // Bulk upload handler
+  const handleBulkUpload = async () => {
+    if (!uploadFile) {
+      toast.error('Please select an Excel file');
+      return;
+    }
+    try {
+      setUploading(true);
+      setUploadProgress(0);
+      setUploadResults(null);
+
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+
+      const response = await apiClient.post('/awards/bulk-upload-serial-numbers/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          const pct = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(pct);
+        },
+      });
+
+      setUploadResults(response.data);
+      if (response.data.success_count > 0) {
+        toast.success(`${response.data.success_count} serial number(s) uploaded successfully`);
+        fetchPrintedAwards(currentPage);
+      }
+      if (response.data.error_count > 0) {
+        toast.error(`${response.data.error_count} row(s) had errors`);
+      }
+    } catch (err) {
+      console.error('Bulk upload error:', err);
+      const msg = err.response?.data?.error || 'Failed to upload file';
+      toast.error(msg);
+      setUploadResults({ error: msg });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleCloseBulkUpload = () => {
+    setShowBulkUploadModal(false);
+    setUploadFile(null);
+    setUploadProgress(0);
+    setUploadResults(null);
+    setDragOver(false);
+  };
+
+  const handleFileDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
+      setUploadFile(file);
+      setUploadResults(null);
+    } else {
+      toast.error('Please upload an Excel file (.xlsx or .xls)');
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setUploadFile(file);
+      setUploadResults(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -283,6 +360,13 @@ const TranscriptLogs = () => {
           </div>
         </div>
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setShowBulkUploadModal(true)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Bulk Upload Serial No
+          </button>
           <button
             onClick={() => handleExportExcel('all')}
             className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm"
@@ -675,6 +759,243 @@ const TranscriptLogs = () => {
               >
                 {saving ? 'Saving...' : 'Save'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Bulk Upload Serial Numbers Modal */}
+      {showBulkUploadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={!uploading ? handleCloseBulkUpload : undefined}
+          />
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <FileSpreadsheet className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Bulk Upload Serial Numbers</h3>
+                  <p className="text-xs text-gray-500">Excel file with columns: Registration Number, TR SNo</p>
+                </div>
+              </div>
+              {!uploading && (
+                <button
+                  onClick={handleCloseBulkUpload}
+                  className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              )}
+            </div>
+
+            {/* Modal Body */}
+            <div className="px-6 py-5">
+              {/* File Drop Zone */}
+              {!uploadResults && (
+                <div
+                  onDrop={handleFileDrop}
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onClick={() => !uploading && fileInputRef.current?.click()}
+                  className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+                    dragOver
+                      ? 'border-blue-400 bg-blue-50'
+                      : uploadFile
+                      ? 'border-green-300 bg-green-50'
+                      : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    disabled={uploading}
+                  />
+                  {uploadFile ? (
+                    <div className="flex flex-col items-center">
+                      <div className="p-3 bg-green-100 rounded-full mb-3">
+                        <FileSpreadsheet className="w-8 h-8 text-green-600" />
+                      </div>
+                      <p className="text-sm font-medium text-gray-900">{uploadFile.name}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {(uploadFile.size / 1024).toFixed(1)} KB
+                      </p>
+                      {!uploading && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setUploadFile(null);
+                            setUploadResults(null);
+                          }}
+                          className="mt-2 text-xs text-red-500 hover:text-red-700 underline"
+                        >
+                          Remove file
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center">
+                      <div className="p-3 bg-gray-100 rounded-full mb-3">
+                        <Upload className="w-8 h-8 text-gray-400" />
+                      </div>
+                      <p className="text-sm font-medium text-gray-700">Drop your Excel file here</p>
+                      <p className="text-xs text-gray-400 mt-1">or click to browse</p>
+                      <p className="text-xs text-gray-400 mt-2">Supported: .xlsx, .xls</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Progress Bar */}
+              {uploading && (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Processing...</span>
+                    <span className="text-sm font-medium text-blue-600">{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-2.5 rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">Please wait while the file is being processed...</p>
+                </div>
+              )}
+
+              {/* Upload Results */}
+              {uploadResults && !uploadResults.error && (
+                <div className="space-y-4">
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-gray-50 rounded-lg p-3 text-center">
+                      <p className="text-2xl font-bold text-gray-900">{uploadResults.total_rows}</p>
+                      <p className="text-xs text-gray-500">Total Rows</p>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-3 text-center">
+                      <p className="text-2xl font-bold text-green-600">{uploadResults.success_count}</p>
+                      <p className="text-xs text-green-600">Successful</p>
+                    </div>
+                    <div className={`rounded-lg p-3 text-center ${uploadResults.error_count > 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
+                      <p className={`text-2xl font-bold ${uploadResults.error_count > 0 ? 'text-red-600' : 'text-gray-400'}`}>{uploadResults.error_count}</p>
+                      <p className={`text-xs ${uploadResults.error_count > 0 ? 'text-red-600' : 'text-gray-400'}`}>Errors</p>
+                    </div>
+                  </div>
+
+                  {/* Success message */}
+                  {uploadResults.success_count > 0 && uploadResults.error_count === 0 && (
+                    <div className="flex items-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                      <p className="text-sm text-green-700">
+                        All {uploadResults.success_count} serial number(s) uploaded successfully!
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Detailed Results */}
+                  {uploadResults.results && uploadResults.results.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-2">Details</p>
+                      <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                        {uploadResults.results.map((r, i) => (
+                          <div
+                            key={i}
+                            className={`flex items-start space-x-3 px-3 py-2.5 text-sm ${
+                              r.status === 'success' ? 'bg-white' : 'bg-red-50'
+                            }`}
+                          >
+                            {r.status === 'success' ? (
+                              <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                            ) : (
+                              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className={`font-medium ${
+                                r.status === 'success' ? 'text-gray-900' : 'text-red-800'
+                              }`}>
+                                Row {r.row}: {r.registration_number}
+                                {r.candidate_name && <span className="font-normal text-gray-500"> — {r.candidate_name}</span>}
+                              </p>
+                              <p className={`text-xs mt-0.5 ${
+                                r.status === 'success' ? 'text-green-600' : 'text-red-600'
+                              }`}>
+                                {r.message}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Error message (file-level) */}
+              {uploadResults?.error && (
+                <div className="flex items-center space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg mt-4">
+                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                  <p className="text-sm text-red-700">{uploadResults.error}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end space-x-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+              {!uploadResults ? (
+                <>
+                  <button
+                    onClick={handleCloseBulkUpload}
+                    disabled={uploading}
+                    className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleBulkUpload}
+                    disabled={!uploadFile || uploading}
+                    className="flex items-center px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {uploading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload
+                      </>
+                    )}
+                  </button>
+                </>
+              ) : (
+                <>
+                  {uploadResults.error_count > 0 && (
+                    <button
+                      onClick={() => {
+                        setUploadFile(null);
+                        setUploadResults(null);
+                        setUploadProgress(0);
+                      }}
+                      className="px-4 py-2 text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
+                    >
+                      Upload Another File
+                    </button>
+                  )}
+                  <button
+                    onClick={handleCloseBulkUpload}
+                    className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Done
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
