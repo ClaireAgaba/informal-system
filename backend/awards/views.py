@@ -8,6 +8,8 @@ from django.core.paginator import Paginator, EmptyPage
 from candidates.models import Candidate
 from results.models import ModularResult, FormalResult
 from configurations.models import ReprintReason
+from awards.models import TranscriptCollection
+from awards.serializers import TranscriptCollectionListSerializer, TranscriptCollectionDetailSerializer
 from occupations.models import OccupationModule, OccupationPaper
 from io import BytesIO
 from PyPDF2 import PdfMerger
@@ -328,6 +330,146 @@ class AwardsViewSet(viewsets.ViewSet):
             'transcript_collector_name': candidate.transcript_collector_name or '',
             'transcript_collector_phone': candidate.transcript_collector_phone or '',
             'transcript_collection_date': str(candidate.transcript_collection_date) if candidate.transcript_collection_date else '',
+        })
+
+    @action(detail=False, methods=['post'], url_path='collect-transcripts')
+    def collect_transcripts(self, request):
+        """
+        Collect transcripts for multiple candidates from the same center.
+        Creates a TranscriptCollection record and updates each candidate's collection status.
+        """
+        from django.utils import timezone
+
+        candidate_ids = request.data.getlist('candidate_ids') if hasattr(request.data, 'getlist') else request.data.get('candidate_ids', [])
+        # Handle comma-separated string from FormData
+        if isinstance(candidate_ids, str):
+            candidate_ids = [int(x.strip()) for x in candidate_ids.split(',') if x.strip()]
+        elif isinstance(candidate_ids, list) and len(candidate_ids) == 1 and isinstance(candidate_ids[0], str):
+            candidate_ids = [int(x.strip()) for x in candidate_ids[0].split(',') if x.strip()]
+        else:
+            candidate_ids = [int(x) for x in candidate_ids]
+
+        designation = request.data.get('designation', '')
+        nin = request.data.get('nin', '')
+        collector_name = request.data.get('collector_name', '')
+        collector_phone = request.data.get('collector_phone', '')
+        email = request.data.get('email', '')
+        collection_date = request.data.get('collection_date', '')
+        signature_data = request.data.get('signature_data', '')
+        supporting_document = request.FILES.get('supporting_document')
+
+        # Validate required fields
+        errors = {}
+        if not candidate_ids:
+            errors['candidate_ids'] = 'At least one candidate must be selected'
+        if not designation:
+            errors['designation'] = 'Designation is required'
+        if not nin:
+            errors['nin'] = 'NIN is required'
+        if not collector_name:
+            errors['collector_name'] = 'Collector Name is required'
+        if not collector_phone:
+            errors['collector_phone'] = 'Phone Number is required'
+        if not email:
+            errors['email'] = 'Email is required'
+        if designation in ('candidate', 'other_person') and not supporting_document:
+            errors['supporting_document'] = 'Supporting document is required for Candidate and Other Person designations'
+
+        if errors:
+            return Response({'errors': errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not collection_date:
+            collection_date = timezone.now().date()
+
+        # Validate candidates exist, have printed transcripts, and belong to the same center
+        candidates = list(Candidate.objects.filter(id__in=candidate_ids).select_related('assessment_center'))
+        if len(candidates) != len(candidate_ids):
+            return Response(
+                {'error': 'Some candidates were not found'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check all candidates have printed transcripts
+        not_printed = [c for c in candidates if not c.transcript_serial_number]
+        if not_printed:
+            names = ', '.join([c.registration_number or str(c.id) for c in not_printed])
+            return Response(
+                {'error': f'The following candidates do not have printed transcripts: {names}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check all candidates belong to the same center
+        center_ids = set(c.assessment_center_id for c in candidates if c.assessment_center_id)
+        if len(center_ids) != 1:
+            return Response(
+                {'error': 'All selected candidates must belong to the same center'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        center_id = center_ids.pop()
+
+        # Check none are already collected
+        already_collected = [c for c in candidates if c.transcript_collected]
+        if already_collected:
+            names = ', '.join([c.registration_number or str(c.id) for c in already_collected])
+            return Response(
+                {'error': f'The following candidates have already had their transcripts collected: {names}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Create the collection record
+        receipt_number = TranscriptCollection.generate_receipt_number()
+        collection = TranscriptCollection.objects.create(
+            designation=designation,
+            nin=nin,
+            assessment_center_id=center_id,
+            collector_name=collector_name,
+            collector_phone=collector_phone,
+            email=email,
+            collection_date=collection_date,
+            signature_data=signature_data or None,
+            supporting_document=supporting_document,
+            candidate_count=len(candidates),
+            receipt_number=receipt_number,
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+        collection.candidates.set(candidates)
+
+        # Update each candidate's collection status
+        for candidate in candidates:
+            candidate.transcript_collected = True
+            candidate.transcript_collector_name = collector_name
+            candidate.transcript_collector_phone = collector_phone
+            candidate.transcript_collection_date = collection_date
+            candidate.save(update_fields=[
+                'transcript_collected',
+                'transcript_collector_name',
+                'transcript_collector_phone',
+                'transcript_collection_date',
+            ])
+
+        # Build response with receipt data for printing
+        candidate_list = [{
+            'registration_number': c.registration_number,
+            'full_name': c.full_name,
+            'tr_sno': c.transcript_serial_number,
+        } for c in candidates]
+
+        return Response({
+            'success': True,
+            'message': f'{len(candidates)} transcript(s) marked as collected',
+            'receipt': {
+                'receipt_number': receipt_number,
+                'designation': designation,
+                'nin': nin,
+                'center_name': collection.assessment_center.center_name,
+                'collector_name': collector_name,
+                'collector_phone': collector_phone,
+                'email': email,
+                'collection_date': str(collection_date),
+                'candidate_count': len(candidates),
+                'candidates': candidate_list,
+            },
         })
 
     @action(detail=False, methods=['post'], url_path='bulk-print-transcripts')
@@ -703,3 +845,97 @@ class AwardsViewSet(viewsets.ViewSet):
         response['Content-Disposition'] = 'attachment; filename="Reprinted_Transcripts.pdf"'
         
         return response
+
+    @action(detail=False, methods=['get'], url_path='collection-receipts')
+    def collection_receipts(self, request):
+        """
+        List all transcript collection receipts with search, filtering, and pagination.
+        """
+        qs = TranscriptCollection.objects.select_related(
+            'assessment_center', 'created_by'
+        ).all()
+
+        # Search
+        search = request.query_params.get('search', '').strip()
+        if search:
+            qs = qs.filter(
+                Q(receipt_number__icontains=search) |
+                Q(collector_name__icontains=search) |
+                Q(nin__icontains=search) |
+                Q(assessment_center__center_name__icontains=search)
+            )
+
+        # Filter by center
+        center_id = request.query_params.get('center_id')
+        if center_id:
+            qs = qs.filter(assessment_center_id=center_id)
+
+        # Pagination
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+        paginator = Paginator(qs, page_size)
+        try:
+            page_obj = paginator.page(page)
+        except EmptyPage:
+            page_obj = paginator.page(paginator.num_pages)
+
+        serializer = TranscriptCollectionListSerializer(page_obj.object_list, many=True)
+        return Response({
+            'results': serializer.data,
+            'count': paginator.count,
+            'total_pages': paginator.num_pages,
+            'current_page': page_obj.number,
+        })
+
+    @action(detail=False, methods=['delete'], url_path='collection-receipts/(?P<receipt_id>[0-9]+)/revoke')
+    def revoke_collection_receipt(self, request, receipt_id=None):
+        """
+        Revoke/delete a collection receipt. Resets candidate collection status.
+        """
+        try:
+            collection = TranscriptCollection.objects.prefetch_related('candidates').get(id=receipt_id)
+        except TranscriptCollection.DoesNotExist:
+            return Response(
+                {'error': 'Collection receipt not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Reset candidate collection fields
+        candidates = collection.candidates.all()
+        for candidate in candidates:
+            candidate.transcript_collected = False
+            candidate.transcript_collector_name = None
+            candidate.transcript_collector_phone = None
+            candidate.transcript_collection_date = None
+            candidate.save(update_fields=[
+                'transcript_collected',
+                'transcript_collector_name',
+                'transcript_collector_phone',
+                'transcript_collection_date',
+            ])
+
+        receipt_number = collection.receipt_number
+        collection.delete()
+
+        return Response({
+            'success': True,
+            'message': f'Receipt {receipt_number} revoked. {candidates.count()} candidate(s) reset.',
+        })
+
+    @action(detail=False, methods=['get'], url_path='collection-receipts/(?P<receipt_id>[0-9]+)')
+    def collection_receipt_detail(self, request, receipt_id=None):
+        """
+        Get detailed view of a single transcript collection receipt.
+        """
+        try:
+            collection = TranscriptCollection.objects.select_related(
+                'assessment_center', 'created_by'
+            ).prefetch_related('candidates__assessment_center').get(id=receipt_id)
+        except TranscriptCollection.DoesNotExist:
+            return Response(
+                {'error': 'Collection receipt not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = TranscriptCollectionDetailSerializer(collection)
+        return Response(serializer.data)

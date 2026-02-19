@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AssessmentCenter, CenterBranch
+from .models import AssessmentCenter, CenterBranch, CenterRepresentativePerson
 from configurations.serializers import DistrictSerializer, VillageSerializer
 
 
@@ -72,3 +72,27 @@ class AssessmentCenterListSerializer(serializers.ModelSerializer):
         fields = ['id', 'center_number', 'center_name', 'assessment_category', 
                   'assessment_category_display', 'district', 'district_name', 'village', 
                   'village_name', 'contact_1', 'has_branches', 'branches_count', 'is_active']
+
+
+class CenterRepresentativePersonSerializer(serializers.ModelSerializer):
+    """Full serializer for center representative persons"""
+    center_name = serializers.CharField(source='assessment_center.center_name', read_only=True)
+    center_number = serializers.CharField(source='assessment_center.center_number', read_only=True)
+    designation_name = serializers.CharField(source='designation.name', read_only=True)
+    district_name = serializers.CharField(source='district.name', read_only=True, default='')
+
+    class Meta:
+        model = CenterRepresentativePerson
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
+
+
+class CenterRepresentativePersonCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating/updating center representative persons"""
+
+    class Meta:
+        model = CenterRepresentativePerson
+        fields = [
+            'assessment_center', 'designation', 'name', 'phone',
+            'email', 'nin', 'country', 'district', 'is_active',
+        ]

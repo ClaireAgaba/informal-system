@@ -1,10 +1,11 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import AssessmentCenter, CenterBranch
+from .models import AssessmentCenter, CenterBranch, CenterRepresentativePerson
 from .serializers import (
     AssessmentCenterSerializer, AssessmentCenterCreateSerializer, AssessmentCenterListSerializer,
-    CenterBranchSerializer, CenterBranchCreateSerializer
+    CenterBranchSerializer, CenterBranchCreateSerializer,
+    CenterRepresentativePersonSerializer, CenterRepresentativePersonCreateSerializer
 )
 
 
@@ -93,3 +94,21 @@ class CenterBranchViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(branches, many=True)
             return Response(serializer.data)
         return Response({'error': 'center_id parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CenterRepresentativePersonViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for CenterRepresentativePerson model
+    """
+    queryset = CenterRepresentativePerson.objects.select_related(
+        'assessment_center', 'designation', 'district'
+    ).all()
+    serializer_class = CenterRepresentativePersonSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ['assessment_center', 'designation', 'district', 'is_active']
+    search_fields = ['name', 'phone', 'email', 'nin']
+
+    def get_serializer_class(self):
+        if self.action in ('create', 'update', 'partial_update'):
+            return CenterRepresentativePersonCreateSerializer
+        return CenterRepresentativePersonSerializer

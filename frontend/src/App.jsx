@@ -23,6 +23,7 @@ import AssessmentCenterView from '@modules/assessment-centers/pages/AssessmentCe
 import AssessmentCenterEdit from '@modules/assessment-centers/pages/AssessmentCenterEdit';
 import AssessmentCenterCreate from '@modules/assessment-centers/pages/AssessmentCenterCreate';
 import BranchEdit from '@modules/assessment-centers/pages/BranchEdit';
+import CenterRepresentatives from '@modules/assessment-centers/pages/CenterRepresentatives';
 import AssessmentSeriesList from '@modules/assessment-series/pages/AssessmentSeriesList';
 import AssessmentSeriesView from '@modules/assessment-series/pages/AssessmentSeriesView';
 import AssessmentSeriesEdit from '@modules/assessment-series/pages/AssessmentSeriesEdit';
@@ -53,6 +54,8 @@ import SpecialNeedsAnalytics from '@modules/statistics/pages/SpecialNeedsAnalyti
 import DitLegacyModule from '@modules/dit-legacy';
 import AwardsList from '@modules/awards/pages/AwardsList';
 import TranscriptLogs from '@modules/awards/pages/TranscriptLogs';
+import CollectionReceipts from '@modules/awards/pages/CollectionReceipts';
+import CollectionReceiptDetail from '@modules/awards/pages/CollectionReceiptDetail';
 
 function App() {
   return (
@@ -90,6 +93,7 @@ function App() {
         <Route path="assessment-centers/new" element={<AssessmentCenterCreate />} />
         <Route path="assessment-centers/:id" element={<AssessmentCenterView />} />
         <Route path="assessment-centers/:id/edit" element={<AssessmentCenterEdit />} />
+        <Route path="assessment-centers/:id/representatives" element={<CenterRepresentatives />} />
         <Route path="assessment-centers/:centerId/branches/new" element={<BranchEdit />} />
         <Route path="assessment-centers/branches/:branchId/edit" element={<BranchEdit />} />
 
@@ -143,6 +147,8 @@ function App() {
         {/* Awards routes */}
         <Route path="awards" element={<AwardsList />} />
         <Route path="awards/transcript-logs" element={<TranscriptLogs />} />
+        <Route path="awards/collection-receipts" element={<CollectionReceipts />} />
+        <Route path="awards/collection-receipts/:id" element={<CollectionReceiptDetail />} />
 
         <Route path="*" element={<div className="p-6"><h1 className="text-2xl">404 - Page Not Found</h1></div>} />
       </Route>

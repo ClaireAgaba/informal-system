@@ -8,6 +8,7 @@ import {
   MapPin,
   Phone,
   Users,
+  Users2,
   CheckCircle,
   XCircle,
   Plus,
@@ -98,6 +99,14 @@ const AssessmentCenterView = () => {
             <p className="text-gray-600 mt-1">Code: {center.center_number}</p>
           </div>
           <div className="flex items-center space-x-3">
+            <Button
+              variant="outline"
+              size="md"
+              onClick={() => navigate(`/assessment-centers/${id}/representatives`)}
+            >
+              <Users2 className="w-4 h-4 mr-2" />
+              Center Representatives
+            </Button>
             <Button
               variant="primary"
               size="md"

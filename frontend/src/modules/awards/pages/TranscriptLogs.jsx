@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Search, ChevronLeft, ChevronRight, User, Filter, ArrowLeft, Download, X, Edit2, Upload, CheckCircle, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { FileText, Search, ChevronLeft, ChevronRight, User, Filter, ArrowLeft, Download, X, Edit2, Upload, CheckCircle, AlertCircle, FileSpreadsheet, ClipboardList, Paperclip, Printer } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import apiClient from '../../../services/apiClient';
+import SignaturePad from '../../../shared/components/SignaturePad';
 
 const TranscriptLogs = () => {
   const navigate = useNavigate();
@@ -39,6 +40,33 @@ const TranscriptLogs = () => {
   const [uploadResults, setUploadResults] = useState(null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Collect transcripts states
+  const [showCollectModal, setShowCollectModal] = useState(false);
+  const [collectForm, setCollectForm] = useState({
+    designation: '',
+    nin: '',
+    collector_name: '',
+    collector_phone: '',
+    email: '',
+    collection_date: new Date().toISOString().slice(0, 10),
+    signature_data: '',
+    supporting_document: null,
+  });
+  const [collecting, setCollecting] = useState(false);
+  const [collectErrors, setCollectErrors] = useState({});
+  const [receiptData, setReceiptData] = useState(null);
+  const supportingDocRef = useRef(null);
+  const [configDesignations, setConfigDesignations] = useState([]);
+  const [centerRepPersons, setCenterRepPersons] = useState([]);
+  const [collectFieldsLocked, setCollectFieldsLocked] = useState(false);
+
+  // Build designation options: config items + static Candidate / Other Person
+  const DESIGNATION_OPTIONS = [
+    ...configDesignations.map((d) => ({ value: d.name, label: d.name, isConfig: true })),
+    { value: 'candidate', label: 'Candidate', isConfig: false },
+    { value: 'other_person', label: 'Other Person', isConfig: false },
+  ];
 
   // Filter states
   const [filters, setFilters] = useState({
@@ -322,6 +350,258 @@ const TranscriptLogs = () => {
     }
   };
 
+  // --- Collect Transcripts Logic ---
+
+  // Get selected candidates' data
+  const getSelectedAwards = () => awards.filter((a) => selectedCandidates.includes(a.id));
+
+  // Check if all selected candidates are from the same center
+  const getSelectedCenter = () => {
+    const selected = getSelectedAwards();
+    if (selected.length === 0) return null;
+    const centers = [...new Set(selected.map((a) => a.center_name))];
+    return centers.length === 1 ? centers[0] : null;
+  };
+
+  // Check if any selected candidate is already collected
+  const hasAlreadyCollected = () => getSelectedAwards().some((a) => a.transcript_collected);
+
+  // Can collect: same center, none already collected, not select-all-filtered (need concrete IDs)
+  const canCollect = () => {
+    if (selectAllFiltered) return false;
+    if (selectedCandidates.length === 0) return false;
+    if (hasAlreadyCollected()) return false;
+    return getSelectedCenter() !== null;
+  };
+
+  const handleOpenCollectModal = async () => {
+    const centerName = getSelectedCenter();
+    if (!centerName) {
+      toast.error('All selected candidates must belong to the same center');
+      return;
+    }
+    if (hasAlreadyCollected()) {
+      toast.error('Some selected candidates have already had their transcripts collected');
+      return;
+    }
+    setCollectForm({
+      designation: '',
+      nin: '',
+      collector_name: '',
+      collector_phone: '',
+      email: '',
+      collection_date: new Date().toISOString().slice(0, 10),
+      signature_data: '',
+      supporting_document: null,
+    });
+    setCollectErrors({});
+    setReceiptData(null);
+    setCollectFieldsLocked(false);
+
+    // Fetch config designations + center rep persons for this center
+    try {
+      const selected = getSelectedAwards();
+      const centerId = selected[0]?.center_id;
+      const [desRes, repsRes] = await Promise.all([
+        apiClient.get('/configurations/center-representatives/'),
+        centerId ? apiClient.get('/assessment-centers/representative-persons/', { params: { assessment_center: centerId } }) : Promise.resolve({ data: [] }),
+      ]);
+      const desData = desRes.data?.results || desRes.data;
+      setConfigDesignations(Array.isArray(desData) ? desData.filter((d) => d.is_active) : []);
+      const repsData = repsRes.data?.results || repsRes.data;
+      setCenterRepPersons(Array.isArray(repsData) ? repsData : []);
+    } catch (err) {
+      console.error('Error fetching designations/reps:', err);
+      setConfigDesignations([]);
+      setCenterRepPersons([]);
+    }
+
+    setShowCollectModal(true);
+  };
+
+  const handleCloseCollectModal = () => {
+    if (!collecting) {
+      setShowCollectModal(false);
+      setCollectErrors({});
+      setReceiptData(null);
+    }
+  };
+
+  const handleCollectTranscripts = async () => {
+    // Client-side validation
+    const errs = {};
+    if (!collectForm.designation) errs.designation = 'Required';
+    if (!collectForm.nin) errs.nin = 'Required';
+    if (!collectForm.collector_name) errs.collector_name = 'Required';
+    if (!collectForm.collector_phone) errs.collector_phone = 'Required';
+    if (!collectForm.email) errs.email = 'Required';
+    if (['candidate', 'other_person'].includes(collectForm.designation) && !collectForm.supporting_document) {
+      errs.supporting_document = 'Supporting document is required for this designation';
+    }
+    if (Object.keys(errs).length > 0) {
+      setCollectErrors(errs);
+      return;
+    }
+    setCollectErrors({});
+
+    try {
+      setCollecting(true);
+      const formData = new FormData();
+      formData.append('candidate_ids', selectedCandidates.join(','));
+      formData.append('designation', collectForm.designation);
+      formData.append('nin', collectForm.nin);
+      formData.append('collector_name', collectForm.collector_name);
+      formData.append('collector_phone', collectForm.collector_phone);
+      formData.append('email', collectForm.email);
+      formData.append('collection_date', collectForm.collection_date);
+      if (collectForm.signature_data) {
+        formData.append('signature_data', collectForm.signature_data);
+      }
+      if (collectForm.supporting_document) {
+        formData.append('supporting_document', collectForm.supporting_document);
+      }
+
+      const response = await apiClient.post('/awards/collect-transcripts/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      setReceiptData(response.data.receipt);
+      toast.success(response.data.message);
+      fetchPrintedAwards(currentPage);
+      setSelectedCandidates([]);
+      setSelectAllFiltered(false);
+    } catch (err) {
+      console.error('Collect transcripts error:', err);
+      if (err.response?.data?.errors) {
+        setCollectErrors(err.response.data.errors);
+      } else {
+        toast.error(err.response?.data?.error || 'Failed to collect transcripts');
+      }
+    } finally {
+      setCollecting(false);
+    }
+  };
+
+  const handlePrintReceipt = async () => {
+    if (!receiptData) return;
+
+    // Get logged-in user
+    let clearedByName = '';
+    try {
+      const u = JSON.parse(localStorage.getItem('user') || '{}');
+      clearedByName = (u.first_name && u.last_name) ? `${u.first_name} ${u.last_name}` : u.first_name || u.username || '';
+    } catch (_) {}
+
+    // Generate QR code
+    const qrText = [
+      `Collection Reference: ${receiptData.receipt_number}`,
+      `Collector Name: ${receiptData.collector_name}`,
+      `Center: ${receiptData.center_name}`,
+      `Collection Date & Time: ${receiptData.collection_date}`,
+      `Collector Type: ${receiptData.designation}`,
+    ].join('\n');
+    let qrDataUrl = '';
+    try {
+      const QRCode = (await import('qrcode')).default;
+      qrDataUrl = await QRCode.toDataURL(qrText, { width: 120, margin: 1 });
+    } catch (_) {}
+
+    const logoUrl = window.location.origin + '/uvtab-logo.png';
+
+    const candidateRows = receiptData.candidates.map((c, i) =>
+      `<tr><td style="padding:6px 12px;border:1px solid #ddd;text-align:center">${i + 1}</td><td style="padding:6px 12px;border:1px solid #ddd">${c.registration_number}</td><td style="padding:6px 12px;border:1px solid #ddd">${c.full_name}</td><td style="padding:6px 12px;border:1px solid #ddd">${c.tr_sno}</td></tr>`
+    ).join('');
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Collection Receipt - ${receiptData.receipt_number}</title>
+        <style>
+          body { font-family: 'Times New Roman', Times, serif; padding: 30px; color: #333; max-width: 800px; margin: 0 auto; }
+          .header { text-align: center; border-bottom: 2px solid #1a237e; padding-bottom: 15px; margin-bottom: 25px; }
+          .header h2 { font-size: 16px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 10px; }
+          .header-content { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 10px; }
+          .header-left { text-align: right; font-size: 12px; line-height: 1.6; }
+          .header-right { text-align: left; font-size: 12px; line-height: 1.6; }
+          .header-logo img { width: 70px; height: 70px; }
+          .header-title { font-size: 14px; font-weight: bold; text-transform: uppercase; margin-top: 8px; }
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 30px; margin-bottom: 20px; padding: 12px; border: 1px solid #ddd; border-radius: 4px; }
+          .info-item { display: flex; }
+          .info-label { font-weight: bold; font-size: 12px; color: #555; min-width: 130px; }
+          .info-value { font-size: 12px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          th { background: #f3f4f6; padding: 8px 12px; text-align: left; border: 1px solid #ddd; font-size: 11px; text-transform: uppercase; color: #555; }
+          td { font-size: 13px; }
+          .footer { margin-top: 30px; display: flex; justify-content: space-between; }
+          .sig-box { width: 250px; text-align: center; }
+          .sig-box .line { border-top: 1px solid #333; margin-top: 50px; padding-top: 5px; font-size: 12px; color: #666; }
+          .official-section { margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px; }
+          .official-title { font-weight: bold; font-size: 14px; font-style: italic; }
+          .cleared-by { font-size: 13px; color: #333; margin-top: 4px; }
+          .cleared-by em { font-style: italic; font-weight: bold; }
+          .qr-section { text-align: center; margin-top: 15px; }
+          @media print { body { padding: 15px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h2>Uganda Vocational and Technical Assessment Board</h2>
+          <div class="header-content">
+            <div class="header-left">
+              Address: P.O.Box 1499,<br/>
+              Kampala,<br/>
+              Email: info@uvtab.go.ug
+            </div>
+            <div class="header-logo">
+              <img src="${logoUrl}" alt="UVTAB Logo" />
+            </div>
+            <div class="header-right">
+              Tel: 0392002468
+            </div>
+          </div>
+          <div class="header-title">Transcript Collection Receipt</div>
+        </div>
+        <div class="info-grid">
+          <div class="info-item"><span class="info-label">Reference:</span><span class="info-value">${receiptData.receipt_number}</span></div>
+          <div class="info-item"><span class="info-label">Collection Date:</span><span class="info-value">${receiptData.collection_date}</span></div>
+          <div class="info-item"><span class="info-label">Collector Name:</span><span class="info-value">${receiptData.collector_name}</span></div>
+          <div class="info-item"><span class="info-label">Center:</span><span class="info-value">${receiptData.center_name}</span></div>
+          <div class="info-item"><span class="info-label">NIN:</span><span class="info-value">${receiptData.nin}</span></div>
+          <div class="info-item"><span class="info-label">Candidates:</span><span class="info-value">${receiptData.candidate_count}</span></div>
+          <div class="info-item"><span class="info-label">Designation:</span><span class="info-value">${receiptData.designation}</span></div>
+          <div class="info-item"><span class="info-label">Phone:</span><span class="info-value">${receiptData.collector_phone}</span></div>
+          <div class="info-item"><span class="info-label">Email:</span><span class="info-value">${receiptData.email}</span></div>
+        </div>
+        <h3 style="font-size:14px;margin-bottom:5px;">Candidates (${receiptData.candidate_count})</h3>
+        <table>
+          <thead><tr><th>#</th><th>Reg No</th><th>Name</th><th>TR SNo</th></tr></thead>
+          <tbody>${candidateRows}</tbody>
+        </table>
+        <div class="footer">
+          <div class="sig-box">
+            ${collectForm.signature_data
+              ? `<img src="${collectForm.signature_data}" style="max-width:250px;max-height:80px;display:block;margin:0 auto 5px;" /><div style="border-top:1px solid #333;padding-top:5px;font-size:12px;color:#666;">Collector Signature</div>`
+              : `<div class="line">Collector Signature</div>`
+            }
+          </div>
+          <div class="sig-box"><div class="line">Authorized Officer</div></div>
+        </div>
+        <div class="official-section">
+          <div class="official-title">Official</div>
+          <div class="cleared-by">Issued By: <em>${clearedByName}</em></div>
+        </div>
+        ${qrDataUrl ? `<div class="qr-section"><img src="${qrDataUrl}" alt="QR Code" style="width:120px;height:120px;" /></div>` : ''}
+        <script>window.onload = function() { window.print(); }</script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -360,6 +640,13 @@ const TranscriptLogs = () => {
           </div>
         </div>
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => navigate('/awards/collection-receipts')}
+            className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
+          >
+            <ClipboardList className="w-4 h-4 mr-2" />
+            Collection Receipts
+          </button>
           <button
             onClick={() => setShowBulkUploadModal(true)}
             className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
@@ -475,14 +762,42 @@ const TranscriptLogs = () => {
                 Clear selection
               </button>
             </div>
-            <button
-              onClick={() => handleExportExcel('selected')}
-              className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Export Selected
-            </button>
+            <div className="flex items-center space-x-2">
+              {!selectAllFiltered && selectedCandidates.length > 0 && (
+                <button
+                  onClick={handleOpenCollectModal}
+                  disabled={!canCollect()}
+                  className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={!canCollect() ? (
+                    hasAlreadyCollected() ? 'Some candidates already collected' :
+                    !getSelectedCenter() ? 'Selected candidates must be from the same center' :
+                    'Cannot collect'
+                  ) : 'Collect Transcripts'}
+                >
+                  <ClipboardList className="w-4 h-4 mr-2" />
+                  Collect Transcripts
+                </button>
+              )}
+              <button
+                onClick={() => handleExportExcel('selected')}
+                className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export Selected
+              </button>
+            </div>
           </div>
+          {/* Same-center warning */}
+          {!selectAllFiltered && selectedCandidates.length > 1 && !getSelectedCenter() && (
+            <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-1.5">
+              Selected candidates are from different centers. To collect transcripts, all must be from the same center.
+            </div>
+          )}
+          {!selectAllFiltered && selectedCandidates.length > 0 && hasAlreadyCollected() && (
+            <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-1.5">
+              Some selected candidates have already had their transcripts collected. Remove them from selection to collect.
+            </div>
+          )}
         </div>
       )}
 
@@ -763,6 +1078,325 @@ const TranscriptLogs = () => {
           </div>
         </div>
       )}
+      {/* Transcript Collection Form Modal */}
+      {showCollectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={handleCloseCollectModal}
+          />
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white z-10 flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <ClipboardList className="w-5 h-5 text-purple-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">Transcript Collection Form</h3>
+              </div>
+              {!collecting && (
+                <button onClick={handleCloseCollectModal} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              )}
+            </div>
+
+            {!receiptData ? (
+              <>
+                {/* Form Body */}
+                <div className="px-6 py-5">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                    {/* Left Column */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Designation *</label>
+                      <select
+                        value={collectForm.designation}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const opt = DESIGNATION_OPTIONS.find((o) => o.value === val);
+                          if (supportingDocRef.current) supportingDocRef.current.value = '';
+                          setCollectErrors((prev) => ({ ...prev, designation: undefined, supporting_document: undefined }));
+
+                          if (opt?.isConfig) {
+                            // Look up center rep person matching this designation name
+                            const rep = centerRepPersons.find((r) => r.designation_name === val);
+                            if (rep) {
+                              setCollectForm({
+                                ...collectForm,
+                                designation: val,
+                                collector_name: rep.name || '',
+                                collector_phone: rep.phone || '',
+                                nin: rep.nin || '',
+                                email: rep.email || '',
+                                supporting_document: null,
+                              });
+                              setCollectFieldsLocked(true);
+                            } else {
+                              // Config designation but no rep person registered for this center
+                              setCollectForm({
+                                ...collectForm,
+                                designation: val,
+                                collector_name: '',
+                                collector_phone: '',
+                                nin: '',
+                                email: '',
+                                supporting_document: null,
+                              });
+                              setCollectFieldsLocked(false);
+                              toast.info(`No ${val} registered for this center. Please fill in details manually.`);
+                            }
+                          } else {
+                            // Candidate or Other Person — manual entry
+                            setCollectForm({
+                              ...collectForm,
+                              designation: val,
+                              collector_name: '',
+                              collector_phone: '',
+                              nin: '',
+                              email: '',
+                              supporting_document: null,
+                            });
+                            setCollectFieldsLocked(false);
+                          }
+                        }}
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${collectErrors.designation ? 'border-red-400' : 'border-gray-300'}`}
+                      >
+                        <option value="">-- Select Designation --</option>
+                        {DESIGNATION_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                      {collectErrors.designation && <p className="text-xs text-red-500 mt-1">{collectErrors.designation}</p>}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Collector Name *</label>
+                      <input
+                        type="text"
+                        value={collectForm.collector_name}
+                        onChange={(e) => { if (!collectFieldsLocked) { setCollectForm({ ...collectForm, collector_name: e.target.value }); setCollectErrors((prev) => ({ ...prev, collector_name: undefined })); } }}
+                        readOnly={collectFieldsLocked}
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${collectFieldsLocked ? 'bg-gray-50 text-gray-600' : ''} ${collectErrors.collector_name ? 'border-red-400' : 'border-gray-300'}`}
+                        placeholder="Full name of collector"
+                      />
+                      {collectErrors.collector_name && <p className="text-xs text-red-500 mt-1">{collectErrors.collector_name}</p>}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number *</label>
+                      <input
+                        type="text"
+                        value={collectForm.collector_phone}
+                        onChange={(e) => { if (!collectFieldsLocked) { setCollectForm({ ...collectForm, collector_phone: e.target.value }); setCollectErrors((prev) => ({ ...prev, collector_phone: undefined })); } }}
+                        readOnly={collectFieldsLocked}
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${collectFieldsLocked ? 'bg-gray-50 text-gray-600' : ''} ${collectErrors.collector_phone ? 'border-red-400' : 'border-gray-300'}`}
+                        placeholder="e.g. +256700000000"
+                      />
+                      {collectErrors.collector_phone && <p className="text-xs text-red-500 mt-1">{collectErrors.collector_phone}</p>}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">NIN *</label>
+                      <input
+                        type="text"
+                        value={collectForm.nin}
+                        onChange={(e) => { if (!collectFieldsLocked) { setCollectForm({ ...collectForm, nin: e.target.value }); setCollectErrors((prev) => ({ ...prev, nin: undefined })); } }}
+                        readOnly={collectFieldsLocked}
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${collectFieldsLocked ? 'bg-gray-50 text-gray-600' : ''} ${collectErrors.nin ? 'border-red-400' : 'border-gray-300'}`}
+                        placeholder="National ID Number"
+                      />
+                      {collectErrors.nin && <p className="text-xs text-red-500 mt-1">{collectErrors.nin}</p>}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                      <input
+                        type="email"
+                        value={collectForm.email}
+                        onChange={(e) => { if (!collectFieldsLocked) { setCollectForm({ ...collectForm, email: e.target.value }); setCollectErrors((prev) => ({ ...prev, email: undefined })); } }}
+                        readOnly={collectFieldsLocked}
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${collectFieldsLocked ? 'bg-gray-50 text-gray-600' : ''} ${collectErrors.email ? 'border-red-400' : 'border-gray-300'}`}
+                        placeholder="Receipt will be sent here"
+                      />
+                      {collectErrors.email && <p className="text-xs text-red-500 mt-1">{collectErrors.email}</p>}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Exam Center</label>
+                      <input
+                        type="text"
+                        value={getSelectedCenter() || ''}
+                        disabled
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Date of Collection</label>
+                      <input
+                        type="date"
+                        value={collectForm.collection_date}
+                        onChange={(e) => setCollectForm({ ...collectForm, collection_date: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+
+                    {/* Supporting Document — only for Candidate and Other Person */}
+                    {['candidate', 'other_person'].includes(collectForm.designation) && (
+                      <div className="col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Supporting Document * <span className="text-xs text-gray-400 font-normal">(Required for {DESIGNATION_OPTIONS.find((o) => o.value === collectForm.designation)?.label})</span>
+                        </label>
+                        <div className={`flex items-center space-x-3 px-3 py-2 border rounded-lg ${collectErrors.supporting_document ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}>
+                          <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <input
+                            ref={supportingDocRef}
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                            onChange={(e) => {
+                              setCollectForm({ ...collectForm, supporting_document: e.target.files[0] || null });
+                              setCollectErrors((prev) => ({ ...prev, supporting_document: undefined }));
+                            }}
+                            className="flex-1 text-sm text-gray-600 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
+                          />
+                        </div>
+                        {collectErrors.supporting_document && <p className="text-xs text-red-500 mt-1">{collectErrors.supporting_document}</p>}
+                      </div>
+                    )}
+
+                    {/* Signature pad */}
+                    <div>
+                      <SignaturePad
+                        label="Signature"
+                        height={130}
+                        value={collectForm.signature_data}
+                        onChange={(data) => setCollectForm({ ...collectForm, signature_data: data })}
+                        showHardwareToggle={true}
+                      />
+                    </div>
+
+                    {/* Candidates info */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Candidates ({selectedCandidates.length})
+                      </label>
+                      <div className="border border-gray-200 rounded-lg p-2 max-h-32 overflow-y-auto bg-gray-50">
+                        <div className="flex flex-wrap gap-1.5">
+                          {getSelectedAwards().map((a) => (
+                            <span
+                              key={a.id}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-700 border border-purple-200"
+                              title={a.full_name}
+                            >
+                              {a.registration_number} - {a.full_name.length > 15 ? a.full_name.slice(0, 15) + '...' : a.full_name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Modal Footer - Form */}
+                <div className="sticky bottom-0 bg-gray-50 flex items-center justify-between px-6 py-4 border-t border-gray-200">
+                  <button
+                    onClick={handleCloseCollectModal}
+                    disabled={collecting}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                  >
+                    CANCEL
+                  </button>
+                  <button
+                    onClick={handleCollectTranscripts}
+                    disabled={collecting}
+                    className="flex items-center px-5 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors font-medium"
+                  >
+                    {collecting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Printer className="w-4 h-4 mr-2" />
+                        SAVE AND PRINT
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Receipt View */}
+                <div className="px-6 py-5">
+                  <div className="flex items-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-lg mb-5">
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-green-700">Collection recorded successfully!</p>
+                      <p className="text-xs text-green-600">Receipt No: {receiptData.receipt_number}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                    <div><span className="text-gray-500">Designation:</span> <span className="font-medium">{receiptData.designation}</span></div>
+                    <div><span className="text-gray-500">Collector:</span> <span className="font-medium">{receiptData.collector_name}</span></div>
+                    <div><span className="text-gray-500">NIN:</span> <span className="font-medium">{receiptData.nin}</span></div>
+                    <div><span className="text-gray-500">Phone:</span> <span className="font-medium">{receiptData.collector_phone}</span></div>
+                    <div><span className="text-gray-500">Center:</span> <span className="font-medium">{receiptData.center_name}</span></div>
+                    <div><span className="text-gray-500">Email:</span> <span className="font-medium">{receiptData.email}</span></div>
+                    <div><span className="text-gray-500">Date:</span> <span className="font-medium">{receiptData.collection_date}</span></div>
+                    <div><span className="text-gray-500">Candidates:</span> <span className="font-medium">{receiptData.candidate_count}</span></div>
+                  </div>
+
+                  <div className="mt-4">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Collected Transcripts</p>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">#</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Reg No</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Name</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">TR SNo</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {receiptData.candidates.map((c, i) => (
+                            <tr key={i}>
+                              <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                              <td className="px-3 py-2 text-blue-600 font-medium">{c.registration_number}</td>
+                              <td className="px-3 py-2">{c.full_name}</td>
+                              <td className="px-3 py-2 text-gray-500">{c.tr_sno}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Modal Footer - Receipt */}
+                <div className="sticky bottom-0 bg-gray-50 flex items-center justify-end space-x-3 px-6 py-4 border-t border-gray-200">
+                  <button
+                    onClick={handleCloseCollectModal}
+                    className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-100"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={handlePrintReceipt}
+                    className="flex items-center px-5 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium"
+                  >
+                    <Printer className="w-4 h-4 mr-2" />
+                    Print Receipt
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Bulk Upload Serial Numbers Modal */}
       {showBulkUploadModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">

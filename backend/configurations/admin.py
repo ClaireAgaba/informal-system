@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import Region, District, Village, NatureOfDisability, Department, ReprintReason
+from .models import Region, District, Village, NatureOfDisability, Department, CenterRepresentative, ReprintReason
 
 
 @admin.register(Region)
@@ -107,6 +107,14 @@ class DepartmentAdmin(admin.ModelAdmin):
             return ', '.join(names) if names else 'No modules assigned'
         return 'Save to see module names'
     display_module_names.short_description = 'Accessible Modules'
+
+
+@admin.register(CenterRepresentative)
+class CenterRepresentativeAdmin(admin.ModelAdmin):
+    list_display = ['name', 'description', 'is_active', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['name', 'description']
+    readonly_fields = ['created_at', 'updated_at']
 
 
 @admin.register(ReprintReason)

@@ -1,5 +1,5 @@
 from django.db import models
-from configurations.models import District, Village
+from configurations.models import District, Village, CenterRepresentative
 
 
 class AssessmentCenter(models.Model):
@@ -91,3 +91,45 @@ class CenterBranch(models.Model):
     def branch_name(self):
         """Branch name is same as main center name"""
         return self.assessment_center.center_name
+
+
+class CenterRepresentativePerson(models.Model):
+    """
+    Model for managing individual center representative persons.
+    Each person is linked to a center and has a designation (HOC, AR, DOS, etc.)
+    """
+    assessment_center = models.ForeignKey(
+        AssessmentCenter,
+        on_delete=models.CASCADE,
+        related_name='representative_persons',
+    )
+    designation = models.ForeignKey(
+        CenterRepresentative,
+        on_delete=models.PROTECT,
+        related_name='persons',
+        help_text='Designation/role at the center',
+    )
+    name = models.CharField(max_length=200)
+    phone = models.CharField(max_length=20, blank=True)
+    email = models.EmailField(blank=True)
+    nin = models.CharField(max_length=50, blank=True, verbose_name='NIN')
+    country = models.CharField(max_length=100, default='Uganda', blank=True)
+    district = models.ForeignKey(
+        District,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='center_representative_persons',
+    )
+
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['assessment_center', 'name']
+        verbose_name = 'Center Representative Person'
+        verbose_name_plural = 'Center Representative Persons'
+
+    def __str__(self):
+        return f'{self.name} - {self.designation.name} ({self.assessment_center.center_name})'

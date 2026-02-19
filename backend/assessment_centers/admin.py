@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import AssessmentCenter, CenterBranch
+from .models import AssessmentCenter, CenterBranch, CenterRepresentativePerson
 
 
 class CenterBranchInline(admin.TabularInline):
@@ -87,3 +87,36 @@ class CenterBranchAdmin(admin.ModelAdmin):
         return obj.assessment_center.center_number
     get_center_number.short_description = 'Center Number'
     get_center_number.admin_order_field = 'assessment_center__center_number'
+
+
+@admin.register(CenterRepresentativePerson)
+class CenterRepresentativePersonAdmin(admin.ModelAdmin):
+    list_display = ['name', 'designation', 'get_center_name', 'phone', 'email', 'nin', 'is_active', 'created_at']
+    list_filter = ['designation', 'is_active', 'assessment_center', 'created_at']
+    search_fields = ['name', 'phone', 'email', 'nin', 'assessment_center__center_name', 'assessment_center__center_number']
+    readonly_fields = ['created_at', 'updated_at']
+    autocomplete_fields = ['assessment_center', 'designation', 'district']
+
+    fieldsets = (
+        ('Representative Information', {
+            'fields': ('assessment_center', 'name', 'designation')
+        }),
+        ('Contact Details', {
+            'fields': ('phone', 'email', 'nin'),
+        }),
+        ('Location', {
+            'fields': ('country', 'district'),
+        }),
+        ('Status & Timestamps', {
+            'fields': ('is_active', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('assessment_center', 'designation', 'district')
+
+    def get_center_name(self, obj):
+        return f'{obj.assessment_center.center_name} ({obj.assessment_center.center_number})'
+    get_center_name.short_description = 'Center'
+    get_center_name.admin_order_field = 'assessment_center__center_name'

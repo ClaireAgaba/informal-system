@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Region, District, Village, NatureOfDisability, Department, ReprintReason
+from .models import Region, District, Village, NatureOfDisability, Department, CenterRepresentative, ReprintReason
 
 
 class RegionSerializer(serializers.ModelSerializer):
@@ -56,6 +56,13 @@ class DepartmentSerializer(serializers.ModelSerializer):
     def get_available_modules(self, obj):
         """Return all available modules for selection"""
         return [{'value': app[0], 'label': app[1]} for app in Department.APP_CHOICES]
+
+
+class CenterRepresentativeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CenterRepresentative
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
 
 
 class ReprintReasonSerializer(serializers.ModelSerializer):

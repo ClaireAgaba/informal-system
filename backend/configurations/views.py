@@ -1,8 +1,8 @@
 from rest_framework import viewsets, permissions
-from .models import Region, District, Village, NatureOfDisability, Department, ReprintReason
+from .models import Region, District, Village, NatureOfDisability, Department, CenterRepresentative, ReprintReason
 from .serializers import (
     RegionSerializer, DistrictSerializer, VillageSerializer, 
-    NatureOfDisabilitySerializer, DepartmentSerializer, ReprintReasonSerializer
+    NatureOfDisabilitySerializer, DepartmentSerializer, CenterRepresentativeSerializer, ReprintReasonSerializer
 )
 
 
@@ -57,6 +57,17 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
     permission_classes = [permissions.AllowAny]  # Temporarily allow unauthenticated access
+    filterset_fields = ['is_active']
+    search_fields = ['name', 'description']
+
+
+class CenterRepresentativeViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for CenterRepresentative model
+    """
+    queryset = CenterRepresentative.objects.all()
+    serializer_class = CenterRepresentativeSerializer
+    permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['is_active']
     search_fields = ['name', 'description']
 
