@@ -16,6 +16,7 @@ const CandidateCreate = () => {
   const [activeTab, setActiveTab] = useState('personal-info');
   const [savedDraftId, setSavedDraftId] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
+  const [photoFile, setPhotoFile] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
 
   const fetchAllPagesFetch = async (baseUrl, params = {}, page = 1, acc = []) => {
@@ -221,18 +222,24 @@ const CandidateCreate = () => {
         setPhotoPreview(reader.result);
       };
       reader.readAsDataURL(file);
-      // TODO: Upload photo via API when implementing file upload
+      setPhotoFile(file);
     }
   };
 
   // Create/Update mutation (for draft saving)
   const saveDraftMutation = useMutation({
-    mutationFn: (data) => {
+    mutationFn: async (data) => {
+      let response;
       if (savedDraftId) {
-        return candidateApi.update(savedDraftId, data);
+        response = await candidateApi.update(savedDraftId, data);
       } else {
-        return candidateApi.create(data);
+        response = await candidateApi.create(data);
       }
+      const candidateId = response?.data?.id || response?.id;
+      if (candidateId && photoFile) {
+        await candidateApi.uploadPhoto(candidateId, photoFile);
+      }
+      return response;
     },
     onSuccess: (response) => {
       console.log('Save draft response:', response);
@@ -270,6 +277,11 @@ const CandidateCreate = () => {
       } else {
         console.log('Updating existing candidate:', candidateId);
         await candidateApi.update(candidateId, data);
+      }
+
+      // Upload photo if one was selected
+      if (candidateId && photoFile) {
+        await candidateApi.uploadPhoto(candidateId, photoFile);
       }
 
       // Then submit
