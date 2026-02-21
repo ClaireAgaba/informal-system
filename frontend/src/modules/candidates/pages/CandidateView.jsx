@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
   Edit,
+  Pencil,
   Trash2,
   CheckCircle,
   XCircle,
@@ -58,6 +59,8 @@ const CandidateView = () => {
   const [showTRSNoModal, setShowTRSNoModal] = useState(false);
   const [trSNoValue, setTRSNoValue] = useState('');
   const [savingTRSNo, setSavingTRSNo] = useState(false);
+  const photoInputRef = useRef(null);
+  const [showPhotoConfirm, setShowPhotoConfirm] = useState(null);
 
   // Load current user from localStorage
   useEffect(() => {
@@ -225,6 +228,55 @@ const CandidateView = () => {
     if (window.confirm('Mark this payment as cleared? This will set the amount due to 0.')) {
       markPaidMutation.mutate();
     }
+  };
+
+  // Photo upload mutation
+  const uploadPhotoMutation = useMutation({
+    mutationFn: (file) => candidateApi.uploadPhoto(id, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['candidate', id]);
+      toast.success('Photo updated successfully!');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.error || 'Failed to upload photo');
+    },
+  });
+
+  // Photo delete mutation
+  const deletePhotoMutation = useMutation({
+    mutationFn: () => candidateApi.deletePhoto(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['candidate', id]);
+      toast.success('Photo deleted successfully!');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.error || 'Failed to delete photo');
+    },
+  });
+
+  const handlePhotoEdit = () => {
+    setShowPhotoConfirm('edit');
+  };
+
+  const handlePhotoDelete = () => {
+    setShowPhotoConfirm('delete');
+  };
+
+  const confirmPhotoAction = () => {
+    if (showPhotoConfirm === 'edit') {
+      photoInputRef.current?.click();
+    } else if (showPhotoConfirm === 'delete') {
+      deletePhotoMutation.mutate();
+    }
+    setShowPhotoConfirm(null);
+  };
+
+  const handlePhotoFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      uploadPhotoMutation.mutate(file);
+    }
+    e.target.value = '';
   };
 
   const handleTranscript = async () => {
@@ -469,15 +521,47 @@ const CandidateView = () => {
           <Card>
             <Card.Content className="text-center py-6">
               {/* Profile Image */}
-              <div className="relative inline-block">
+              <div className="relative inline-block group">
+                <input
+                  type="file"
+                  ref={photoInputRef}
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handlePhotoFileChange}
+                />
                 {candidate.passport_photo ? (
-                  <img
-                    src={candidate.passport_photo}
-                    alt={candidate.full_name}
-                    className="w-32 h-32 rounded-full object-cover mx-auto border-4 border-gray-200"
-                  />
+                  <>
+                    <img
+                      src={candidate.passport_photo}
+                      alt={candidate.full_name}
+                      className="w-32 h-32 rounded-full object-cover mx-auto border-4 border-gray-200"
+                    />
+                    {/* Edit/Delete overlay */}
+                    <div className="absolute inset-0 rounded-full flex items-center justify-center gap-2 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={handlePhotoEdit}
+                        className="p-2 bg-white rounded-full shadow hover:bg-blue-50 transition-colors"
+                        title="Change photo"
+                        disabled={uploadPhotoMutation.isPending}
+                      >
+                        <Pencil className="w-4 h-4 text-blue-600" />
+                      </button>
+                      <button
+                        onClick={handlePhotoDelete}
+                        className="p-2 bg-white rounded-full shadow hover:bg-red-50 transition-colors"
+                        title="Delete photo"
+                        disabled={deletePhotoMutation.isPending}
+                      >
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                      </button>
+                    </div>
+                  </>
                 ) : (
-                  <div className="w-32 h-32 rounded-full bg-primary-100 flex items-center justify-center mx-auto border-4 border-gray-200">
+                  <div
+                    className="w-32 h-32 rounded-full bg-primary-100 flex items-center justify-center mx-auto border-4 border-gray-200 cursor-pointer hover:bg-primary-200 transition-colors"
+                    onClick={() => setShowPhotoConfirm('upload')}
+                    title="Upload photo"
+                  >
                     <span className="text-4xl font-bold text-primary-600">
                       {candidate.full_name?.charAt(0) || '?'}
                     </span>
@@ -492,6 +576,40 @@ const CandidateView = () => {
                   </div>
                 )}
               </div>
+
+              {/* Photo confirmation modal */}
+              {showPhotoConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                  <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm mx-4">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      {showPhotoConfirm === 'delete' ? 'Delete Photo' : showPhotoConfirm === 'edit' ? 'Change Photo' : 'Upload Photo'}
+                    </h3>
+                    <p className="text-gray-600 mb-4">
+                      {showPhotoConfirm === 'delete'
+                        ? 'Are you sure you want to delete this photo? This action cannot be undone.'
+                        : showPhotoConfirm === 'edit'
+                          ? 'Are you sure you want to replace the current photo with a new one?'
+                          : 'Would you like to upload a photo for this candidate?'}
+                    </p>
+                    <div className="flex justify-end gap-3">
+                      <button
+                        onClick={() => setShowPhotoConfirm(null)}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={showPhotoConfirm === 'upload' ? () => { setShowPhotoConfirm(null); photoInputRef.current?.click(); } : confirmPhotoAction}
+                        className={`px-4 py-2 text-sm font-medium text-white rounded-lg ${
+                          showPhotoConfirm === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
+                      >
+                        {showPhotoConfirm === 'delete' ? 'Delete' : 'Continue'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <h2 className="text-xl font-bold text-gray-900 mt-4">
                 {candidate.full_name}
@@ -638,9 +756,16 @@ const CandidateView = () => {
                   </Button>
                 )}
 
-                <Button variant="outline" size="md" className="w-full">
+                <Button
+                  variant="outline"
+                  size="md"
+                  className="w-full"
+                  onClick={() => candidate.passport_photo ? handlePhotoEdit() : setShowPhotoConfirm('upload')}
+                  loading={uploadPhotoMutation.isPending}
+                  disabled={uploadPhotoMutation.isPending}
+                >
                   <Upload className="w-4 h-4 mr-2" />
-                  Upload Photo
+                  {candidate.passport_photo ? 'Change Photo' : 'Upload Photo'}
                 </Button>
               </div>
             </Card.Content>

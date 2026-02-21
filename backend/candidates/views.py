@@ -268,20 +268,6 @@ class CandidateViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     @action(detail=True, methods=['post'])
-    def upload_photo(self, request, pk=None):
-        """Upload passport photo"""
-        candidate = self.get_object()
-        if 'passport_photo' in request.FILES:
-            candidate.passport_photo = request.FILES['passport_photo']
-            candidate.save()
-            serializer = self.get_serializer(candidate)
-            return Response(serializer.data)
-        return Response(
-            {'error': 'No photo file provided'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    @action(detail=True, methods=['post'])
     def upload_document(self, request, pk=None):
         """Upload identification or qualification document"""
         candidate = self.get_object()
@@ -979,13 +965,14 @@ class CandidateViewSet(viewsets.ModelViewSet):
         """Upload passport photo"""
         candidate = self.get_object()
         
-        if 'photo' not in request.FILES:
+        photo_file = request.FILES.get('photo') or request.FILES.get('passport_photo')
+        if not photo_file:
             return Response(
                 {'error': 'No photo file provided'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        candidate.passport_photo = request.FILES['photo']
+        candidate.passport_photo = photo_file
         candidate.save()
 
         self._log_activity(candidate, 'photo_uploaded', 'Photo uploaded')
@@ -998,6 +985,28 @@ class CandidateViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK
         )
     
+    @action(detail=True, methods=['delete'])
+    def delete_photo(self, request, pk=None):
+        """Delete passport photo"""
+        candidate = self.get_object()
+
+        if not candidate.passport_photo:
+            return Response(
+                {'error': 'No photo to delete'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        candidate.passport_photo.delete(save=False)
+        candidate.passport_photo = None
+        candidate.save()
+
+        self._log_activity(candidate, 'photo_deleted', 'Passport photo deleted')
+
+        return Response(
+            {'message': 'Photo deleted successfully'},
+            status=status.HTTP_200_OK
+        )
+
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def upload_document(self, request, pk=None):
         """Upload identification or qualification document"""

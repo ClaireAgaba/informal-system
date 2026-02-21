@@ -33,23 +33,6 @@ export const candidateApi = {
     return apiClient.delete(`${CANDIDATES_BASE}/${id}/`);
   },
 
-  // Upload candidate photo
-  uploadPhoto: (id, file) => {
-    const formData = new FormData();
-    formData.append('passport_photo', file);
-    return apiClient.post(`${CANDIDATES_BASE}/${id}/upload-photo/`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-  },
-
-  // Upload identification document
-  uploadDocument: (id, file, documentType) => {
-    const formData = new FormData();
-    formData.append(documentType, file);
-    return apiClient.post(`${CANDIDATES_BASE}/${id}/upload-document/`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-  },
 
   // Verify candidate
   verify: (id) => {
@@ -118,6 +101,11 @@ export const candidateApi = {
         'Content-Type': 'multipart/form-data',
       },
     });
+  },
+
+  // Delete passport photo
+  deletePhoto: (id) => {
+    return apiClient.delete(`${CANDIDATES_BASE}/${id}/delete_photo/`);
   },
 
   // Upload document (identification or qualification)
