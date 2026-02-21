@@ -45,7 +45,7 @@ db.sqlite3-journal
 /media
 /staticfiles
 /static
-**/migrations/**
+**/migrations/__pycache__/
 
 # Node
 node_modules/
