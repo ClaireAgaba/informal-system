@@ -455,21 +455,33 @@ class AwardsViewSet(viewsets.ViewSet):
             'tr_sno': c.transcript_serial_number,
         } for c in candidates]
 
+        issued_by = ''
+        if request.user.is_authenticated:
+            issued_by = f'{request.user.first_name} {request.user.last_name}'.strip() or request.user.username
+
+        receipt = {
+            'receipt_number': receipt_number,
+            'designation': designation,
+            'nin': nin,
+            'center_name': collection.assessment_center.center_name,
+            'collector_name': collector_name,
+            'collector_phone': collector_phone,
+            'email': email,
+            'collection_date': str(collection_date),
+            'candidate_count': len(candidates),
+            'candidates': candidate_list,
+            'issued_by': issued_by,
+        }
+
+        # Send receipt email to collector in background
+        if email:
+            from awards.emails import send_collection_receipt_email
+            send_collection_receipt_email(receipt, email)
+
         return Response({
             'success': True,
             'message': f'{len(candidates)} transcript(s) marked as collected',
-            'receipt': {
-                'receipt_number': receipt_number,
-                'designation': designation,
-                'nin': nin,
-                'center_name': collection.assessment_center.center_name,
-                'collector_name': collector_name,
-                'collector_phone': collector_phone,
-                'email': email,
-                'collection_date': str(collection_date),
-                'candidate_count': len(candidates),
-                'candidates': candidate_list,
-            },
+            'receipt': receipt,
         })
 
     @action(detail=False, methods=['post'], url_path='bulk-print-transcripts')
