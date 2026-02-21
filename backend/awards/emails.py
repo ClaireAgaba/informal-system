@@ -1,5 +1,7 @@
+import base64
 import logging
 import os
+import re
 import threading
 from io import BytesIO
 
@@ -197,11 +199,44 @@ def _build_receipt_pdf(receipt_data):
     elements.append(Spacer(1, 0.3 * inch))
 
     # -- Signature section --
+    # Try to render the actual collector signature from base64 data
+    collector_sig_cell = None
+    signature_data = receipt_data.get('signature_data', '')
+    if signature_data:
+        try:
+            # Strip the data URI prefix if present (e.g. "data:image/png;base64,")
+            if ',' in signature_data:
+                sig_b64 = signature_data.split(',', 1)[1]
+            else:
+                sig_b64 = signature_data
+            sig_bytes = base64.b64decode(sig_b64)
+            sig_buf = BytesIO(sig_bytes)
+            sig_img = Image(sig_buf, width=2.5 * inch, height=0.8 * inch)
+            # Stack signature image + label
+            sig_cell_data = [[sig_img], [Paragraph(
+                '<font size="9" color="#666666">Collector Signature</font>',
+                ParagraphStyle('siglbl', parent=styles['Normal'], alignment=TA_CENTER),
+            )]]
+            collector_sig_cell = Table(sig_cell_data, colWidths=[doc.width / 2])
+            collector_sig_cell.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('LINEBELOW', (0, 0), (0, 0), 0.5, colors.HexColor('#333333')),
+                ('BOTTOMPADDING', (0, 0), (0, 0), 4),
+            ]))
+        except Exception as e:
+            logger.warning(f"Failed to render signature image: {e}")
+            collector_sig_cell = None
+
+    if not collector_sig_cell:
+        collector_sig_cell = Paragraph(
+            '_' * 35 + '<br/><font size="9" color="#666666">Collector Signature</font>',
+            ParagraphStyle('sig', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER),
+        )
+
     sig_data = [[
-        Paragraph('_' * 35 + '<br/><font size="9" color="#666666">Collector Signature</font>', 
-                  ParagraphStyle('sig', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER)),
+        collector_sig_cell,
         Paragraph('_' * 35 + '<br/><font size="9" color="#666666">Authorized Officer</font>',
-                  ParagraphStyle('sig', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER)),
+                  ParagraphStyle('sig2', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER)),
     ]]
     sig_table = Table(sig_data, colWidths=[doc.width / 2, doc.width / 2])
     sig_table.setStyle(TableStyle([
@@ -263,16 +298,16 @@ def send_collection_receipt_email(receipt_data, recipient_email):
     def _send():
         try:
             receipt_number = receipt_data['receipt_number']
-            subject = f"Transcript Collection Receipt - {receipt_number}"
+            subject = f"NOREPLY - Transcript Collection Receipt - {receipt_number}"
             body = (
                 f"Dear {receipt_data['collector_name']},\n\n"
                 f"Please find attached your transcript collection receipt ({receipt_number}).\n\n"
                 f"Center: {receipt_data['center_name']}\n"
                 f"Collection Date: {receipt_data['collection_date']}\n"
                 f"Candidates Collected: {receipt_data['candidate_count']}\n\n"
-                f"This is an official receipt from UVTAB EMIS.\n"
+                f"This is an official receipt from UVTAB.\n"
                 f"For any inquiries, contact us at 0392002468.\n\n"
-                f"Regards,\nUVTAB EMIS"
+                f"Regards,\nUVTAB"
             )
 
             pdf_buffer = _build_receipt_pdf(receipt_data)

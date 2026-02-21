@@ -471,6 +471,7 @@ class AwardsViewSet(viewsets.ViewSet):
             'candidate_count': len(candidates),
             'candidates': candidate_list,
             'issued_by': issued_by,
+            'signature_data': signature_data or '',
         }
 
         # Send receipt email to collector in background
