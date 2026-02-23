@@ -17,6 +17,9 @@ from reportlab.pdfgen import canvas
 from datetime import datetime
 import os
 from candidates.models import Candidate
+from assessment_series.models import AssessmentSeries
+from assessment_centers.models import AssessmentCenter
+from .signals import update_center_fee
 from .models import CandidateFee, CenterFee
 from .serializers import CandidateFeeSerializer, CenterFeeSerializer
 
@@ -127,7 +130,9 @@ class CandidateFeeViewSet(viewsets.ModelViewSet):
         if payment_reference not in ('bulk_payment', 'via_schoolpay'):
             return Response({'error': 'Invalid payment reference. Must be bulk_payment or via_schoolpay'}, status=status.HTTP_400_BAD_REQUEST)
         
-        fees = CandidateFee.objects.filter(id__in=fee_ids, verification_status='pending')
+        fees = CandidateFee.objects.select_related(
+            'candidate', 'assessment_series'
+        ).filter(id__in=fee_ids, verification_status='pending')
         count = fees.count()
         
         if count == 0:
@@ -136,12 +141,23 @@ class CandidateFeeViewSet(viewsets.ModelViewSet):
         user = request.user if request.user.is_authenticated else None
         now = timezone.now()
         
-        fees.update(
-            verification_status='marked',
-            payment_reference=payment_reference,
-            marked_by=user,
-            marked_date=now,
-        )
+        centers_to_update = set()
+        for fee in fees:
+            fee.verification_status = 'marked'
+            fee.payment_reference = payment_reference
+            fee.marked_by = user
+            fee.marked_date = now
+            fee.amount_paid = fee.total_amount
+            fee.payment_date = now
+            fee.save()
+            if fee.candidate.assessment_center:
+                centers_to_update.add((fee.assessment_series_id, fee.candidate.assessment_center_id))
+        
+        for series_id, center_id in centers_to_update:
+            update_center_fee(
+                AssessmentSeries.objects.get(pk=series_id),
+                AssessmentCenter.objects.get(pk=center_id),
+            )
         
         return Response({
             'success': True,
