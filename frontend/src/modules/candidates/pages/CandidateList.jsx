@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  ExternalLink,
 } from 'lucide-react';
 import candidateApi from '../services/candidateApi';
 import assessmentCenterApi from '@modules/assessment-centers/services/assessmentCenterApi';
@@ -949,16 +950,28 @@ const CandidateList = () => {
                   <tr
                     key={candidate.id}
                     className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => navigate(`/candidates/${candidate.id}`)}
+                    onClick={() => navigate(`/candidates/${candidate.id}`, { state: { fromList: true, filters, searchQuery, currentPage, pageSize } })}
                   >
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <button onClick={() => handleSelectCandidate(candidate.id)}>
-                        {selectedCandidates.includes(candidate.id) ? (
-                          <CheckSquare className="w-5 h-5 text-primary-600" />
-                        ) : (
-                          <Square className="w-5 h-5 text-gray-400" />
-                        )}
-                      </button>
+                      <div className="flex items-center space-x-2">
+                        <button onClick={() => handleSelectCandidate(candidate.id)}>
+                          {selectedCandidates.includes(candidate.id) ? (
+                            <CheckSquare className="w-5 h-5 text-primary-600" />
+                          ) : (
+                            <Square className="w-5 h-5 text-gray-400" />
+                          )}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(`/candidates/${candidate.id}`, '_blank');
+                          }}
+                          className="text-gray-400 hover:text-indigo-600"
+                          title="Open in new tab"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       {candidate.passport_photo ? (
@@ -1067,7 +1080,7 @@ const CandidateList = () => {
                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end space-x-2">
                         <button
-                          onClick={() => navigate(`/candidates/${candidate.id}`)}
+                          onClick={() => navigate(`/candidates/${candidate.id}`, { state: { fromList: true, filters, searchQuery, currentPage, pageSize } })}
                           className="text-gray-600 hover:text-primary-600"
                           title="View"
                         >

@@ -46,6 +46,7 @@ const CandidateView = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const fromAwards = location.state?.from === 'awards';
+  const fromList = location.state?.fromList;
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('bio-data');
   const [showDeclineModal, setShowDeclineModal] = useState(false);
@@ -371,7 +372,22 @@ const CandidateView = () => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate(fromAwards ? '/awards' : '/candidates')}
+            onClick={() => {
+              if (fromList && location.state) {
+                // Reconstruct URL with filters to preserve them
+                const { filters, searchQuery, currentPage, pageSize } = location.state;
+                const params = new URLSearchParams();
+                if (searchQuery) params.set('search', searchQuery);
+                if (currentPage > 1) params.set('page', String(currentPage));
+                if (pageSize !== 20) params.set('page_size', String(pageSize));
+                Object.entries(filters).forEach(([k, v]) => {
+                  if (v) params.set(k, v);
+                });
+                navigate(`/candidates?${params.toString()}`);
+              } else {
+                navigate(fromAwards ? '/awards' : '/candidates');
+              }
+            }}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             {fromAwards ? 'Back to Awards' : 'Back to Candidates'}
