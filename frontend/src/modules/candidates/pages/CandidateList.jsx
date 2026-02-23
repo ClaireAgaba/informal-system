@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -28,15 +28,30 @@ import BulkChangeRegCategoryModal from '../components/BulkChangeRegCategoryModal
 import BulkChangeSeriesModal from '../components/BulkChangeSeriesModal';
 import BulkChangeCenterModal from '../components/BulkChangeCenterModal';
 
+const FILTER_KEYS = [
+  'registration_category', 'assessment_center', 'assessment_center_branch',
+  'occupation', 'sector', 'has_disability', 'is_refugee',
+  'verification_status', 'is_enrolled', 'has_marks', 'entry_year', 'intake',
+];
+
 const CandidateList = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Initialize state from URL params
+  const initFilters = () => {
+    const f = {};
+    FILTER_KEYS.forEach((k) => { f[k] = searchParams.get(k) || ''; });
+    return f;
+  };
+
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
+  const [currentPage, setCurrentPage] = useState(Number(searchParams.get('page')) || 1);
+  const [pageSize, setPageSize] = useState(Number(searchParams.get('page_size')) || 20);
   const [selectedCandidates, setSelectedCandidates] = useState([]);
   const [selectAllPages, setSelectAllPages] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(() => FILTER_KEYS.some((k) => searchParams.get(k)));
   const [exporting, setExporting] = useState(false);
   const [deEnrolling, setDeEnrolling] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -63,21 +78,20 @@ const CandidateList = () => {
     }
   }, []);
 
-  // Filter states
-  const [filters, setFilters] = useState({
-    registration_category: '',
-    assessment_center: '',
-    assessment_center_branch: '',
-    occupation: '',
-    sector: '',
-    has_disability: '',
-    is_refugee: '',
-    verification_status: '',
-    is_enrolled: '',
-    has_marks: '',
-    entry_year: '',
-    intake: '',
-  });
+  // Filter states — initialized from URL
+  const [filters, setFilters] = useState(initFilters);
+
+  // Sync state → URL params
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (searchQuery) params.set('search', searchQuery);
+    if (currentPage > 1) params.set('page', String(currentPage));
+    if (pageSize !== 20) params.set('page_size', String(pageSize));
+    FILTER_KEYS.forEach((k) => {
+      if (filters[k]) params.set(k, filters[k]);
+    });
+    setSearchParams(params, { replace: true });
+  }, [searchQuery, currentPage, pageSize, filters]);
 
   // Fetch candidates
   const { data, isLoading, error } = useQuery({
@@ -935,7 +949,7 @@ const CandidateList = () => {
                   <tr
                     key={candidate.id}
                     className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => window.open(`/candidates/${candidate.id}`, '_blank')}
+                    onClick={() => navigate(`/candidates/${candidate.id}`)}
                   >
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <button onClick={() => handleSelectCandidate(candidate.id)}>
@@ -1053,7 +1067,7 @@ const CandidateList = () => {
                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end space-x-2">
                         <button
-                          onClick={() => window.open(`/candidates/${candidate.id}`, '_blank')}
+                          onClick={() => navigate(`/candidates/${candidate.id}`)}
                           className="text-gray-600 hover:text-primary-600"
                           title="View"
                         >
