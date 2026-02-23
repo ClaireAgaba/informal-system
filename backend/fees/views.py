@@ -139,6 +139,13 @@ class CandidateFeeViewSet(viewsets.ModelViewSet):
         if count == 0:
             return Response({'error': 'No eligible fees found (must be in pending status)'}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Only verified candidates can be marked as paid
+        unverified = [f.candidate.registration_number for f in fees if f.candidate.verification_status != 'verified']
+        if unverified:
+            return Response({
+                'error': f'Cannot mark as paid: the following candidates are not verified: {", ".join(unverified)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         user = request.user if request.user.is_authenticated else None
         now = timezone.now()
         
@@ -174,20 +181,38 @@ class CandidateFeeViewSet(viewsets.ModelViewSet):
         if not fee_ids:
             return Response({'error': 'No fee IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
         
-        fees = CandidateFee.objects.filter(id__in=fee_ids, verification_status='marked')
+        fees = CandidateFee.objects.select_related(
+            'candidate', 'assessment_series'
+        ).filter(id__in=fee_ids, verification_status='marked')
         count = fees.count()
         
         if count == 0:
             return Response({'error': 'No eligible fees found (must be in marked status)'}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Only verified candidates can be approved
+        unverified = [f.candidate.registration_number for f in fees if f.candidate.verification_status != 'verified']
+        if unverified:
+            return Response({
+                'error': f'Cannot approve payment: the following candidates are not verified: {", ".join(unverified)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         user = request.user if request.user.is_authenticated else None
         now = timezone.now()
         
-        fees.update(
-            verification_status='approved',
-            approved_by=user,
-            approved_date=now,
-        )
+        centers_to_update = set()
+        for fee in fees:
+            fee.verification_status = 'approved'
+            fee.approved_by = user
+            fee.approved_date = now
+            fee.save()
+            if fee.candidate.assessment_center:
+                centers_to_update.add((fee.assessment_series_id, fee.candidate.assessment_center_id))
+        
+        for series_id, center_id in centers_to_update:
+            update_center_fee(
+                AssessmentSeries.objects.get(pk=series_id),
+                AssessmentCenter.objects.get(pk=center_id),
+            )
         
         return Response({
             'success': True,

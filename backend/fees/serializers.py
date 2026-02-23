@@ -8,6 +8,7 @@ class CandidateFeeSerializer(serializers.ModelSerializer):
     occupation_name = serializers.CharField(source='candidate.occupation.occ_name', read_only=True)
     assessment_series_name = serializers.CharField(source='assessment_series.name', read_only=True)
     funding_source = serializers.CharField(source='candidate.funding_source', read_only=True)
+    candidate_verification_status = serializers.CharField(source='candidate.verification_status', read_only=True)
     marked_by_name = serializers.SerializerMethodField()
     approved_by_name = serializers.SerializerMethodField()
     
@@ -15,6 +16,7 @@ class CandidateFeeSerializer(serializers.ModelSerializer):
         model = CandidateFee
         fields = [
             'id', 'candidate', 'candidate_name', 'registration_number', 'occupation_name',
+            'candidate_verification_status',
             'assessment_series', 'assessment_series_name', 'payment_code', 'funding_source',
             'total_amount', 'amount_paid', 'amount_due', 'payment_date',
             'payment_status', 'attempt_status',

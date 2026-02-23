@@ -1328,6 +1328,22 @@ def bulk_de_enroll_view(request):
             })
             continue
         
+        # Check if candidate has marked/approved fees for this series
+        from fees.models import CandidateFee
+        has_locked_fees = CandidateFee.objects.filter(
+            candidate=candidate,
+            assessment_series=enrollment.assessment_series,
+            verification_status__in=['marked', 'approved']
+        ).exists()
+        if has_locked_fees:
+            skipped_with_marks.append({
+                'candidate_id': candidate.id,
+                'name': candidate.full_name,
+                'reg_no': candidate.registration_number,
+                'reason': 'Has fees marked/approved by accounts - cannot de-enroll'
+            })
+            continue
+        
         try:
             enrollment.delete()
             actor = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
@@ -1389,6 +1405,19 @@ def delete_enrollment_view(request, enrollment_id):
         if has_modular_results or has_formal_results or has_workers_pas_results:
             return Response(
                 {'error': 'Can\'t de-enroll, candidate already has marks'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if candidate has marked/approved fees for this series
+        from fees.models import CandidateFee
+        has_locked_fees = CandidateFee.objects.filter(
+            candidate=candidate,
+            assessment_series=enrollment.assessment_series,
+            verification_status__in=['marked', 'approved']
+        ).exists()
+        if has_locked_fees:
+            return Response(
+                {'error': 'Can\'t de-enroll, candidate has fees marked/approved by accounts'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -2790,6 +2819,21 @@ def bulk_de_enroll_by_enrollment(request):
                 'name': candidate.full_name,
                 'reg_no': candidate.registration_number,
                 'reason': 'Has marks - cannot de-enroll'
+            })
+            continue
+        
+        # Check if candidate has marked/approved fees for this series
+        has_locked_fees = CandidateFee.objects.filter(
+            candidate=candidate, assessment_series=series,
+            verification_status__in=['marked', 'approved']
+        ).exists()
+        if has_locked_fees:
+            skipped_with_marks.append({
+                'enrollment_id': enrollment.id,
+                'candidate_id': candidate.id,
+                'name': candidate.full_name,
+                'reg_no': candidate.registration_number,
+                'reason': 'Has fees marked/approved by accounts - cannot de-enroll'
             })
             continue
         

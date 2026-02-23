@@ -61,7 +61,10 @@ def update_candidate_fee_on_payment(sender, instance, created, **kwargs):
         return
     
     # Update all fees for this candidate
-    fees = CandidateFee.objects.filter(candidate=instance)
+    # Skip fees that have been marked or approved by accounts — their amounts are locked
+    fees = CandidateFee.objects.filter(candidate=instance).exclude(
+        verification_status__in=['marked', 'approved']
+    )
     
     for fee in fees:
         amount_paid = instance.payment_amount_cleared or 0

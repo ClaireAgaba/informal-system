@@ -94,6 +94,29 @@ export default function CenterFeeView() {
     return c && c.verification_status === 'marked';
   }).length;
 
+  // Check if all selected pending fees are already paid via SchoolPay
+  const selectedPendingFees = selectedIds
+    .map((feeId) => candidates.find((f) => f.id === feeId))
+    .filter((f) => f && f.verification_status === 'pending');
+  const allSchoolPay = selectedPendingFees.length > 0 &&
+    selectedPendingFees.every((f) => f.payment_status === 'successful');
+
+  // Check if any selected pending fees have unverified candidates
+  const hasUnverified = selectedPendingFees.some((f) => f.candidate_verification_status !== 'verified');
+
+  const handleMarkAsPaidClick = () => {
+    if (hasUnverified) {
+      alert('Cannot mark as paid: some selected candidates are not verified.');
+      return;
+    }
+    if (allSchoolPay) {
+      setActionLoading(true);
+      markMutation.mutate({ feeIds: selectedIds, ref: 'via_schoolpay' });
+    } else {
+      setShowRefDialog(true);
+    }
+  };
+
   const getPaymentStatusBadge = (status) => {
     const badges = {
       not_paid: 'bg-red-100 text-red-800',
@@ -174,7 +197,7 @@ export default function CenterFeeView() {
               </span>
               {selectedPendingCount > 0 && (
                 <button
-                  onClick={() => setShowRefDialog(true)}
+                  onClick={handleMarkAsPaidClick}
                   className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
                 >
                   <CheckCircle className="h-4 w-4" />
