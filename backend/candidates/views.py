@@ -41,6 +41,7 @@ class CandidateViewSet(viewsets.ModelViewSet):
     filterset_fields = {
         'registration_category': ['exact'],
         'assessment_center': ['exact'],
+        'assessment_center_branch': ['exact'],
         'occupation': ['exact'],
         'has_disability': ['exact'],
         'is_refugee': ['exact'],

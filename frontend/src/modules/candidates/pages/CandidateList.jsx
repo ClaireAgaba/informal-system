@@ -67,6 +67,7 @@ const CandidateList = () => {
   const [filters, setFilters] = useState({
     registration_category: '',
     assessment_center: '',
+    assessment_center_branch: '',
     occupation: '',
     sector: '',
     has_disability: '',
@@ -105,7 +106,15 @@ const CandidateList = () => {
     queryFn: () => occupationApi.sectors.getAll(),
   });
 
+  // Fetch branches for selected center
+  const { data: branchesData } = useQuery({
+    queryKey: ['branches-filter', filters.assessment_center],
+    queryFn: () => assessmentCenterApi.branches.getByCenter(filters.assessment_center),
+    enabled: !!filters.assessment_center,
+  });
+
   const centers = centersData?.data?.results || centersData?.data || [];
+  const branches = branchesData?.data?.results || branchesData?.data || [];
   const occupations = occupationsData?.data?.results || occupationsData?.data || [];
   const sectors = sectorsData?.data?.results || sectorsData?.data || [];
 
@@ -414,6 +423,7 @@ const CandidateList = () => {
     setFilters({
       registration_category: '',
       assessment_center: '',
+      assessment_center_branch: '',
       occupation: '',
       sector: '',
       has_disability: '',
@@ -702,13 +712,25 @@ const CandidateList = () => {
                   <select
                     className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
                     value={filters.assessment_center}
-                    onChange={(e) => setFilters({ ...filters, assessment_center: e.target.value })}
+                    onChange={(e) => setFilters({ ...filters, assessment_center: e.target.value, assessment_center_branch: '' })}
                   >
                     <option value="">Select</option>
                     {centers.map((c) => (
                       <option key={c.id} value={c.id}>{c.center_number} - {c.center_name}</option>
                     ))}
                   </select>
+                  {filters.assessment_center && branches.length > 0 && (
+                    <select
+                      className="w-full mt-1 px-2 py-1 text-xs border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-indigo-50"
+                      value={filters.assessment_center_branch}
+                      onChange={(e) => setFilters({ ...filters, assessment_center_branch: e.target.value })}
+                    >
+                      <option value="">All Branches</option>
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.id}>{b.branch_code}</option>
+                      ))}
+                    </select>
+                  )}
                 </th>
                 <th className="px-2 py-2">
                   <select
