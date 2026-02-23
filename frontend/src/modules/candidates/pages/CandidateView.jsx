@@ -30,6 +30,7 @@ import {
   Eye,
 } from 'lucide-react';
 import candidateApi from '../services/candidateApi';
+import feesApi from '../../fees/api/feesApi';
 import Button from '@shared/components/Button';
 import Card from '@shared/components/Card';
 import { formatDate } from '@shared/utils/formatters';
@@ -91,6 +92,18 @@ const CandidateView = () => {
   });
 
   const enrollments = enrollmentsData?.data || [];
+
+  // Fetch candidate fees
+  const { data: feesData } = useQuery({
+    queryKey: ['candidate-fees-for', candidate?.id],
+    queryFn: () => feesApi.getCandidateFees({ candidate: candidate?.id }),
+    enabled: !!candidate?.id,
+  });
+
+  const candidateFees = feesData?.data?.results || [];
+  const totalBilled = candidateFees.reduce((sum, f) => sum + parseFloat(f.total_amount || 0), 0);
+  const totalPaid = candidateFees.reduce((sum, f) => sum + parseFloat(f.amount_paid || 0), 0);
+  const totalDue = candidateFees.reduce((sum, f) => sum + parseFloat(f.amount_due || 0), 0);
 
   const { data: activityData, isLoading: isActivityLoading } = useQuery({
     queryKey: ['candidate-activity', id],
@@ -638,11 +651,14 @@ const CandidateView = () => {
               </div>
 
               {/* Candidate Fees */}
-              <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3">
-                <div className="text-xs text-gray-600 mb-1">Candidate Fees</div>
-                <div className="text-lg font-bold text-green-600">
-                  UGX {enrollments.reduce((sum, e) => sum + parseFloat(e.total_amount || 0), 0).toLocaleString()}
+              <div className={`mt-4 ${totalDue <= 0 && totalBilled > 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} border rounded-lg p-3`}>
+                <div className="text-xs text-gray-600 mb-1">Amount Due</div>
+                <div className={`text-lg font-bold ${totalDue <= 0 && totalBilled > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  UGX {totalDue.toLocaleString()}
                 </div>
+                {totalBilled > 0 && (
+                  <div className="text-xs text-gray-500 mt-1">of UGX {totalBilled.toLocaleString()} billed</div>
+                )}
               </div>
 
               {/* Quick Stats */}
@@ -878,8 +894,9 @@ const CandidateView = () => {
                       <InfoItem
                         label="Candidate Fees"
                         value={
-                          <span className={enrollments.length > 0 ? 'text-green-600 font-semibold' : 'text-gray-600'}>
-                            UGX {enrollments.reduce((sum, e) => sum + parseFloat(e.total_amount || 0), 0).toLocaleString()}
+                          <span className={totalDue <= 0 && totalBilled > 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
+                            UGX {totalDue.toLocaleString()}
+                            {totalBilled > 0 && <span className="text-xs text-gray-500 font-normal ml-1">/ {totalBilled.toLocaleString()}</span>}
                           </span>
                         }
                       />
@@ -1288,27 +1305,23 @@ const CandidateView = () => {
                           <div className="flex justify-between items-center">
                             <span className="text-lg font-semibold text-gray-900">Total Billed:</span>
                             <span className="text-xl font-bold text-primary-600">
-                              UGX {enrollments.reduce((sum, e) => sum + parseFloat(e.total_amount || 0), 0).toLocaleString()}
+                              UGX {totalBilled.toLocaleString()}
                             </span>
                           </div>
 
-                          {candidate.payment_amount_cleared > 0 && (
+                          {totalPaid > 0 && (
                             <div className="flex justify-between items-center">
                               <span className="text-lg font-semibold text-gray-900">Amount Paid:</span>
                               <span className="text-xl font-bold text-green-600">
-                                UGX {parseFloat(candidate.payment_amount_cleared || 0).toLocaleString()}
+                                UGX {totalPaid.toLocaleString()}
                               </span>
                             </div>
                           )}
 
                           <div className="flex justify-between items-center pt-2 border-t border-gray-200">
                             <span className="text-lg font-semibold text-gray-900">Amount Due:</span>
-                            <span className={`text-xl font-bold ${candidate.payment_cleared ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                              UGX {(
-                                enrollments.reduce((sum, e) => sum + parseFloat(e.total_amount || 0), 0) -
-                                parseFloat(candidate.payment_amount_cleared || 0)
-                              ).toLocaleString()}
+                            <span className={`text-xl font-bold ${totalDue <= 0 && totalBilled > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              UGX {totalDue.toLocaleString()}
                             </span>
                           </div>
                         </div>
@@ -1318,7 +1331,57 @@ const CandidateView = () => {
                     )}
                   </div>
 
-                  {/* Payment Status & Actions */}
+                  {/* Payment Verification Details (from fees) */}
+                  {candidateFees.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                        Payment Verification
+                      </h3>
+                      <div className="space-y-4">
+                        {candidateFees.map((fee) => (
+                          <div key={fee.id} className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="text-sm font-medium text-gray-700">{fee.payment_code}</span>
+                              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                fee.verification_status === 'approved' ? 'bg-green-100 text-green-800' :
+                                fee.verification_status === 'marked' ? 'bg-orange-100 text-orange-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {fee.verification_status === 'approved' ? 'PAID' :
+                                 fee.verification_status === 'marked' ? 'MARKED AS PAID' : 'PENDING'}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <InfoItem label="Assessment Series" value={fee.assessment_series_name} />
+                              <InfoItem label="Payment Reference" value={
+                                fee.payment_reference === 'bulk_payment' ? 'Bulk Payment' :
+                                fee.payment_reference === 'via_schoolpay' ? 'Via SchoolPay' :
+                                fee.payment_reference || 'N/A'
+                              } />
+                              <InfoItem label="Total Amount" value={`UGX ${parseFloat(fee.total_amount).toLocaleString()}`} />
+                              <InfoItem label="Amount Paid" value={`UGX ${parseFloat(fee.amount_paid).toLocaleString()}`} />
+                              <InfoItem label="Amount Due" value={`UGX ${parseFloat(fee.amount_due).toLocaleString()}`} />
+                              <InfoItem label="Payment Date" value={fee.payment_date ? formatDate(fee.payment_date) : 'N/A'} />
+                              {(fee.verification_status === 'marked' || fee.verification_status === 'approved') && (
+                                <>
+                                  <InfoItem label="Marked as Paid By" value={fee.marked_by_name || 'N/A'} />
+                                  <InfoItem label="Marked Date" value={fee.marked_date ? formatDate(fee.marked_date) : 'N/A'} />
+                                </>
+                              )}
+                              {fee.verification_status === 'approved' && (
+                                <>
+                                  <InfoItem label="Approved By" value={fee.approved_by_name || 'N/A'} />
+                                  <InfoItem label="Approved Date" value={fee.approved_date ? formatDate(fee.approved_date) : 'N/A'} />
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SchoolPay / Payment Clearing Status */}
                   <div>
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="text-lg font-semibold text-gray-900">

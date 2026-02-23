@@ -29,7 +29,7 @@ class CandidateFeeViewSet(viewsets.ModelViewSet):
     serializer_class = CandidateFeeSerializer
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['assessment_series', 'payment_status', 'attempt_status', 'verification_status', 'candidate__occupation']
+    filterset_fields = ['assessment_series', 'payment_status', 'attempt_status', 'verification_status', 'candidate', 'candidate__occupation']
     search_fields = ['payment_code', 'candidate__registration_number', 'candidate__first_name', 'candidate__last_name']
     ordering_fields = ['created_at', 'total_amount', 'payment_date']
     ordering = ['-created_at']
@@ -37,7 +37,8 @@ class CandidateFeeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter fees by center for center representatives"""
         queryset = CandidateFee.objects.select_related(
-            'candidate', 'candidate__occupation', 'assessment_series'
+            'candidate', 'candidate__occupation', 'assessment_series',
+            'marked_by', 'approved_by'
         ).all()
         
         # Filter by center for center representatives
