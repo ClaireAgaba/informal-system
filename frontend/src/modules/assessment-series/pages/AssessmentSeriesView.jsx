@@ -210,6 +210,23 @@ const AssessmentSeriesView = () => {
               />
 
               <InfoItem
+                icon={<Calendar className="w-5 h-5 text-gray-400" />}
+                label="Fiscal Quarter"
+                value={
+                  series.quarter ? (
+                    <span className="text-blue-600 font-medium">
+                      {series.quarter === 'Q1' && 'Q1 (July - September)'}
+                      {series.quarter === 'Q2' && 'Q2 (October - December)'}
+                      {series.quarter === 'Q3' && 'Q3 (January - March)'}
+                      {series.quarter === 'Q4' && 'Q4 (April - June)'}
+                    </span>
+                  ) : (
+                    <span className="text-amber-500 font-medium">Not configured</span>
+                  )
+                }
+              />
+
+              <InfoItem
                 icon={<DollarSign className="w-5 h-5 text-gray-400" />}
                 label="Billing Status"
                 value={
