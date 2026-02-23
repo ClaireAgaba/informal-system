@@ -6,6 +6,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Sum, Count
 from django.http import HttpResponse
 from django.conf import settings
+from django.utils import timezone
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -25,7 +26,7 @@ class CandidateFeeViewSet(viewsets.ModelViewSet):
     serializer_class = CandidateFeeSerializer
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['assessment_series', 'payment_status', 'attempt_status', 'candidate__occupation']
+    filterset_fields = ['assessment_series', 'payment_status', 'attempt_status', 'verification_status', 'candidate__occupation']
     search_fields = ['payment_code', 'candidate__registration_number', 'candidate__first_name', 'candidate__last_name']
     ordering_fields = ['created_at', 'total_amount', 'payment_date']
     ordering = ['-created_at']
@@ -113,6 +114,69 @@ class CandidateFeeViewSet(viewsets.ModelViewSet):
             'updated': updated_count,
             'total': created_count + updated_count
         })
+    
+    @action(detail=False, methods=['post'])
+    def mark_as_paid(self, request):
+        """Bulk mark selected candidate fees as paid by accounts office"""
+        fee_ids = request.data.get('fee_ids', [])
+        payment_reference = request.data.get('payment_reference', '')
+        
+        if not fee_ids:
+            return Response({'error': 'No fee IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if payment_reference not in ('bulk_payment', 'via_schoolpay'):
+            return Response({'error': 'Invalid payment reference. Must be bulk_payment or via_schoolpay'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        fees = CandidateFee.objects.filter(id__in=fee_ids, verification_status='pending')
+        count = fees.count()
+        
+        if count == 0:
+            return Response({'error': 'No eligible fees found (must be in pending status)'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = request.user if request.user.is_authenticated else None
+        now = timezone.now()
+        
+        fees.update(
+            verification_status='marked',
+            payment_reference=payment_reference,
+            marked_by=user,
+            marked_date=now,
+        )
+        
+        return Response({
+            'success': True,
+            'message': f'{count} fee(s) marked as paid',
+            'count': count,
+        })
+    
+    @action(detail=False, methods=['post'])
+    def approve_payment(self, request):
+        """Bulk approve payment for fees that have been marked as paid"""
+        fee_ids = request.data.get('fee_ids', [])
+        
+        if not fee_ids:
+            return Response({'error': 'No fee IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        fees = CandidateFee.objects.filter(id__in=fee_ids, verification_status='marked')
+        count = fees.count()
+        
+        if count == 0:
+            return Response({'error': 'No eligible fees found (must be in marked status)'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = request.user if request.user.is_authenticated else None
+        now = timezone.now()
+        
+        fees.update(
+            verification_status='approved',
+            approved_by=user,
+            approved_date=now,
+        )
+        
+        return Response({
+            'success': True,
+            'message': f'{count} fee(s) approved',
+            'count': count,
+        })
 
 
 class CenterFeeViewSet(viewsets.ModelViewSet):
@@ -138,6 +202,18 @@ class CenterFeeViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(assessment_center=center_rep.assessment_center)
         
         return queryset
+    
+    @action(detail=True, methods=['get'])
+    def candidates(self, request, pk=None):
+        """Get all candidate fees for a specific center fee (center + series)"""
+        center_fee = self.get_object()
+        candidate_fees = CandidateFee.objects.filter(
+            assessment_series=center_fee.assessment_series,
+            candidate__assessment_center=center_fee.assessment_center
+        ).select_related('candidate', 'candidate__occupation', 'assessment_series')
+        
+        serializer = CandidateFeeSerializer(candidate_fees, many=True)
+        return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
     def center_invoice(self, request, pk=None):

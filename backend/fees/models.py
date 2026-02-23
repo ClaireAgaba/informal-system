@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 from django.core.validators import MinValueValidator
 from decimal import Decimal
 from candidates.models import Candidate
@@ -23,6 +24,17 @@ class CandidateFee(models.Model):
         ('successful', 'Successful'),
     ]
     
+    VERIFICATION_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('marked', 'Marked as Paid'),
+        ('approved', 'Approved'),
+    ]
+    
+    PAYMENT_REFERENCE_CHOICES = [
+        ('bulk_payment', 'Bulk Payment'),
+        ('via_schoolpay', 'Via SchoolPay'),
+    ]
+    
     candidate = models.ForeignKey(Candidate, on_delete=models.CASCADE, related_name='fees')
     assessment_series = models.ForeignKey(AssessmentSeries, on_delete=models.CASCADE, related_name='candidate_fees')
     payment_code = models.CharField(max_length=100, unique=True)
@@ -32,6 +44,12 @@ class CandidateFee(models.Model):
     payment_date = models.DateTimeField(null=True, blank=True)
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='not_paid')
     attempt_status = models.CharField(max_length=20, choices=ATTEMPT_STATUS_CHOICES, default='no_attempt')
+    verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUS_CHOICES, default='pending')
+    payment_reference = models.CharField(max_length=20, choices=PAYMENT_REFERENCE_CHOICES, null=True, blank=True)
+    marked_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='marked_fees')
+    marked_date = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_fees')
+    approved_date = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

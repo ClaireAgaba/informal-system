@@ -9,6 +9,8 @@ const feesApi = {
   patchCandidateFee: (id, data) => apiClient.patch(`/fees/candidate-fees/${id}/`, data),
   deleteCandidateFee: (id) => apiClient.delete(`/fees/candidate-fees/${id}/`),
   populateCandidateFees: () => apiClient.post('/fees/candidate-fees/populate_from_candidates/'),
+  markAsPaid: (feeIds, paymentReference) => apiClient.post('/fees/candidate-fees/mark_as_paid/', { fee_ids: feeIds, payment_reference: paymentReference }),
+  approvePayment: (feeIds) => apiClient.post('/fees/candidate-fees/approve_payment/', { fee_ids: feeIds }),
 
   // Center Fees
   getCenterFees: (params) => apiClient.get('/fees/center-fees/', { params }),
@@ -18,6 +20,7 @@ const feesApi = {
   patchCenterFee: (id, data) => apiClient.patch(`/fees/center-fees/${id}/`, data),
   deleteCenterFee: (id) => apiClient.delete(`/fees/center-fees/${id}/`),
   populateCenterFees: () => apiClient.post('/fees/center-fees/populate_from_candidates/'),
+  getCenterFeeCandidates: (id) => apiClient.get(`/fees/center-fees/${id}/candidates/`),
 };
 
 export default feesApi;
