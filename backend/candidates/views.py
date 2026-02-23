@@ -2161,6 +2161,7 @@ def bulk_clear_candidate_data(request):
         )
     
     from results.models import ModularResult, FormalResult, WorkersPasResult
+    from fees.models import CandidateFee
     
     total_cleared = {
         'modular_results': 0,
@@ -2169,10 +2170,25 @@ def bulk_clear_candidate_data(request):
         'enrollments': 0,
         'candidates_processed': 0,
     }
+    skipped = []
     
     candidates = Candidate.objects.filter(id__in=candidate_ids)
     
     for candidate in candidates:
+        # Block if candidate has marked/approved fees
+        has_locked_fees = CandidateFee.objects.filter(
+            candidate=candidate,
+            verification_status__in=['marked', 'approved']
+        ).exists()
+        if has_locked_fees:
+            skipped.append({
+                'candidate_id': candidate.id,
+                'name': candidate.full_name,
+                'reg_no': candidate.registration_number,
+                'reason': 'Has fees marked/approved by accounts'
+            })
+            continue
+        
         # Delete all modular results
         modular_deleted = ModularResult.objects.filter(candidate=candidate).delete()
         total_cleared['modular_results'] += modular_deleted[0] if modular_deleted else 0
@@ -2193,7 +2209,8 @@ def bulk_clear_candidate_data(request):
     
     return Response({
         'message': f'Successfully cleared data for {total_cleared["candidates_processed"]} candidate(s)',
-        'cleared': total_cleared
+        'cleared': total_cleared,
+        'skipped': skipped
     }, status=status.HTTP_200_OK)
 
 
@@ -2328,6 +2345,18 @@ def clear_candidate_data(request, candidate_id):
         )
     
     from results.models import ModularResult, FormalResult, WorkersPasResult
+    from fees.models import CandidateFee
+    
+    # Block if candidate has marked/approved fees
+    has_locked_fees = CandidateFee.objects.filter(
+        candidate=candidate,
+        verification_status__in=['marked', 'approved']
+    ).exists()
+    if has_locked_fees:
+        return Response(
+            {'error': 'Cannot clear data: candidate has fees marked/approved by accounts. Contact accounts office first.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
     
     cleared = {
         'modular_results': 0,
@@ -2917,10 +2946,26 @@ def bulk_clear_enrollment_data(request):
         'enrollments': 0,
         'fees': 0,
     }
+    skipped = []
     
     for enrollment in enrollments:
         candidate = enrollment.candidate
         series = enrollment.assessment_series
+        
+        # Block if candidate has marked/approved fees for this series
+        has_locked_fees = CandidateFee.objects.filter(
+            candidate=candidate, assessment_series=series,
+            verification_status__in=['marked', 'approved']
+        ).exists()
+        if has_locked_fees:
+            skipped.append({
+                'enrollment_id': enrollment.id,
+                'candidate_id': candidate.id,
+                'name': candidate.full_name,
+                'reg_no': candidate.registration_number,
+                'reason': 'Has fees marked/approved by accounts'
+            })
+            continue
         
         # Delete results for this candidate and series
         modular_deleted = ModularResult.objects.filter(
@@ -2950,7 +2995,8 @@ def bulk_clear_enrollment_data(request):
     
     return Response({
         'message': f'Successfully cleared data for {total_cleared["enrollments"]} enrollment(s)',
-        'cleared': total_cleared
+        'cleared': total_cleared,
+        'skipped': skipped
     }, status=status.HTTP_200_OK)
 
 
