@@ -38,11 +38,14 @@ class CandidateListSerializer(serializers.ModelSerializer):
     
     def get_assessment_center(self, obj):
         if obj.assessment_center:
-            return {
+            data = {
                 'id': obj.assessment_center.id,
                 'center_number': obj.assessment_center.center_number,
                 'center_name': obj.assessment_center.center_name,
             }
+            if obj.assessment_center_branch:
+                data['branch_code'] = obj.assessment_center_branch.branch_code
+            return data
         return None
     
     def get_occupation(self, obj):

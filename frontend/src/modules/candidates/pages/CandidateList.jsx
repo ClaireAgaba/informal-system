@@ -949,6 +949,11 @@ const CandidateList = () => {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
                       {candidate.assessment_center?.center_name || '-'}
+                      {candidate.assessment_center?.branch_code && (
+                        <span className="ml-1 inline-flex px-1.5 py-0.5 text-xs font-medium rounded bg-indigo-100 text-indigo-700" title={`Branch: ${candidate.assessment_center.branch_code}`}>
+                          {candidate.assessment_center.branch_code}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${candidate.registration_category === 'modular'
