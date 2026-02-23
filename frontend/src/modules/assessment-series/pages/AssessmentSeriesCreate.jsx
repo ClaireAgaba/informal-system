@@ -22,6 +22,7 @@ const AssessmentSeriesCreate = () => {
       end_date: '',
       date_of_release: '',
       completion_year: '',
+      quarter: '',
       is_current: false,
       results_released: false,
       is_active: true,
@@ -64,6 +65,7 @@ const AssessmentSeriesCreate = () => {
       end_date: formData.end_date,
       date_of_release: formData.date_of_release || null,
       completion_year: formData.completion_year || '',
+      quarter: formData.quarter || '',
       is_current: formData.is_current || false,
       results_released: formData.results_released || false,
       dont_charge: formData.dont_charge || false,
@@ -177,6 +179,24 @@ const AssessmentSeriesCreate = () => {
                     placeholder="e.g., November, 2025"
                   />
                   <p className="mt-1 text-xs text-gray-500">Optional: Completion year/period for certificates</p>
+                </div>
+
+                {/* Fiscal Quarter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Fiscal Quarter
+                  </label>
+                  <select
+                    {...register('quarter')}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">Select Quarter</option>
+                    <option value="Q1">Q1 (July - September)</option>
+                    <option value="Q2">Q2 (October - December)</option>
+                    <option value="Q3">Q3 (January - March)</option>
+                    <option value="Q4">Q4 (April - June)</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">Uganda fiscal year quarter this series falls under</p>
                 </div>
 
                 {/* Is Current */}

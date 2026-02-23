@@ -605,6 +605,166 @@ class CenterFeeViewSet(viewsets.ModelViewSet):
         doc.build(elements)
         return response
     
+    @action(detail=False, methods=['get'])
+    def quarterly_report(self, request):
+        """Generate quarterly financial report as Excel file"""
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+        from openpyxl.utils import get_column_letter
+        from io import BytesIO
+        
+        quarter = request.query_params.get('quarter')
+        series_id = request.query_params.get('assessment_series')
+        
+        if not quarter:
+            return Response({'error': 'Quarter is required (Q1, Q2, Q3, Q4)'}, status=status.HTTP_400_BAD_REQUEST)
+        if quarter not in ('Q1', 'Q2', 'Q3', 'Q4'):
+            return Response({'error': 'Invalid quarter. Must be Q1, Q2, Q3, or Q4'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Build queryset
+        center_fees = CenterFee.objects.select_related(
+            'assessment_series', 'assessment_center'
+        ).filter(assessment_series__quarter=quarter)
+        
+        if series_id:
+            center_fees = center_fees.filter(assessment_series_id=series_id)
+        
+        if not center_fees.exists():
+            return Response({'error': 'No center fee data found for the selected quarter/series'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Build workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        
+        quarter_labels = {
+            'Q1': 'Q1 (July - September)',
+            'Q2': 'Q2 (October - December)',
+            'Q3': 'Q3 (January - March)',
+            'Q4': 'Q4 (April - June)',
+        }
+        ws.title = f'{quarter} Report'
+        
+        # Styles
+        header_font = Font(bold=True, color='FFFFFF', size=11)
+        header_fill = PatternFill(start_color='2E7D32', end_color='2E7D32', fill_type='solid')
+        header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        money_format = '#,##0'
+        
+        # Title
+        ws.merge_cells('A1:G1')
+        ws['A1'] = f'UVTAB Quarterly Financial Report — {quarter_labels[quarter]}'
+        ws['A1'].font = Font(bold=True, size=14)
+        ws['A1'].alignment = Alignment(horizontal='center')
+        
+        # Headers
+        headers = ['Center Code', 'Center Name', 'Total Candidates', 'Assessment Series', 'Amount Billed (UGX)', 'Amount Paid (UGX)', 'Amount Due (UGX)']
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = border
+        
+        # Data rows
+        row_idx = 4
+        total_candidates = 0
+        total_billed = 0
+        total_paid = 0
+        total_due = 0
+        
+        for cf in center_fees.order_by('assessment_center__center_number', 'assessment_series__name'):
+            ws.cell(row=row_idx, column=1, value=cf.assessment_center.center_number).border = border
+            ws.cell(row=row_idx, column=2, value=cf.assessment_center.center_name).border = border
+            
+            cand_cell = ws.cell(row=row_idx, column=3, value=cf.total_candidates)
+            cand_cell.border = border
+            cand_cell.alignment = Alignment(horizontal='center')
+            
+            ws.cell(row=row_idx, column=4, value=cf.assessment_series.name).border = border
+            
+            billed_cell = ws.cell(row=row_idx, column=5, value=float(cf.total_amount))
+            billed_cell.border = border
+            billed_cell.number_format = money_format
+            billed_cell.alignment = Alignment(horizontal='right')
+            
+            paid_cell = ws.cell(row=row_idx, column=6, value=float(cf.amount_paid))
+            paid_cell.border = border
+            paid_cell.number_format = money_format
+            paid_cell.alignment = Alignment(horizontal='right')
+            
+            due_cell = ws.cell(row=row_idx, column=7, value=float(cf.amount_due))
+            due_cell.border = border
+            due_cell.number_format = money_format
+            due_cell.alignment = Alignment(horizontal='right')
+            
+            total_candidates += cf.total_candidates
+            total_billed += float(cf.total_amount)
+            total_paid += float(cf.amount_paid)
+            total_due += float(cf.amount_due)
+            row_idx += 1
+        
+        # Totals row
+        total_fill = PatternFill(start_color='FFF3CD', end_color='FFF3CD', fill_type='solid')
+        total_font = Font(bold=True)
+        
+        ws.cell(row=row_idx, column=1, value='').border = border
+        total_label = ws.cell(row=row_idx, column=2, value='TOTALS')
+        total_label.font = total_font
+        total_label.border = border
+        
+        tc = ws.cell(row=row_idx, column=3, value=total_candidates)
+        tc.font = total_font
+        tc.border = border
+        tc.alignment = Alignment(horizontal='center')
+        tc.fill = total_fill
+        
+        ws.cell(row=row_idx, column=4, value='').border = border
+        
+        tb = ws.cell(row=row_idx, column=5, value=total_billed)
+        tb.font = total_font
+        tb.border = border
+        tb.number_format = money_format
+        tb.alignment = Alignment(horizontal='right')
+        tb.fill = total_fill
+        
+        tp = ws.cell(row=row_idx, column=6, value=total_paid)
+        tp.font = total_font
+        tp.border = border
+        tp.number_format = money_format
+        tp.alignment = Alignment(horizontal='right')
+        tp.fill = total_fill
+        
+        td = ws.cell(row=row_idx, column=7, value=total_due)
+        td.font = total_font
+        td.border = border
+        td.number_format = money_format
+        td.alignment = Alignment(horizontal='right')
+        td.fill = total_fill
+        
+        # Column widths
+        col_widths = [15, 40, 18, 28, 20, 20, 20]
+        for col, width in enumerate(col_widths, 1):
+            ws.column_dimensions[get_column_letter(col)].width = width
+        
+        # Write to response
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        
+        filename = f'UVTAB_Quarterly_Report_{quarter}_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+    
     @action(detail=False, methods=['post'])
     def populate_from_candidates(self, request):
         """Populate center fees by aggregating candidate fees per center and series"""

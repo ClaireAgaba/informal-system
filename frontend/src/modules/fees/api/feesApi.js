@@ -21,6 +21,7 @@ const feesApi = {
   deleteCenterFee: (id) => apiClient.delete(`/fees/center-fees/${id}/`),
   populateCenterFees: () => apiClient.post('/fees/center-fees/populate_from_candidates/'),
   getCenterFeeCandidates: (id) => apiClient.get(`/fees/center-fees/${id}/candidates/`),
+  getQuarterlyReport: (params) => apiClient.get('/fees/center-fees/quarterly_report/', { params, responseType: 'blob' }),
 };
 
 export default feesApi;

@@ -7,6 +7,13 @@ class AssessmentSeries(models.Model):
     Model for managing assessment series/periods
     An assessment series represents a specific assessment period (e.g., "March 2024 Assessment")
     """
+    QUARTER_CHOICES = [
+        ('Q1', 'Q1 (July - September)'),
+        ('Q2', 'Q2 (October - December)'),
+        ('Q3', 'Q3 (January - March)'),
+        ('Q4', 'Q4 (April - June)'),
+    ]
+    
     name = models.CharField(
         max_length=200,
         unique=True,
@@ -53,6 +60,15 @@ class AssessmentSeries(models.Model):
         null=True,
         verbose_name='Completion Year',
         help_text='Completion year/period (e.g., "November, 2025")'
+    )
+    
+    quarter = models.CharField(
+        max_length=2,
+        choices=QUARTER_CHOICES,
+        blank=True,
+        null=True,
+        verbose_name='Fiscal Quarter',
+        help_text='Uganda fiscal year quarter: Q1(Jul-Sep), Q2(Oct-Dec), Q3(Jan-Mar), Q4(Apr-Jun)'
     )
     
     is_active = models.BooleanField(default=True)
