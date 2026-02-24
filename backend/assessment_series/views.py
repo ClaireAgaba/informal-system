@@ -65,8 +65,8 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
         ws_special.title = "Special Needs Candidates"
         
         special_headers = [
-            ('Reg No', 20), ('Full Name', 25), ('Center', 30), ('Category', 12), 
-            ('Occupation', 20), ('Sector', 15), ('Level/Modules', 20),
+            ('Reg No', 20), ('Full Name', 25), ('Center No', 15), ('Center Name', 30), ('Center Contact', 15),
+            ('Category', 12), ('Occupation', 20), ('Sector', 15), ('Level/Modules', 20),
             ('Nature of Disability', 25), ('Disability Notes', 30),
             ('Age', 6), ('District', 15), ('Gender', 8), ('Contact', 15)
         ]
@@ -84,8 +84,8 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
         ws_refugees = wb.create_sheet(title="Refugees")
         
         refugee_headers = [
-            ('Reg No', 20), ('Full Name', 25), ('Center', 30), ('Category', 12), 
-            ('Occupation', 20), ('Sector', 15), ('Level/Modules', 20),
+            ('Reg No', 20), ('Full Name', 25), ('Center No', 15), ('Center Name', 30), ('Center Contact', 15),
+            ('Category', 12), ('Occupation', 20), ('Sector', 15), ('Level/Modules', 20),
             ('Refugee ID', 20), ('Nationality', 15),
             ('Age', 6), ('District', 15), ('Gender', 8), ('Contact', 15)
         ]
@@ -129,33 +129,37 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
             if c.has_disability:
                 ws_special.cell(row=special_row, column=1, value=c.registration_number or '')
                 ws_special.cell(row=special_row, column=2, value=c.full_name or '')
-                ws_special.cell(row=special_row, column=3, value=c.assessment_center.center_name if c.assessment_center else '')
-                ws_special.cell(row=special_row, column=4, value=category_map.get(c.registration_category, ''))
-                ws_special.cell(row=special_row, column=5, value=c.occupation.occ_name if c.occupation else '')
-                ws_special.cell(row=special_row, column=6, value=c.occupation.sector.name if c.occupation and c.occupation.sector else '')
-                ws_special.cell(row=special_row, column=7, value=level_modules)
-                ws_special.cell(row=special_row, column=8, value=c.nature_of_disability.name if c.nature_of_disability else '')
-                ws_special.cell(row=special_row, column=9, value=c.disability_specification or '')
-                ws_special.cell(row=special_row, column=10, value=calc_age(c.date_of_birth))
-                ws_special.cell(row=special_row, column=11, value=c.district.name if c.district else '')
-                ws_special.cell(row=special_row, column=12, value=gender_map.get(c.gender, ''))
-                ws_special.cell(row=special_row, column=13, value=c.contact or '')
+                ws_special.cell(row=special_row, column=3, value=c.assessment_center.center_number if c.assessment_center else '')
+                ws_special.cell(row=special_row, column=4, value=c.assessment_center.center_name if c.assessment_center else '')
+                ws_special.cell(row=special_row, column=5, value=c.assessment_center.contact_1 if c.assessment_center else '')
+                ws_special.cell(row=special_row, column=6, value=category_map.get(c.registration_category, ''))
+                ws_special.cell(row=special_row, column=7, value=c.occupation.occ_name if c.occupation else '')
+                ws_special.cell(row=special_row, column=8, value=c.occupation.sector.name if c.occupation and c.occupation.sector else '')
+                ws_special.cell(row=special_row, column=9, value=level_modules)
+                ws_special.cell(row=special_row, column=10, value=c.nature_of_disability.name if c.nature_of_disability else '')
+                ws_special.cell(row=special_row, column=11, value=c.disability_specification or '')
+                ws_special.cell(row=special_row, column=12, value=calc_age(c.date_of_birth))
+                ws_special.cell(row=special_row, column=13, value=c.district.name if c.district else '')
+                ws_special.cell(row=special_row, column=14, value=gender_map.get(c.gender, ''))
+                ws_special.cell(row=special_row, column=15, value=c.contact or '')
                 special_row += 1
                 
             if c.is_refugee:
                 ws_refugees.cell(row=refugee_row, column=1, value=c.registration_number or '')
                 ws_refugees.cell(row=refugee_row, column=2, value=c.full_name or '')
-                ws_refugees.cell(row=refugee_row, column=3, value=c.assessment_center.center_name if c.assessment_center else '')
-                ws_refugees.cell(row=refugee_row, column=4, value=category_map.get(c.registration_category, ''))
-                ws_refugees.cell(row=refugee_row, column=5, value=c.occupation.occ_name if c.occupation else '')
-                ws_refugees.cell(row=refugee_row, column=6, value=c.occupation.sector.name if c.occupation and c.occupation.sector else '')
-                ws_refugees.cell(row=refugee_row, column=7, value=level_modules)
-                ws_refugees.cell(row=refugee_row, column=8, value=c.refugee_number or '')
-                ws_refugees.cell(row=refugee_row, column=9, value=c.nationality or 'Uganda')
-                ws_refugees.cell(row=refugee_row, column=10, value=calc_age(c.date_of_birth))
-                ws_refugees.cell(row=refugee_row, column=11, value=c.district.name if c.district else '')
-                ws_refugees.cell(row=refugee_row, column=12, value=gender_map.get(c.gender, ''))
-                ws_refugees.cell(row=refugee_row, column=13, value=c.contact or '')
+                ws_refugees.cell(row=refugee_row, column=3, value=c.assessment_center.center_number if c.assessment_center else '')
+                ws_refugees.cell(row=refugee_row, column=4, value=c.assessment_center.center_name if c.assessment_center else '')
+                ws_refugees.cell(row=refugee_row, column=5, value=c.assessment_center.contact_1 if c.assessment_center else '')
+                ws_refugees.cell(row=refugee_row, column=6, value=category_map.get(c.registration_category, ''))
+                ws_refugees.cell(row=refugee_row, column=7, value=c.occupation.occ_name if c.occupation else '')
+                ws_refugees.cell(row=refugee_row, column=8, value=c.occupation.sector.name if c.occupation and c.occupation.sector else '')
+                ws_refugees.cell(row=refugee_row, column=9, value=level_modules)
+                ws_refugees.cell(row=refugee_row, column=10, value=c.refugee_number or '')
+                ws_refugees.cell(row=refugee_row, column=11, value=c.nationality or 'Uganda')
+                ws_refugees.cell(row=refugee_row, column=12, value=calc_age(c.date_of_birth))
+                ws_refugees.cell(row=refugee_row, column=13, value=c.district.name if c.district else '')
+                ws_refugees.cell(row=refugee_row, column=14, value=gender_map.get(c.gender, ''))
+                ws_refugees.cell(row=refugee_row, column=15, value=c.contact or '')
                 refugee_row += 1
 
         response = HttpResponse(

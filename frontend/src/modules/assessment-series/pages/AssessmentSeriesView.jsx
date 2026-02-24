@@ -321,9 +321,9 @@ const AssessmentSeriesView = () => {
               )}
 
               <Button
-                variant="outline"
+                variant="orange"
                 size="md"
-                className="w-full text-primary-600 border-primary-200 hover:bg-primary-50"
+                className="w-full"
                 onClick={handleExportSpecialNeeds}
                 loading={exporting}
               >
