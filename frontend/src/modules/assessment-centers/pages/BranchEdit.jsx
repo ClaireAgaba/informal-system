@@ -39,7 +39,6 @@ const BranchEdit = () => {
 
   const [formData, setFormData] = useState({
     assessment_center: centerId || '',
-    branch_name: '',
     branch_code: '',
     district: '',
     village: '',
@@ -88,7 +87,6 @@ const BranchEdit = () => {
       const branch = branchData.data;
       setFormData({
         assessment_center: branch.assessment_center,
-        branch_name: branch.branch_name || '',
         branch_code: branch.branch_code || '',
         district: branch.district || '',
         village: branch.village || '',
@@ -186,26 +184,6 @@ const BranchEdit = () => {
       <Card>
         <Card.Content className="p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Branch Name */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Branch Name *
-              </label>
-              <input
-                type="text"
-                name="branch_name"
-                value={formData.branch_name}
-                onChange={handleChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-                  errors.branch_name ? 'border-red-500' : 'border-gray-300'
-                }`}
-                required
-              />
-              {errors.branch_name && (
-                <p className="mt-1 text-sm text-red-600">{errors.branch_name}</p>
-              )}
-            </div>
-
             {/* Branch Code */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
