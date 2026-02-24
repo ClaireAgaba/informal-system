@@ -2389,6 +2389,21 @@ def regenerate_candidate_regno(request, candidate_id):
     candidate.payment_code = new_payment_code
     candidate.save()
     
+    # Log activity
+    actor = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
+    CandidateActivity.objects.create(
+        candidate=candidate,
+        actor=actor,
+        action='regno_regenerated',
+        description='Registration number regenerated',
+        details={
+            'old_registration_number': old_regno,
+            'new_registration_number': new_regno,
+            'old_payment_code': old_payment_code,
+            'new_payment_code': new_payment_code,
+        }
+    )
+    
     return Response({
         'message': 'Registration number regenerated successfully',
         'candidate_id': candidate.id,
@@ -2471,6 +2486,19 @@ def bulk_regenerate_candidate_regno(request):
             candidate.registration_number = new_regno
             candidate.payment_code = new_payment_code
             candidate.save()
+            
+            # Log activity for each candidate
+            actor = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
+            CandidateActivity.objects.create(
+                candidate=candidate,
+                actor=actor,
+                action='regno_regenerated',
+                description='Registration number regenerated (bulk)',
+                details={
+                    'old_registration_number': old_regno,
+                    'new_registration_number': new_regno,
+                }
+            )
             
             changes.append({
                 'candidate_id': candidate.id,
