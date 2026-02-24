@@ -1217,7 +1217,7 @@ const CandidateList = () => {
       {/* Bulk Change Center Modal */}
       {showBulkChangeCenterModal && (
         <BulkChangeCenterModal
-          selectedCount={selectedCandidates.length}
+          selectedCount={selectAllPages ? totalCount : selectedCandidates.length}
           onClose={() => setShowBulkChangeCenterModal(false)}
           onConfirm={processBulkChangeCenter}
           isLoading={changingCenter}
