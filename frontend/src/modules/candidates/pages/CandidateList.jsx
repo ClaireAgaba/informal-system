@@ -413,7 +413,10 @@ const CandidateList = () => {
   const processBulkChangeCenter = async (newCenterId) => {
     try {
       setChangingCenter(true);
-      const response = await candidateApi.bulkChangeCenter(selectedCandidates, newCenterId);
+      const payload = selectAllPages
+        ? { select_all: true, filters: { ...filters, search: searchQuery }, new_center_id: newCenterId }
+        : { candidate_ids: selectedCandidates, new_center_id: newCenterId };
+      const response = await candidateApi.bulkChangeCenter(payload);
       const { updated } = response.data;
 
       toast.success(

@@ -2225,6 +2225,8 @@ def bulk_change_candidate_center(request):
 
     candidate_ids = request.data.get('candidate_ids', [])
     new_center_id = request.data.get('new_center_id')
+    select_all = request.data.get('select_all', False)
+    filters = request.data.get('filters', {})
     
     if not new_center_id:
         return Response(
@@ -2232,7 +2234,7 @@ def bulk_change_candidate_center(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    if not candidate_ids:
+    if not select_all and not candidate_ids:
         return Response(
             {'error': 'No candidates selected'},
             status=status.HTTP_400_BAD_REQUEST
@@ -2249,7 +2251,36 @@ def bulk_change_candidate_center(request):
     
     from fees.models import CandidateFee, CenterFee
     
-    candidates = Candidate.objects.filter(id__in=candidate_ids)
+    # Get candidates based on select_all or candidate_ids
+    if select_all:
+        queryset = Candidate.objects.select_related('assessment_center').all()
+        if filters.get('registration_category'):
+            queryset = queryset.filter(registration_category=filters['registration_category'])
+        if filters.get('assessment_center'):
+            queryset = queryset.filter(assessment_center_id=filters['assessment_center'])
+        if filters.get('assessment_center_branch'):
+            queryset = queryset.filter(assessment_center_branch_id=filters['assessment_center_branch'])
+        if filters.get('occupation'):
+            queryset = queryset.filter(occupation_id=filters['occupation'])
+        if filters.get('has_disability'):
+            queryset = queryset.filter(has_disability=filters['has_disability'] == 'true')
+        if filters.get('is_refugee'):
+            queryset = queryset.filter(is_refugee=filters['is_refugee'] == 'true')
+        if filters.get('verification_status'):
+            queryset = queryset.filter(verification_status=filters['verification_status'])
+        if filters.get('entry_year'):
+            queryset = queryset.filter(entry_year=filters['entry_year'])
+        if filters.get('intake'):
+            queryset = queryset.filter(intake=filters['intake'])
+        if filters.get('search'):
+            queryset = queryset.filter(
+                Q(registration_number__icontains=filters['search']) |
+                Q(full_name__icontains=filters['search']) |
+                Q(phone_number__icontains=filters['search'])
+            )
+        candidates = queryset
+    else:
+        candidates = Candidate.objects.filter(id__in=candidate_ids)
     
     total_updated = {
         'candidates': 0,

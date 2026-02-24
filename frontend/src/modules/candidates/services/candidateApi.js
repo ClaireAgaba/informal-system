@@ -252,11 +252,8 @@ export const candidateApi = {
   },
 
   // Bulk change assessment center for multiple candidates
-  bulkChangeCenter: (candidateIds, newCenterId) => {
-    return apiClient.post(`${CANDIDATES_BASE}/bulk-change-center/`, {
-      candidate_ids: candidateIds,
-      new_center_id: newCenterId
-    });
+  bulkChangeCenter: (data) => {
+    return apiClient.post(`${CANDIDATES_BASE}/bulk-change-center/`, data);
   },
 
   // Get all enrollments with filters

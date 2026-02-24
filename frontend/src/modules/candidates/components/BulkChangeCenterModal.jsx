@@ -7,10 +7,10 @@ import Button from '@shared/components/Button';
 const BulkChangeCenterModal = ({ selectedCount, onClose, onConfirm, isLoading }) => {
   const [selectedCenter, setSelectedCenter] = useState('');
 
-  // Fetch all assessment centers
+  // Fetch all assessment centers (no pagination limit, include inactive)
   const { data: centerData, isLoading: loadingCenters } = useQuery({
-    queryKey: ['assessment-centers'],
-    queryFn: () => assessmentCenterApi.getAll({ page_size: 200 }),
+    queryKey: ['assessment-centers-all'],
+    queryFn: () => assessmentCenterApi.getAll({ page_size: 1000 }),
   });
 
   const centerList = centerData?.data?.results || centerData?.data || [];
