@@ -257,7 +257,12 @@ const AssessmentCenterView = () => {
           <Card>
             <Card.Header>
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Center Branches</h3>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Center Branches
+                  {center.has_branches && branches.length > 0 && (
+                    <span className="ml-2 text-sm font-medium text-gray-500">({branches.length})</span>
+                  )}
+                </h3>
                 {center.has_branches && (
                   <Button
                     variant="outline"
