@@ -528,11 +528,27 @@ class Candidate(models.Model):
                 except (ValueError, IndexError):
                     continue
         
-        # Increment for new candidate
-        unique_no = str(max_unique_no + 1).zfill(3)
+        # Increment for new candidate and check for collisions
+        base_regno = f"{center_no}/{nationality_code}/{year_code}/{intake_code}/{occ_code}/{reg_category_code}"
+        unique_no_int = max_unique_no + 1
         
-        # Construct registration number
-        reg_number = f"{center_no}/{nationality_code}/{year_code}/{intake_code}/{occ_code}/{reg_category_code}/{unique_no}"
+        # Keep incrementing until we find an available registration number
+        while True:
+            unique_no = str(unique_no_int).zfill(3)
+            reg_number = f"{base_regno}/{unique_no}"
+            
+            # Check if this registration number already exists
+            exists = Candidate.objects.filter(
+                registration_number=reg_number
+            ).exclude(pk=self.pk if self.pk else None).exists()
+            
+            if not exists:
+                break
+            unique_no_int += 1
+            
+            # Safety limit to avoid infinite loop
+            if unique_no_int > max_unique_no + 1000:
+                break
         
         return reg_number
     
