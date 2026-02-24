@@ -2463,8 +2463,16 @@ def bulk_regenerate_candidate_regno(request):
     total_skipped = 0
     failed = []
     changes = []
+    actor = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
     
-    for candidate in candidates:
+    # Process in batches for better performance
+    from django.db import transaction
+    BATCH_SIZE = 100
+    candidates_to_update = []
+    activities_to_create = []
+    
+    # First pass: identify candidates that need updating
+    for candidate in candidates.iterator():
         try:
             old_regno = candidate.registration_number
             
@@ -2482,14 +2490,13 @@ def bulk_regenerate_candidate_regno(request):
             # Generate new payment code
             new_payment_code = candidate.generate_payment_code()
             
-            # Update candidate
+            # Queue for batch update
             candidate.registration_number = new_regno
             candidate.payment_code = new_payment_code
-            candidate.save()
+            candidates_to_update.append(candidate)
             
-            # Log activity for each candidate
-            actor = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
-            CandidateActivity.objects.create(
+            # Queue activity log
+            activities_to_create.append(CandidateActivity(
                 candidate=candidate,
                 actor=actor,
                 action='regno_regenerated',
@@ -2498,7 +2505,7 @@ def bulk_regenerate_candidate_regno(request):
                     'old_registration_number': old_regno,
                     'new_registration_number': new_regno,
                 }
-            )
+            ))
             
             changes.append({
                 'candidate_id': candidate.id,
@@ -2506,13 +2513,35 @@ def bulk_regenerate_candidate_regno(request):
                 'old_regno': old_regno,
                 'new_regno': new_regno,
             })
-            total_updated += 1
+            
+            # Batch save every BATCH_SIZE candidates
+            if len(candidates_to_update) >= BATCH_SIZE:
+                with transaction.atomic():
+                    Candidate.objects.bulk_update(
+                        candidates_to_update, 
+                        ['registration_number', 'payment_code']
+                    )
+                    CandidateActivity.objects.bulk_create(activities_to_create)
+                total_updated += len(candidates_to_update)
+                candidates_to_update = []
+                activities_to_create = []
+                
         except Exception as e:
             failed.append({
                 'candidate_id': candidate.id,
                 'name': candidate.full_name,
                 'reason': str(e)
             })
+    
+    # Save remaining candidates
+    if candidates_to_update:
+        with transaction.atomic():
+            Candidate.objects.bulk_update(
+                candidates_to_update, 
+                ['registration_number', 'payment_code']
+            )
+            CandidateActivity.objects.bulk_create(activities_to_create)
+        total_updated += len(candidates_to_update)
     
     return Response({
         'message': f'Regenerated registration numbers for {total_updated} candidate(s). {total_skipped} skipped (no change needed or missing data).',
