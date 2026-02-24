@@ -76,15 +76,15 @@ const AssessmentCenterEdit = () => {
   const districts = districtsData || [];
   const villages = villagesData || [];
 
-  // Populate form when data is loaded
+  // Populate form when data is loaded (wait for districts to load first)
   useEffect(() => {
-    if (center && !isNewCenter) {
+    if (center && !isNewCenter && districts.length > 0) {
       reset({
         center_number: center.center_number,
         center_name: center.center_name,
         assessment_category: center.assessment_category,
-        district: center.district || '',
-        village: center.village || '',
+        district: center.district ? String(center.district) : '',
+        village: center.village ? String(center.village) : '',
         contact_1: center.contact_1 || '',
         contact_2: center.contact_2 || '',
         has_branches: center.has_branches,
@@ -104,7 +104,7 @@ const AssessmentCenterEdit = () => {
         is_active: true,
       });
     }
-  }, [center, reset, isNewCenter]);
+  }, [center, reset, isNewCenter, districts.length]);
 
   // Update mutation
   const updateMutation = useMutation({
