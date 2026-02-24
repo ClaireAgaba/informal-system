@@ -25,7 +25,7 @@ const Albums = () => {
       try {
         const user = JSON.parse(userStr);
         setCurrentUser(user);
-        
+
         // Auto-select center for center representatives
         if (user.user_type === 'center_representative' && user.center_representative?.assessment_center) {
           setFilters(prev => ({
@@ -85,8 +85,8 @@ const Albums = () => {
 
   // Reset occupation and level when registration category changes
   const handleCategoryChange = (value) => {
-    setFilters({ 
-      ...filters, 
+    setFilters({
+      ...filters,
       registrationCategory: value,
       occupation: '', // Reset occupation when category changes
       level: '' // Reset level when category changes
@@ -122,7 +122,7 @@ const Albums = () => {
         registration_category: filters.registrationCategory,
         occupation: filters.occupation,
       });
-      
+
       // Add level if selected (for formal/workers_pas)
       if (filters.level) {
         params.append('level', filters.level);
@@ -136,17 +136,17 @@ const Albums = () => {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      
+
       // Extract filename from Content-Disposition header or use default
       const contentDisposition = response.headers['content-disposition'];
       let filename = 'candidate_album.pdf';
       if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+        const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
         if (filenameMatch) {
           filename = filenameMatch[1];
         }
       }
-      
+
       link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
@@ -156,10 +156,10 @@ const Albums = () => {
       toast.success('Album generated successfully!');
     } catch (error) {
       console.error('Error generating album:', error);
-      
+
       // Handle error - need to parse blob response as JSON for error messages
       let errorMessage = 'Failed to generate album. Please try again.';
-      
+
       if (error.response?.data) {
         try {
           // If response is a blob, convert to text and parse as JSON
@@ -174,7 +174,7 @@ const Albums = () => {
           console.error('Error parsing error response:', parseError);
         }
       }
-      
+
       toast.error(errorMessage);
     } finally {
       setLoading(false);
@@ -195,7 +195,7 @@ const Albums = () => {
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Filter Options</h2>
-        
+
         <div className={`grid grid-cols-1 md:grid-cols-2 ${filters.registrationCategory === 'formal' || filters.registrationCategory === 'workers_pas' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4 mb-6`}>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -261,8 +261,8 @@ const Albums = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               <option value="">
-                {!filters.registrationCategory 
-                  ? 'Select Category First' 
+                {!filters.registrationCategory
+                  ? 'Select Category First'
                   : 'Select Occupation'}
               </option>
               {occupations.map((occupation) => (
@@ -286,10 +286,10 @@ const Albums = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 <option value="">
-                  {!filters.occupation 
-                    ? 'Select Occupation First' 
-                    : filters.registrationCategory === 'workers_pas' 
-                      ? 'All Levels' 
+                  {!filters.occupation
+                    ? 'Select Occupation First'
+                    : filters.registrationCategory === 'workers_pas'
+                      ? 'All Levels'
                       : 'Select Level'}
                 </option>
                 {levels.map((level) => (

@@ -168,7 +168,8 @@ class ReportViewSet(viewsets.ViewSet):
             rightMargin=0.5*inch,
             leftMargin=0.5*inch,
             topMargin=0.5*inch,
-            bottomMargin=0.5*inch
+            bottomMargin=0.5*inch,
+            title=f"Candidate Album - {assessment_series.name}"
         )
 
         # Container for PDF elements
@@ -430,7 +431,8 @@ class ReportViewSet(viewsets.ViewSet):
         buffer.close()
 
         # Create filename
-        filename = f"candidate_album_{assessment_center.center_number}_{occupation.occ_code}_{assessment_series.name.replace(' ', '_')}.pdf"
+        clean_series_name = assessment_series.name.strip().replace(' ', '_')
+        filename = f"candidate_album_{assessment_center.center_number}_{occupation.occ_code}_{clean_series_name}.pdf"
 
         # Return PDF response
         response = HttpResponse(pdf, content_type='application/pdf')

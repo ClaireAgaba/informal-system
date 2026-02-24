@@ -70,10 +70,11 @@ class ComplaintCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Complaint
         fields = [
-            'category', 'exam_center', 'exam_series', 'program',
+            'id', 'category', 'exam_center', 'exam_series', 'program',
             'phone', 'issue_description', 'proof_of_complaint',
             'status', 'helpdesk_team'
         ]
+        read_only_fields = ['id']
     
     def create(self, validated_data):
         validated_data['created_by'] = self.context['request'].user
@@ -84,7 +85,8 @@ class ComplaintUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Complaint
         fields = [
-            'category', 'exam_center', 'exam_series', 'program',
+            'id', 'category', 'exam_center', 'exam_series', 'program',
             'phone', 'issue_description', 'proof_of_complaint',
             'status', 'helpdesk_team', 'team_response'
         ]
+        read_only_fields = ['id']
