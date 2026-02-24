@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { X, Building, AlertTriangle } from 'lucide-react';
+import { X, Building, AlertTriangle, GitBranch } from 'lucide-react';
 import assessmentCenterApi from '@modules/assessment-centers/services/assessmentCenterApi';
 import Button from '@shared/components/Button';
 
 const BulkChangeCenterModal = ({ selectedCount, onClose, onConfirm, isLoading }) => {
   const [selectedCenter, setSelectedCenter] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState('');
 
   // Fetch all assessment centers (no pagination limit, include inactive)
   const { data: centerData, isLoading: loadingCenters } = useQuery({
@@ -14,11 +15,29 @@ const BulkChangeCenterModal = ({ selectedCount, onClose, onConfirm, isLoading })
   });
 
   const centerList = centerData?.data?.results || centerData?.data || [];
+  
+  // Get selected center object
+  const selectedCenterObj = centerList.find(c => String(c.id) === String(selectedCenter));
+  const hasBranches = selectedCenterObj?.has_branches;
+
+  // Fetch branches for selected center if it has branches
+  const { data: branchData, isLoading: loadingBranches } = useQuery({
+    queryKey: ['center-branches', selectedCenter],
+    queryFn: () => assessmentCenterApi.branches.getByCenter(selectedCenter),
+    enabled: !!selectedCenter && hasBranches,
+  });
+
+  const branchList = branchData?.data?.results || branchData?.data || [];
+
+  // Reset branch when center changes
+  useEffect(() => {
+    setSelectedBranch('');
+  }, [selectedCenter]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (selectedCenter) {
-      onConfirm(selectedCenter);
+      onConfirm(selectedCenter, selectedBranch || null);
     }
   };
 
@@ -88,6 +107,39 @@ const BulkChangeCenterModal = ({ selectedCount, onClose, onConfirm, isLoading })
                 </p>
               )}
             </div>
+
+            {/* Branch Selection - only show if selected center has branches */}
+            {hasBranches && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <GitBranch className="w-4 h-4 inline mr-1" />
+                  Select Branch (Optional)
+                </label>
+                {loadingBranches ? (
+                  <div className="text-sm text-gray-500">Loading branches...</div>
+                ) : branchList.length === 0 ? (
+                  <p className="text-sm text-amber-600">No branches defined for this center yet.</p>
+                ) : (
+                  <select
+                    value={selectedBranch}
+                    onChange={(e) => setSelectedBranch(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">-- No Branch (Main Center) --</option>
+                    {branchList.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.branch_code} - {branch.district_name || 'N/A'}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {!loadingBranches && branchList.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {branchList.length} branch(es) available
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Footer */}

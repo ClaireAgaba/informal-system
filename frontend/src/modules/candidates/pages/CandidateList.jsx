@@ -428,12 +428,12 @@ const CandidateList = () => {
   };
 
   // Process bulk change center
-  const processBulkChangeCenter = async (newCenterId) => {
+  const processBulkChangeCenter = async (newCenterId, newBranchId = null) => {
     try {
       setChangingCenter(true);
       const payload = selectAllPages
-        ? { select_all: true, filters: { ...filters, search: searchQuery }, new_center_id: newCenterId }
-        : { candidate_ids: selectedCandidates, new_center_id: newCenterId };
+        ? { select_all: true, filters: { ...filters, search: searchQuery }, new_center_id: newCenterId, new_branch_id: newBranchId }
+        : { candidate_ids: selectedCandidates, new_center_id: newCenterId, new_branch_id: newBranchId };
       const response = await candidateApi.bulkChangeCenter(payload);
       const { updated } = response.data;
 

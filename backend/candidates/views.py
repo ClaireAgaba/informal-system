@@ -2225,6 +2225,7 @@ def bulk_change_candidate_center(request):
 
     candidate_ids = request.data.get('candidate_ids', [])
     new_center_id = request.data.get('new_center_id')
+    new_branch_id = request.data.get('new_branch_id')
     select_all = request.data.get('select_all', False)
     filters = request.data.get('filters', {})
     
@@ -2240,7 +2241,7 @@ def bulk_change_candidate_center(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    from assessment_centers.models import AssessmentCenter
+    from assessment_centers.models import AssessmentCenter, CenterBranch
     try:
         new_center = AssessmentCenter.objects.get(id=new_center_id)
     except AssessmentCenter.DoesNotExist:
@@ -2248,6 +2249,17 @@ def bulk_change_candidate_center(request):
             {'error': 'Assessment center not found'},
             status=status.HTTP_404_NOT_FOUND
         )
+    
+    # Get branch if provided
+    new_branch = None
+    if new_branch_id:
+        try:
+            new_branch = CenterBranch.objects.get(id=new_branch_id, assessment_center=new_center)
+        except CenterBranch.DoesNotExist:
+            return Response(
+                {'error': 'Branch not found or does not belong to selected center'},
+                status=status.HTTP_404_NOT_FOUND
+            )
     
     from fees.models import CandidateFee, CenterFee
     
@@ -2292,9 +2304,9 @@ def bulk_change_candidate_center(request):
         try:
             old_center = candidate.assessment_center
             
-            # Update candidate's assessment center
+            # Update candidate's assessment center and branch
             candidate.assessment_center = new_center
-            candidate.assessment_center_branch = None  # Reset branch
+            candidate.assessment_center_branch = new_branch  # Set to selected branch or None
             
             # Generate new registration number if candidate is submitted
             if candidate.is_submitted and candidate.registration_number:
