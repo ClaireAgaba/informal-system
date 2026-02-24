@@ -382,7 +382,8 @@ class CandidateViewSet(viewsets.ModelViewSet):
             'registration_number', 'full_name', 'date_of_birth', 'gender',
             'nationality', 'contact', 'has_disability', 'is_refugee',
             'assessment_center__center_name', 'registration_category',
-            'occupation__occ_name', 'occupation__sector__name', 'district__name'
+            'occupation__occ_name', 'occupation__sector__name', 'district__name',
+            'nature_of_disability__name', 'disability_specification'
         )
         
         # Create workbook
@@ -393,8 +394,10 @@ class CandidateViewSet(viewsets.ModelViewSet):
         # Define headers and column widths
         headers = [
             ('Reg No', 20), ('Full Name', 25), ('Center', 30), ('Category', 12), 
-            ('Occupation', 20), ('Sector', 15), ('Disability', 10), ('Refugee', 10), 
-            ('Nationality', 12), ('Age', 6), ('District', 15), ('Gender', 8), ('Contact', 15)
+            ('Occupation', 20), ('Sector', 15), ('Disability', 10), 
+            ('Nature of Disability', 25), ('Disability Notes', 30),
+            ('Refugee', 10), ('Nationality', 12), ('Age', 6), 
+            ('District', 15), ('Gender', 8), ('Contact', 15)
         ]
         
         # Style for headers only
@@ -428,12 +431,14 @@ class CandidateViewSet(viewsets.ModelViewSet):
             ws.cell(row=row_num, column=5, value=c['occupation__occ_name'] or '')
             ws.cell(row=row_num, column=6, value=c['occupation__sector__name'] or '')
             ws.cell(row=row_num, column=7, value='Yes' if c['has_disability'] else 'No')
-            ws.cell(row=row_num, column=8, value='Yes' if c['is_refugee'] else 'No')
-            ws.cell(row=row_num, column=9, value=c['nationality'] or 'Uganda')
-            ws.cell(row=row_num, column=10, value=calc_age(c['date_of_birth']))
-            ws.cell(row=row_num, column=11, value=c['district__name'] or '')
-            ws.cell(row=row_num, column=12, value=gender_map.get(c['gender'], ''))
-            ws.cell(row=row_num, column=13, value=c['contact'] or '')
+            ws.cell(row=row_num, column=8, value=c['nature_of_disability__name'] or '')
+            ws.cell(row=row_num, column=9, value=c['disability_specification'] or '')
+            ws.cell(row=row_num, column=10, value='Yes' if c['is_refugee'] else 'No')
+            ws.cell(row=row_num, column=11, value=c['nationality'] or 'Uganda')
+            ws.cell(row=row_num, column=12, value=calc_age(c['date_of_birth']))
+            ws.cell(row=row_num, column=13, value=c['district__name'] or '')
+            ws.cell(row=row_num, column=14, value=gender_map.get(c['gender'], ''))
+            ws.cell(row=row_num, column=15, value=c['contact'] or '')
         
         # Create response
         response = HttpResponse(

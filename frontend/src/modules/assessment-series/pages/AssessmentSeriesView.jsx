@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -10,6 +11,7 @@ import {
   AlertCircle,
   Flag,
   DollarSign,
+  Download,
 } from 'lucide-react';
 import assessmentSeriesApi from '../services/assessmentSeriesApi';
 import Button from '@shared/components/Button';
@@ -20,6 +22,7 @@ const AssessmentSeriesView = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [exporting, setExporting] = useState(false);
 
   // Redirect if ID is invalid
   if (!id || id === 'undefined' || id === 'new') {
@@ -59,6 +62,41 @@ const AssessmentSeriesView = () => {
       toast.error(`Failed to release results: ${error.message}`);
     },
   });
+
+  const handleExportSpecialNeeds = async () => {
+    setExporting(true);
+    try {
+      const response = await assessmentSeriesApi.exportSpecialNeeds(id);
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `special_needs_refugees_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (filenameMatch && filenameMatch.length > 1) {
+          filename = filenameMatch[1];
+        } else {
+          const fallbackMatch = contentDisposition.match(/filename=([^;]+)/);
+          if (fallbackMatch && fallbackMatch.length > 1) {
+            filename = fallbackMatch[1].trim();
+          }
+        }
+      }
+
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Export downloaded successfully!');
+    } catch (error) {
+      toast.error('Failed to download export');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -281,6 +319,17 @@ const AssessmentSeriesView = () => {
                   Release Results
                 </Button>
               )}
+
+              <Button
+                variant="outline"
+                size="md"
+                className="w-full text-primary-600 border-primary-200 hover:bg-primary-50"
+                onClick={handleExportSpecialNeeds}
+                loading={exporting}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export Special Needs & Refugees
+              </Button>
 
               <div className="pt-4 border-t border-gray-200">
                 <div className="text-xs text-gray-500 space-y-1">

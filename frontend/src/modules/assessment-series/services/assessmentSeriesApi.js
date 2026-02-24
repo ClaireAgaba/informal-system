@@ -12,6 +12,7 @@ export const assessmentSeriesApi = {
   setCurrent: (id) => apiClient.post(`${SERIES_BASE}/${id}/set-current/`),
   releaseResults: (id) => apiClient.post(`${SERIES_BASE}/${id}/release-results/`),
   getByYear: (year) => apiClient.get(`${SERIES_BASE}/`, { params: { year } }),
+  exportSpecialNeeds: (id) => apiClient.get(`${SERIES_BASE}/${id}/export_special_needs/`, { responseType: 'blob' }),
 };
 
 export default assessmentSeriesApi;
