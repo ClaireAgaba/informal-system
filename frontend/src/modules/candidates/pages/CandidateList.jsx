@@ -83,6 +83,23 @@ const CandidateList = () => {
   // Filter states — initialized from URL
   const [filters, setFilters] = useState(initFilters);
 
+  // Sync filters from URL params on navigation (e.g., from center details "View All")
+  useEffect(() => {
+    const newFilters = {};
+    let hasChanges = false;
+    FILTER_KEYS.forEach((k) => {
+      const urlValue = searchParams.get(k) || '';
+      newFilters[k] = urlValue;
+      if (urlValue !== filters[k]) hasChanges = true;
+    });
+    if (hasChanges) {
+      setFilters(newFilters);
+      if (FILTER_KEYS.some((k) => searchParams.get(k))) {
+        setShowFilters(true);
+      }
+    }
+  }, [searchParams]);
+
   // Sync state → URL params
   useEffect(() => {
     const params = new URLSearchParams();
