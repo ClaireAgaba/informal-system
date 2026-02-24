@@ -10,11 +10,16 @@ class CenterBranchSerializer(serializers.ModelSerializer):
     full_location = serializers.CharField(source='get_full_location', read_only=True)
     center_name = serializers.CharField(source='assessment_center.center_name', read_only=True)
     center_number = serializers.CharField(source='assessment_center.center_number', read_only=True)
+    candidates_count = serializers.SerializerMethodField()
     
     class Meta:
         model = CenterBranch
         fields = '__all__'
         read_only_fields = ['created_at', 'updated_at']
+    
+    def get_candidates_count(self, obj):
+        from candidates.models import Candidate
+        return Candidate.objects.filter(assessment_center_branch=obj).count()
 
 
 class CenterBranchCreateSerializer(serializers.ModelSerializer):

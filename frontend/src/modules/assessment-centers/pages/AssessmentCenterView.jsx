@@ -322,6 +322,12 @@ const AssessmentCenterView = () => {
                                 {branch.is_active ? 'Active' : 'Inactive'}
                               </span>
                             </div>
+                            <div>
+                              <span className="text-gray-500">Candidates:</span>
+                              <span className="ml-2 font-medium text-primary-600">
+                                {branch.candidates_count ?? 0}
+                              </span>
+                            </div>
                           </div>
                         </div>
                         <Button
