@@ -65,6 +65,7 @@ const CandidateList = () => {
   const [changingSeries, setChangingSeries] = useState(false);
   const [showBulkChangeCenterModal, setShowBulkChangeCenterModal] = useState(false);
   const [changingCenter, setChangingCenter] = useState(false);
+  const [regeneratingRegNo, setRegeneratingRegNo] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
 
   // Load current user from localStorage
@@ -436,6 +437,40 @@ const CandidateList = () => {
     }
   };
 
+  // Handle bulk regenerate registration numbers
+  const handleBulkRegenerateRegNo = async () => {
+    if (selectedCandidates.length === 0 && !selectAllPages) {
+      toast.error('Please select candidates to regenerate registration numbers');
+      return;
+    }
+    
+    const count = selectAllPages ? totalCount : selectedCandidates.length;
+    if (!window.confirm(`Regenerate registration numbers for ${count} candidate(s)?\n\nThis will update registration numbers based on current center, occupation, and other details.\n\nCandidates with no changes needed will be skipped.`)) {
+      return;
+    }
+    
+    try {
+      setRegeneratingRegNo(true);
+      const payload = selectAllPages
+        ? { select_all: true, filters: { ...filters, search: searchQuery } }
+        : { candidate_ids: selectedCandidates };
+      const response = await candidateApi.bulkRegenerateRegNo(payload);
+      const { updated, skipped } = response.data;
+      
+      toast.success(`Regenerated ${updated} registration number(s). ${skipped} skipped (no change needed).`);
+      
+      // Refresh the list
+      queryClient.invalidateQueries(['candidates']);
+      setSelectedCandidates([]);
+      setSelectAllPages(false);
+    } catch (error) {
+      console.error('Bulk regenerate regno failed:', error);
+      toast.error(error.response?.data?.error || 'Failed to regenerate registration numbers');
+    } finally {
+      setRegeneratingRegNo(false);
+    }
+  };
+
   // Clear filters
   const handleClearFilters = () => {
     setFilters({
@@ -671,10 +706,12 @@ const CandidateList = () => {
                     handleBulkChangeSeries();
                   } else if (e.target.value === 'change-center') {
                     handleBulkChangeCenter();
+                  } else if (e.target.value === 'regenerate-regno') {
+                    handleBulkRegenerateRegNo();
                   }
                   e.target.value = '';
                 }}
-                disabled={exporting || deEnrolling || clearing || changingOccupation || changingRegCategory || changingSeries || changingCenter}
+                disabled={exporting || deEnrolling || clearing || changingOccupation || changingRegCategory || changingSeries || changingCenter || regeneratingRegNo}
                 defaultValue=""
               >
                 <option value="" disabled>⚙ Action</option>
@@ -687,6 +724,7 @@ const CandidateList = () => {
                 )}
                 <option value="change-occupation">{changingOccupation ? 'Changing...' : 'Change Occupation'}</option>
                 <option value="change-reg-category">{changingRegCategory ? 'Changing...' : 'Change Registration Category'}</option>
+                <option value="regenerate-regno">{regeneratingRegNo ? 'Regenerating...' : 'Regenerate Reg No'}</option>
                 {currentUser?.user_type !== 'center_representative' && (
                   <option value="clear-data">{clearing ? 'Clearing...' : 'Clear Results, Enrollments & Fees'}</option>
                 )}

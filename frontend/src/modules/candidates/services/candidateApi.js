@@ -256,6 +256,16 @@ export const candidateApi = {
     return apiClient.post(`${CANDIDATES_BASE}/bulk-change-center/`, data);
   },
 
+  // Regenerate registration number for a single candidate
+  regenerateRegNo: (candidateId) => {
+    return apiClient.post(`${CANDIDATES_BASE}/${candidateId}/regenerate-regno/`);
+  },
+
+  // Bulk regenerate registration numbers for multiple candidates
+  bulkRegenerateRegNo: (data) => {
+    return apiClient.post(`${CANDIDATES_BASE}/bulk-regenerate-regno/`, data);
+  },
+
   // Get all enrollments with filters
   getAllEnrollments: (params = {}) => {
     return apiClient.get(`${CANDIDATES_BASE}/enrollments/`, { params });

@@ -2363,6 +2363,142 @@ def bulk_change_candidate_center(request):
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
+def regenerate_candidate_regno(request, candidate_id):
+    """Regenerate registration number and payment code for a single candidate"""
+    try:
+        candidate = Candidate.objects.select_related('assessment_center', 'occupation').get(id=candidate_id)
+    except Candidate.DoesNotExist:
+        return Response({'error': 'Candidate not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    if not candidate.is_submitted:
+        return Response({'error': 'Candidate is not submitted. Cannot regenerate registration number.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    old_regno = candidate.registration_number
+    old_payment_code = candidate.payment_code
+    
+    # Generate new registration number
+    new_regno = candidate.generate_registration_number()
+    if not new_regno:
+        return Response({'error': 'Cannot generate registration number. Missing required fields (center, year, intake, occupation, category).'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Generate new payment code
+    new_payment_code = candidate.generate_payment_code()
+    
+    # Update candidate
+    candidate.registration_number = new_regno
+    candidate.payment_code = new_payment_code
+    candidate.save()
+    
+    return Response({
+        'message': 'Registration number regenerated successfully',
+        'candidate_id': candidate.id,
+        'old_registration_number': old_regno,
+        'new_registration_number': new_regno,
+        'old_payment_code': old_payment_code,
+        'new_payment_code': new_payment_code,
+    }, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def bulk_regenerate_candidate_regno(request):
+    """Bulk regenerate registration numbers and payment codes for multiple candidates"""
+    candidate_ids = request.data.get('candidate_ids', [])
+    select_all = request.data.get('select_all', False)
+    filters = request.data.get('filters', {})
+    
+    if not select_all and not candidate_ids:
+        return Response({'error': 'No candidates selected'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Get candidates based on select_all or candidate_ids
+    if select_all:
+        queryset = Candidate.objects.select_related('assessment_center', 'occupation').filter(is_submitted=True)
+        if filters.get('registration_category'):
+            queryset = queryset.filter(registration_category=filters['registration_category'])
+        if filters.get('assessment_center'):
+            queryset = queryset.filter(assessment_center_id=filters['assessment_center'])
+        if filters.get('assessment_center_branch'):
+            queryset = queryset.filter(assessment_center_branch_id=filters['assessment_center_branch'])
+        if filters.get('occupation'):
+            queryset = queryset.filter(occupation_id=filters['occupation'])
+        if filters.get('has_disability'):
+            queryset = queryset.filter(has_disability=filters['has_disability'] == 'true')
+        if filters.get('is_refugee'):
+            queryset = queryset.filter(is_refugee=filters['is_refugee'] == 'true')
+        if filters.get('verification_status'):
+            queryset = queryset.filter(verification_status=filters['verification_status'])
+        if filters.get('entry_year'):
+            queryset = queryset.filter(entry_year=filters['entry_year'])
+        if filters.get('intake'):
+            queryset = queryset.filter(intake=filters['intake'])
+        if filters.get('search'):
+            queryset = queryset.filter(
+                Q(registration_number__icontains=filters['search']) |
+                Q(full_name__icontains=filters['search']) |
+                Q(contact__icontains=filters['search'])
+            )
+        candidates = queryset
+    else:
+        candidates = Candidate.objects.select_related('assessment_center', 'occupation').filter(
+            id__in=candidate_ids, is_submitted=True
+        )
+    
+    total_updated = 0
+    total_skipped = 0
+    failed = []
+    changes = []
+    
+    for candidate in candidates:
+        try:
+            old_regno = candidate.registration_number
+            
+            # Generate new registration number
+            new_regno = candidate.generate_registration_number()
+            if not new_regno:
+                total_skipped += 1
+                continue
+            
+            # Check if registration number actually changed
+            if old_regno == new_regno:
+                total_skipped += 1
+                continue
+            
+            # Generate new payment code
+            new_payment_code = candidate.generate_payment_code()
+            
+            # Update candidate
+            candidate.registration_number = new_regno
+            candidate.payment_code = new_payment_code
+            candidate.save()
+            
+            changes.append({
+                'candidate_id': candidate.id,
+                'name': candidate.full_name,
+                'old_regno': old_regno,
+                'new_regno': new_regno,
+            })
+            total_updated += 1
+        except Exception as e:
+            failed.append({
+                'candidate_id': candidate.id,
+                'name': candidate.full_name,
+                'reason': str(e)
+            })
+    
+    return Response({
+        'message': f'Regenerated registration numbers for {total_updated} candidate(s). {total_skipped} skipped (no change needed or missing data).',
+        'updated': total_updated,
+        'skipped': total_skipped,
+        'failed': len(failed),
+        'changes': changes[:50],  # Limit to first 50 for response size
+        'failed_details': failed[:20],  # Limit failed details
+    }, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def clear_candidate_data(request, candidate_id):
     """Clear all results, enrollments, and fees for a candidate"""
     if request.user.is_authenticated and request.user.user_type == 'center_representative':

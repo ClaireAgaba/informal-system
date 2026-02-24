@@ -28,6 +28,7 @@ import {
   Briefcase,
   Tag,
   Eye,
+  RefreshCw,
 } from 'lucide-react';
 import candidateApi from '../services/candidateApi';
 import feesApi from '../../fees/api/feesApi';
@@ -500,6 +501,24 @@ const CandidateView = () => {
                   >
                     <Tag className="w-4 h-4 mr-2" />
                     Change Registration Category
+                  </button>
+                  <button
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                    onClick={async () => {
+                      setShowActionsDropdown(false);
+                      if (window.confirm(`Regenerate registration number for ${candidate.full_name}?\n\nThis will update the registration number based on current center, occupation, and other details.\n\nOld: ${candidate.registration_number}`)) {
+                        try {
+                          const response = await candidateApi.regenerateRegNo(id);
+                          toast.success(`Registration number updated: ${response.data.old_registration_number} → ${response.data.new_registration_number}`);
+                          queryClient.invalidateQueries(['candidate', id]);
+                        } catch (error) {
+                          toast.error(error.response?.data?.error || 'Failed to regenerate registration number');
+                        }
+                      }
+                    }}
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Regenerate Reg No
                   </button>
                   {currentUser?.user_type !== 'center_representative' && (
                     <>
