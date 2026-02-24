@@ -2276,7 +2276,7 @@ def bulk_change_candidate_center(request):
             queryset = queryset.filter(
                 Q(registration_number__icontains=filters['search']) |
                 Q(full_name__icontains=filters['search']) |
-                Q(phone_number__icontains=filters['search'])
+                Q(contact__icontains=filters['search'])
             )
         candidates = queryset
     else:
