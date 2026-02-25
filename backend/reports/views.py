@@ -200,9 +200,9 @@ class ReportViewSet(viewsets.ViewSet):
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
-            fontSize=16,
+            fontSize=13,
             textColor=colors.HexColor('#000000'),
-            spaceAfter=6,
+            spaceAfter=4,
             alignment=TA_CENTER,
             fontName='Helvetica-Bold'
         )
@@ -210,9 +210,9 @@ class ReportViewSet(viewsets.ViewSet):
         subtitle_style = ParagraphStyle(
             'CustomSubtitle',
             parent=styles['Normal'],
-            fontSize=12,
+            fontSize=10,
             textColor=colors.HexColor('#000000'),
-            spaceAfter=12,
+            spaceAfter=6,
             alignment=TA_CENTER,
             fontName='Helvetica-Bold'
         )
@@ -220,9 +220,9 @@ class ReportViewSet(viewsets.ViewSet):
         info_style = ParagraphStyle(
             'InfoStyle',
             parent=styles['Normal'],
-            fontSize=10,
+            fontSize=9,
             textColor=colors.HexColor('#000000'),
-            spaceAfter=6,
+            spaceAfter=2,
             alignment=TA_LEFT,
             fontName='Helvetica'
         )
@@ -280,22 +280,19 @@ class ReportViewSet(viewsets.ViewSet):
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ]))
             elements.append(header_table)
-            elements.append(Spacer(1, 0.2*inch))
+            elements.append(Spacer(1, 0.05*inch))
 
             # Title
             elements.append(Paragraph("UGANDA VOCATIONAL AND TECHNICAL ASSESSMENT BOARD", title_style))
-            elements.append(Spacer(1, 0.1*inch))
-
+            
             # Subtitle
             elements.append(Paragraph(f"Registered Candidates for {assessment_series.name}", subtitle_style))
-            elements.append(Spacer(1, 0.05*inch))
 
             # Assessment center info
             elements.append(Paragraph(
                 f"Assessment Center: {assessment_center.center_number} - {assessment_center.center_name}",
                 subtitle_style
             ))
-            elements.append(Spacer(1, 0.1*inch))
             
             # Branch info if applicable
             if branch_key:
@@ -309,7 +306,6 @@ class ReportViewSet(viewsets.ViewSet):
                     branch_label,
                     subtitle_style
                 ))
-                elements.append(Spacer(1, 0.1*inch))
 
             # Occupation details
             reg_category_display = dict(Candidate.REGISTRATION_CATEGORY_CHOICES).get(registration_category, registration_category)
@@ -321,7 +317,7 @@ class ReportViewSet(viewsets.ViewSet):
             if level:
                 elements.append(Paragraph(f"Level: {level.level_name}", info_style))
                 
-            elements.append(Spacer(1, 0.2*inch))
+            elements.append(Spacer(1, 0.1*inch))
 
             # Prepare table data - add ENROLLMENT column for Workers PAS
             if registration_category == 'workers_pas':
@@ -333,7 +329,7 @@ class ReportViewSet(viewsets.ViewSet):
                 # Handle photo and registration number
                 photo_cell = ''
                 reg_no_text = candidate.registration_number or 'NO REG NO'
-                reg_no_paragraph = Paragraph(reg_no_text, ParagraphStyle('SmallReg', fontSize=8, alignment=TA_CENTER, leading=10))
+                reg_no_paragraph = Paragraph(reg_no_text, ParagraphStyle('SmallReg', fontSize=6, alignment=TA_CENTER, leading=8))
                 
                 if candidate.passport_photo:
                     try:
@@ -452,8 +448,8 @@ class ReportViewSet(viewsets.ViewSet):
                 ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('FONTSIZE', (0, 0), (-1, 0), 9),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                ('TOPPADDING', (0, 0), (-1, 0), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+                ('TOPPADDING', (0, 0), (-1, 0), 4),
                 
                 # Body styling
                 ('BACKGROUND', (0, 1), (-1, -1), colors.white),
@@ -464,10 +460,10 @@ class ReportViewSet(viewsets.ViewSet):
                 ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
                 ('FONTSIZE', (0, 1), (-1, -1), 8),
                 ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
-                ('LEFTPADDING', (0, 1), (-1, -1), 4),
-                ('RIGHTPADDING', (0, 1), (-1, -1), 4),
-                ('TOPPADDING', (0, 1), (-1, -1), 4),
-                ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+                ('LEFTPADDING', (0, 1), (-1, -1), 2),
+                ('RIGHTPADDING', (0, 1), (-1, -1), 2),
+                ('TOPPADDING', (0, 1), (-1, -1), 2),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 2),
                 
                 # Grid
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
