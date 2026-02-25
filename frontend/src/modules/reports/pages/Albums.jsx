@@ -12,6 +12,7 @@ const Albums = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [filters, setFilters] = useState({
     assessmentCenter: '',
+    assessmentCenterBranch: '',
     assessmentSeries: '',
     registrationCategory: '',
     occupation: '',
@@ -30,7 +31,8 @@ const Albums = () => {
         if (user.user_type === 'center_representative' && user.center_representative?.assessment_center) {
           setFilters(prev => ({
             ...prev,
-            assessmentCenter: user.center_representative.assessment_center.id.toString()
+            assessmentCenter: user.center_representative.assessment_center.id.toString(),
+            assessmentCenterBranch: user.center_representative.assessment_center_branch?.id?.toString() || ''
           }));
         }
       } catch (error) {
@@ -49,6 +51,13 @@ const Albums = () => {
   const { data: seriesData } = useQuery({
     queryKey: ['assessment-series'],
     queryFn: () => assessmentSeriesApi.getAll({ page_size: 1000 }),
+  });
+
+  // Fetch branches for selected center
+  const { data: branchesData } = useQuery({
+    queryKey: ['assessment-center-branches', filters.assessmentCenter],
+    queryFn: () => assessmentCenterApi.branches.getByCenter(filters.assessmentCenter),
+    enabled: !!filters.assessmentCenter,
   });
 
   // Fetch occupations (filtered by registration category)
@@ -73,6 +82,11 @@ const Albums = () => {
   const assessmentCenters = centersData?.data?.results || [];
   const assessmentSeries = seriesData?.data?.results || [];
   const occupations = occupationsData?.data?.results || [];
+  const branches = branchesData?.data || [];
+
+  // Check if selected center has branches
+  const selectedCenter = assessmentCenters.find(c => c.id.toString() === filters.assessmentCenter);
+  const hasBranches = selectedCenter?.has_branches || false;
 
   // Fetch levels for selected occupation (only for formal/workers_pas)
   const { data: levelsData } = useQuery({
@@ -122,6 +136,10 @@ const Albums = () => {
         registration_category: filters.registrationCategory,
         occupation: filters.occupation,
       });
+
+      if (filters.assessmentCenterBranch) {
+        params.append('branch', filters.assessmentCenterBranch);
+      }
 
       // Add level if selected (for formal/workers_pas)
       if (filters.level) {
@@ -196,14 +214,14 @@ const Albums = () => {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Filter Options</h2>
 
-        <div className={`grid grid-cols-1 md:grid-cols-2 ${filters.registrationCategory === 'formal' || filters.registrationCategory === 'workers_pas' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4 mb-6`}>
+        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6`}>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Assessment Center
             </label>
             <select
               value={filters.assessmentCenter}
-              onChange={(e) => setFilters({ ...filters, assessmentCenter: e.target.value })}
+              onChange={(e) => setFilters({ ...filters, assessmentCenter: e.target.value, assessmentCenterBranch: '' })}
               disabled={currentUser?.user_type === 'center_representative'}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
@@ -215,6 +233,27 @@ const Albums = () => {
               ))}
             </select>
           </div>
+
+          {hasBranches && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Assessment Center Branch
+              </label>
+              <select
+                value={filters.assessmentCenterBranch}
+                onChange={(e) => setFilters({ ...filters, assessmentCenterBranch: e.target.value })}
+                disabled={currentUser?.user_type === 'center_representative' && !!currentUser?.center_representative?.assessment_center_branch}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              >
+                <option value="">All Branches</option>
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.branch_code} - {branch.branch_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
