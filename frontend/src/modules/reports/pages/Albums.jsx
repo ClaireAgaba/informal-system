@@ -82,7 +82,10 @@ const Albums = () => {
   const assessmentCenters = centersData?.data?.results || [];
   const assessmentSeries = seriesData?.data?.results || [];
   const occupations = occupationsData?.data?.results || [];
-  const branches = branchesData?.data || [];
+
+  // The API returns the array inside `results` for standard viewsets.
+  // Alternatively, if it was custom, it might just be the data array. We handle both cases to be safe.
+  const branches = Array.isArray(branchesData?.data) ? branchesData.data : (branchesData?.data?.results || []);
 
   // Check if selected center has branches
   const selectedCenter = assessmentCenters.find(c => c.id.toString() === filters.assessmentCenter);
