@@ -299,8 +299,14 @@ class ReportViewSet(viewsets.ViewSet):
             
             # Branch info if applicable
             if branch_key:
+                branch_label = f"Branch: {branch_key.branch_code} - {branch_key.branch_name}"
+                
+                # Check if district exists on branch and add it
+                if hasattr(branch_key, 'district') and branch_key.district:
+                    branch_label += f" - {branch_key.district.name}"
+                    
                 elements.append(Paragraph(
-                    f"Branch: {branch_key.branch_code} - {branch_key.branch_name}",
+                    branch_label,
                     subtitle_style
                 ))
                 elements.append(Spacer(1, 0.1*inch))
@@ -319,13 +325,16 @@ class ReportViewSet(viewsets.ViewSet):
 
             # Prepare table data - add ENROLLMENT column for Workers PAS
             if registration_category == 'workers_pas':
-                table_data = [['S/N', 'PHOTO', 'REG NO.', 'FULL NAME', 'GENDER', 'OCCUPATION', 'REG TYPE', 'ENROLLMENT', 'SPECIAL NEEDS', 'SIGNATURE']]
+                table_data = [['S/N', 'PHOTO', 'FULL NAME', 'GENDER', 'OCCUPATION', 'REG TYPE', 'ENROLLMENT', 'SPECIAL NEEDS', 'SIGNATURE']]
             else:
-                table_data = [['S/N', 'PHOTO', 'REG NO.', 'FULL NAME', 'GENDER', 'OCCUPATION', 'REG TYPE', 'SPECIAL NEEDS', 'SIGNATURE']]
+                table_data = [['S/N', 'PHOTO', 'FULL NAME', 'GENDER', 'OCCUPATION', 'REG TYPE', 'SPECIAL NEEDS', 'SIGNATURE']]
 
             for idx, candidate in enumerate(branch_candidates, start=1):
-                # Handle photo
+                # Handle photo and registration number
                 photo_cell = ''
+                reg_no_text = candidate.registration_number or 'NO REG NO'
+                reg_no_paragraph = Paragraph(reg_no_text, ParagraphStyle('SmallReg', fontSize=8, alignment=TA_CENTER, leading=10))
+                
                 if candidate.passport_photo:
                     try:
                         photo_path = candidate.passport_photo.path
@@ -348,13 +357,15 @@ class ReportViewSet(viewsets.ViewSet):
                             
                             # Create ReportLab image from buffer
                             img = Image(img_buffer, width=0.8*inch, height=1*inch)
-                            photo_cell = img
+                            
+                            # Combine photo and reg no
+                            photo_cell = [img, Spacer(1, 0.05*inch), reg_no_paragraph]
                         else:
-                            photo_cell = Paragraph("NO PHOTO", ParagraphStyle('Small', fontSize=6, alignment=TA_CENTER))
+                            photo_cell = [Paragraph("NO PHOTO", ParagraphStyle('Small', fontSize=6, alignment=TA_CENTER)), Spacer(1, 0.05*inch), reg_no_paragraph]
                     except Exception as e:
-                        photo_cell = Paragraph("NO PHOTO", ParagraphStyle('Small', fontSize=6, alignment=TA_CENTER))
+                        photo_cell = [Paragraph("NO PHOTO", ParagraphStyle('Small', fontSize=6, alignment=TA_CENTER)), Spacer(1, 0.05*inch), reg_no_paragraph]
                 else:
-                    photo_cell = Paragraph("NO PHOTO", ParagraphStyle('Small', fontSize=6, alignment=TA_CENTER))
+                    photo_cell = [Paragraph("NO PHOTO", ParagraphStyle('Small', fontSize=6, alignment=TA_CENTER)), Spacer(1, 0.05*inch), reg_no_paragraph]
 
                 # Special needs
                 special_needs = "No"
@@ -404,7 +415,6 @@ class ReportViewSet(viewsets.ViewSet):
                     row = [
                         str(idx),
                         photo_cell,
-                        candidate.registration_number or '',
                         candidate.full_name or '',
                         candidate.gender.capitalize() if candidate.gender else '',
                         occupation.occ_name,
@@ -417,7 +427,6 @@ class ReportViewSet(viewsets.ViewSet):
                     row = [
                         str(idx),
                         photo_cell,
-                        candidate.registration_number or '',
                         candidate.full_name or '',
                         candidate.gender.capitalize() if candidate.gender else '',
                         occupation.occ_name,
@@ -429,11 +438,11 @@ class ReportViewSet(viewsets.ViewSet):
 
             # Create table with appropriate column widths
             if registration_category == 'workers_pas':
-                # S/N, PHOTO, REG NO, FULL NAME, GENDER, OCCUPATION, REG TYPE, ENROLLMENT, SPECIAL NEEDS, SIGNATURE
-                col_widths = [0.3*inch, 0.85*inch, 1.3*inch, 1.6*inch, 0.6*inch, 1.1*inch, 0.85*inch, 1.8*inch, 0.9*inch, 0.85*inch]
+                # S/N, PHOTO(+REG NO), FULL NAME, GENDER, OCCUPATION, REG TYPE, ENROLLMENT, SPECIAL NEEDS, SIGNATURE
+                col_widths = [0.3*inch, 1.4*inch, 1.8*inch, 0.6*inch, 1.1*inch, 0.85*inch, 1.8*inch, 0.9*inch, 0.85*inch]
             else:
-                # S/N, PHOTO, REG NO, FULL NAME, GENDER, OCCUPATION, REG TYPE, SPECIAL NEEDS, SIGNATURE
-                col_widths = [0.4*inch, 1*inch, 1.5*inch, 2*inch, 0.8*inch, 1.5*inch, 1*inch, 1.2*inch, 1*inch]
+                # S/N, PHOTO(+REG NO), FULL NAME, GENDER, OCCUPATION, REG TYPE, SPECIAL NEEDS, SIGNATURE
+                col_widths = [0.4*inch, 1.8*inch, 2.2*inch, 0.8*inch, 1.5*inch, 1.2*inch, 1.2*inch, 1*inch]
             
             table = Table(table_data, colWidths=col_widths, repeatRows=1)
             table.setStyle(TableStyle([
