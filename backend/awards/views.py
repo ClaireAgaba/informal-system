@@ -1023,8 +1023,9 @@ class AwardsViewSet(viewsets.ViewSet):
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             for reg_no, pdf_bytes in pdf_results:
-                # Each PDF named by registration number
-                filename = f"{folder_name}/{reg_no}.pdf"
+                # Sanitize reg_no - replace slashes with underscores
+                safe_reg_no = reg_no.replace('/', '_')
+                filename = f"{folder_name}/{safe_reg_no}.pdf"
                 zip_file.writestr(filename, pdf_bytes)
         
         zip_buffer.seek(0)
