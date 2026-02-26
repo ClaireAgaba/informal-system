@@ -498,12 +498,18 @@ class AwardsViewSet(viewsets.ViewSet):
         candidate_ids = request.data.get('candidate_ids', [])
         select_all = request.data.get('select_all', False)
         filters = request.data.get('filters', {})
+        limit = request.data.get('limit')
+        offset = request.data.get('offset', 0)
         
         # Get candidates based on select_all or candidate_ids
         if select_all:
             candidates_qs = self._get_base_queryset()
             candidates_qs = self._apply_filters(candidates_qs, type('obj', (object,), {'query_params': filters})())
             candidates_qs = candidates_qs.order_by('registration_number')
+            
+            # Apply limit/offset for batch processing
+            if limit:
+                candidates_qs = candidates_qs[offset:offset + limit]
         else:
             if not candidate_ids:
                 return Response(
@@ -514,22 +520,26 @@ class AwardsViewSet(viewsets.ViewSet):
                 'occupation', 'assessment_center'
             ).order_by('registration_number')
         
-        # Check if any candidate already has a transcript printed
-        already_printed = candidates_qs.filter(
-            transcript_serial_number__isnull=False
-        ).exclude(transcript_serial_number='')
+        # Get candidates list first (needed for batch processing)
+        candidates = list(candidates_qs)
         
-        if already_printed.exists():
+        if not candidates:
+            return Response(
+                {'error': 'No valid candidates found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if any candidate already has a transcript printed
+        already_printed = [c for c in candidates if c.transcript_serial_number]
+        
+        if already_printed:
             return Response(
                 {
-                    'error': f'{already_printed.count()} candidate(s) already have printed transcripts. Use reprint option.',
-                    'already_printed_count': already_printed.count()
+                    'error': f'{len(already_printed)} candidate(s) already have printed transcripts. Use reprint option.',
+                    'already_printed_count': len(already_printed)
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Get candidates list
-        candidates = list(candidates_qs)
         
         if not candidates:
             return Response(
@@ -883,12 +893,18 @@ class AwardsViewSet(viewsets.ViewSet):
         filters = request.data.get('filters', {})
         is_reprint = request.data.get('is_reprint', False)
         reason_id = request.data.get('reason_id')
+        limit = request.data.get('limit')
+        offset = request.data.get('offset', 0)
         
         # Get candidates based on select_all or candidate_ids
         if select_all:
             candidates_qs = self._get_base_queryset()
             candidates_qs = self._apply_filters(candidates_qs, type('obj', (object,), {'query_params': filters})())
             candidates_qs = candidates_qs.order_by('registration_number')
+            
+            # Apply limit/offset for batch processing
+            if limit:
+                candidates_qs = candidates_qs[offset:offset + limit]
         else:
             if not candidate_ids:
                 return Response(

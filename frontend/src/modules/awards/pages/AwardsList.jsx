@@ -29,7 +29,12 @@ const AwardsList = () => {
   const [uniqueOccupations, setUniqueOccupations] = useState([]);
   const [exporting, setExporting] = useState(false);
   const [downloadingZip, setDownloadingZip] = useState(false);
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [batchAction, setBatchAction] = useState(null); // 'print' or 'zip'
+  const [batchSize, setBatchSize] = useState(100);
+  const [batchOffset, setBatchOffset] = useState(0);
   const itemsPerPage = 50;
+  const MAX_BATCH_SIZE = 300; // Safe limit to avoid timeouts
   const searchTimerRef = useRef(null);
 
   // Filter states - load from localStorage
@@ -261,8 +266,41 @@ const AwardsList = () => {
     }
   };
 
+  // Check if batch modal needed and show it
+  const handlePrintClick = () => {
+    const count = selectAllFiltered ? totalCount : selectedCandidates.length;
+    if (count > MAX_BATCH_SIZE) {
+      setBatchAction('print');
+      setBatchOffset(0);
+      setShowBatchModal(true);
+    } else {
+      handlePrintTranscripts(0, count);
+    }
+  };
+
+  const handleZipClick = () => {
+    const count = selectAllFiltered ? totalCount : selectedCandidates.length;
+    if (count > MAX_BATCH_SIZE) {
+      setBatchAction('zip');
+      setBatchOffset(0);
+      setShowBatchModal(true);
+    } else {
+      handleDownloadZip(false, 0, count);
+    }
+  };
+
+  // Execute batch action
+  const executeBatchAction = () => {
+    setShowBatchModal(false);
+    if (batchAction === 'print') {
+      handlePrintTranscripts(batchOffset, batchSize);
+    } else if (batchAction === 'zip') {
+      handleDownloadZip(false, batchOffset, batchSize);
+    }
+  };
+
   // Print transcripts handler
-  const handlePrintTranscripts = async () => {
+  const handlePrintTranscripts = async (offset = 0, limit = null) => {
     // For non-select-all, check locally if any are already printed
     if (!selectAllFiltered) {
       const selectedAwards = awards.filter((a) => selectedCandidates.includes(a.id));
@@ -289,6 +327,10 @@ const AwardsList = () => {
           occupation: filters.occupation,
           printed: filters.printed,
         };
+        if (limit) {
+          requestData.limit = limit;
+          requestData.offset = offset;
+        }
       } else {
         requestData.candidate_ids = selectedCandidates;
       }
@@ -303,15 +345,21 @@ const AwardsList = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'Transcripts.pdf';
+      const batchLabel = limit ? `_batch${Math.floor(offset / limit) + 1}` : '';
+      link.download = `Transcripts${batchLabel}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      const count = selectAllFiltered ? totalCount : selectedCandidates.length;
-      toast.success(`Generated transcripts for ${count} candidate(s)`);
-      handleClearSelection();
+      const count = limit || (selectAllFiltered ? totalCount : selectedCandidates.length);
+      toast.success(`Generated transcripts for ${count} candidate(s) (offset ${offset})`);
+      
+      // Update offset for next batch
+      if (limit) {
+        setBatchOffset(offset + limit);
+      }
+      
       fetchAwards(currentPage); // Refresh to update printed status
     } catch (err) {
       console.error('Error printing transcripts:', err);
@@ -332,7 +380,7 @@ const AwardsList = () => {
   };
 
   // Download transcripts as ZIP handler
-  const handleDownloadZip = async (isReprint = false) => {
+  const handleDownloadZip = async (isReprint = false, offset = 0, limit = null) => {
     if (isReprint && !selectedReprintReason) {
       toast.error('Please select a reprint reason');
       return;
@@ -356,6 +404,10 @@ const AwardsList = () => {
           occupation: filters.occupation,
           printed: filters.printed,
         };
+        if (limit) {
+          requestData.limit = limit;
+          requestData.offset = offset;
+        }
       } else {
         requestData.candidate_ids = selectedCandidates;
       }
@@ -376,6 +428,12 @@ const AwardsList = () => {
         const match = contentDisposition.match(/filename="?([^"]+)"?/);
         if (match) filename = match[1];
       }
+      
+      // Add batch number to filename if batching
+      if (limit) {
+        const batchNum = Math.floor(offset / limit) + 1;
+        filename = filename.replace('.zip', `_batch${batchNum}.zip`);
+      }
 
       // Create download link
       const blob = new Blob([response.data], { type: 'application/zip' });
@@ -388,14 +446,18 @@ const AwardsList = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      const count = selectAllFiltered ? totalCount : selectedCandidates.length;
-      toast.success(`Downloaded ${count} transcript(s) as ZIP`);
+      const count = limit || (selectAllFiltered ? totalCount : selectedCandidates.length);
+      toast.success(`Downloaded ${count} transcript(s) as ZIP (batch starting at ${offset})`);
+      
+      // Update offset for next batch
+      if (limit) {
+        setBatchOffset(offset + limit);
+      }
       
       if (isReprint) {
         setShowReprintModal(false);
         setSelectedReprintReason('');
       }
-      handleClearSelection();
       fetchAwards(currentPage);
     } catch (err) {
       console.error('Error downloading transcripts:', err);
@@ -680,7 +742,7 @@ const AwardsList = () => {
             </div>
             <div className="flex items-center space-x-2">
               <button
-                onClick={handlePrintTranscripts}
+                onClick={handlePrintClick}
                 disabled={printing}
                 className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -688,7 +750,7 @@ const AwardsList = () => {
                 {printing ? 'Printing...' : 'Print Transcripts'}
               </button>
               <button
-                onClick={() => handleDownloadZip(false)}
+                onClick={handleZipClick}
                 disabled={downloadingZip}
                 className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -988,6 +1050,87 @@ const AwardsList = () => {
                 className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {reprinting ? 'Reprinting...' : 'Reprint'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Size Modal */}
+      {showBatchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={() => setShowBatchModal(false)}
+          />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {batchAction === 'print' ? 'Print Transcripts' : 'Download ZIP'} - Batch Processing
+              </h3>
+              <button
+                onClick={() => setShowBatchModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-800">
+                <strong>Note:</strong> You have selected {totalCount} candidates. 
+                Processing more than {MAX_BATCH_SIZE} at once may timeout. 
+                Please process in batches.
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Batch Size
+              </label>
+              <select
+                value={batchSize}
+                onChange={(e) => setBatchSize(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value={50}>50 candidates</option>
+                <option value={100}>100 candidates</option>
+                <option value={200}>200 candidates</option>
+                <option value={300}>300 candidates (max recommended)</option>
+              </select>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Starting Position (Offset)
+              </label>
+              <input
+                type="number"
+                value={batchOffset}
+                onChange={(e) => setBatchOffset(Number(e.target.value))}
+                min={0}
+                max={totalCount - 1}
+                step={batchSize}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Processing candidates {batchOffset + 1} to {Math.min(batchOffset + batchSize, totalCount)} of {totalCount}
+              </p>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowBatchModal(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeBatchAction}
+                disabled={printing || downloadingZip}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {batchAction === 'print' ? 'Print Batch' : 'Download Batch'}
               </button>
             </div>
           </div>
