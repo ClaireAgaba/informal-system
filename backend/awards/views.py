@@ -958,6 +958,7 @@ class AwardsViewSet(viewsets.ViewSet):
         
         # Import transcript generation functions
         from results.views import ModularResultViewSet, FormalResultViewSet
+        from django.db import connection
         
         def generate_transcript(candidate_data):
             """Generate PDF for a single candidate. Returns (candidate_id, reg_no, pdf_bytes, error)"""
@@ -990,6 +991,8 @@ class AwardsViewSet(viewsets.ViewSet):
                 return (candidate_id, reg_no, None, 'No results found')
             except Exception as e:
                 return (candidate_id, reg_no, None, str(e))
+            finally:
+                connection.close()
         
         # Prepare candidate data for parallel processing
         candidate_data_list = [
@@ -997,29 +1000,18 @@ class AwardsViewSet(viewsets.ViewSet):
             for c in candidates
         ]
         
-        # Generate PDFs in parallel using ThreadPoolExecutor
-        # Use max 10 workers to avoid overwhelming the system
-        max_workers = min(10, len(candidates))
+        # Generate PDFs sequentially for reliability (parallel had DB connection issues)
+        # Process in batches to avoid timeouts
         pdf_results = []
         errors = []
         
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_candidate = {
-                executor.submit(generate_transcript, data): data[1]
-                for data in candidate_data_list
-            }
-            
-            for future in as_completed(future_to_candidate):
-                reg_no = future_to_candidate[future]
-                try:
-                    result = future.result()
-                    candidate_id, reg_no, pdf_bytes, error = result
-                    if pdf_bytes:
-                        pdf_results.append((reg_no, pdf_bytes))
-                    elif error:
-                        errors.append({'reg_no': reg_no, 'error': error})
-                except Exception as e:
-                    errors.append({'reg_no': reg_no, 'error': str(e)})
+        for data in candidate_data_list:
+            result = generate_transcript(data)
+            candidate_id, reg_no, pdf_bytes, error = result
+            if pdf_bytes:
+                pdf_results.append((reg_no, pdf_bytes))
+            elif error:
+                errors.append({'reg_no': reg_no, 'error': error})
         
         if not pdf_results:
             return Response(
