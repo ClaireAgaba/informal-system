@@ -6,7 +6,7 @@ import Button from '@shared/components/Button';
 import Card from '@shared/components/Card';
 import candidateApi from '../services/candidateApi';
 
-const BulkEnrollModal = ({ isOpen, onClose, candidateIds, filters }) => {
+const BulkEnrollModal = ({ isOpen, onClose, candidateIds, filters, selectAllPages, totalCount, searchQuery }) => {
   const queryClient = useQueryClient();
   
   // Form state
@@ -72,8 +72,9 @@ const BulkEnrollModal = ({ isOpen, onClose, candidateIds, filters }) => {
     }
 
     // Multiply by number of candidates
-    setCalculatedFee(fee * candidateIds.length);
-  }, [formData, options, regCategory, candidateIds.length]);
+    const count = selectAllPages ? totalCount : candidateIds.length;
+    setCalculatedFee(fee * count);
+  }, [formData, options, regCategory, candidateIds.length, selectAllPages, totalCount]);
 
   // Bulk enroll mutation
   const bulkEnrollMutation = useMutation({
@@ -126,11 +127,18 @@ const BulkEnrollModal = ({ isOpen, onClose, candidateIds, filters }) => {
     }
 
     const enrollmentData = {
-      candidate_ids: candidateIds,
       assessment_series: parseInt(formData.assessment_series),
       modules: formData.modules.map(m => parseInt(m)),
       papers: formData.papers.map(p => parseInt(p)),
     };
+
+    // If selectAllPages, send filters instead of candidate_ids
+    if (selectAllPages) {
+      enrollmentData.enroll_all = true;
+      enrollmentData.filters = { ...filters, search: searchQuery };
+    } else {
+      enrollmentData.candidate_ids = candidateIds;
+    }
 
     // Only include occupation_level for formal and modular
     if (regCategory !== 'workers_pas') {
@@ -208,7 +216,7 @@ const BulkEnrollModal = ({ isOpen, onClose, candidateIds, filters }) => {
           {/* Show enrollment info */}
           <div className="mb-6 p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600">
-              Enrolling <span className="font-semibold">{candidateIds.length}</span> candidates
+              Enrolling <span className="font-semibold">{selectAllPages ? totalCount : candidateIds.length}</span> candidates
             </p>
             {regCategory && (
               <p className="text-sm text-gray-600">
@@ -380,7 +388,7 @@ const BulkEnrollModal = ({ isOpen, onClose, candidateIds, filters }) => {
                   <div className="flex items-center">
                     <Banknote className="w-5 h-5 text-green-600 mr-2" />
                     <span className="text-sm font-medium text-green-900">
-                      Total Amount ({candidateIds.length} candidates)
+                      Total Amount ({selectAllPages ? totalCount : candidateIds.length} candidates)
                     </span>
                   </div>
                   <span className="text-lg font-bold text-green-900">
@@ -405,7 +413,7 @@ const BulkEnrollModal = ({ isOpen, onClose, candidateIds, filters }) => {
                 variant="primary"
                 disabled={bulkEnrollMutation.isPending || calculatedFee === null}
               >
-                {bulkEnrollMutation.isPending ? 'Enrolling...' : `Enroll ${candidateIds.length} Candidates`}
+                {bulkEnrollMutation.isPending ? 'Enrolling...' : `Enroll ${selectAllPages ? totalCount : candidateIds.length} Candidates`}
               </Button>
             </div>
           </form>

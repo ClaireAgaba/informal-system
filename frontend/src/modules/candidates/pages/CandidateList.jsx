@@ -1237,6 +1237,9 @@ const CandidateList = () => {
         onClose={() => setShowBulkEnrollModal(false)}
         candidateIds={selectedCandidates}
         filters={filters}
+        selectAllPages={selectAllPages}
+        totalCount={totalCount}
+        searchQuery={searchQuery}
       />
 
       {/* Bulk Change Occupation Modal */}

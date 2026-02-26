@@ -601,8 +601,11 @@ class BulkEnrollSerializer(serializers.Serializer):
     """Serializer for bulk enrolling multiple candidates"""
     candidate_ids = serializers.ListField(
         child=serializers.IntegerField(),
-        min_length=1
+        required=False,
+        allow_empty=True
     )
+    enroll_all = serializers.BooleanField(required=False, default=False)
+    filters = serializers.DictField(required=False, allow_empty=True)
     assessment_series = serializers.IntegerField()
     occupation_level = serializers.IntegerField(required=False, allow_null=True)
     modules = serializers.ListField(
@@ -617,6 +620,10 @@ class BulkEnrollSerializer(serializers.Serializer):
     )
     
     def validate(self, data):
+        # Either candidate_ids or enroll_all must be provided
+        if not data.get('enroll_all') and not data.get('candidate_ids'):
+            raise serializers.ValidationError({'candidate_ids': 'Either candidate_ids or enroll_all with filters is required'})
+        
         # Validate assessment series exists
         try:
             assessment_series = AssessmentSeries.objects.get(id=data['assessment_series'])

@@ -595,18 +595,67 @@ class CandidateViewSet(viewsets.ModelViewSet):
         serializer = BulkEnrollSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        candidate_ids = serializer.validated_data['candidate_ids']
+        enroll_all = serializer.validated_data.get('enroll_all', False)
+        filters = serializer.validated_data.get('filters', {})
+        candidate_ids = serializer.validated_data.get('candidate_ids', [])
         assessment_series = serializer.validated_data['assessment_series_obj']
         occupation_level = serializer.validated_data.get('occupation_level_obj')
         
-        # Validate all candidates have same registration category and occupation
-        candidates = Candidate.objects.filter(id__in=candidate_ids).select_related('occupation')
-        
-        if len(candidates) != len(candidate_ids):
-            return Response(
-                {'error': 'Some candidates not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        # Get candidates either by IDs or by filters
+        if enroll_all and filters:
+            # Build queryset from filters (same logic as list view)
+            queryset = Candidate.objects.select_related('occupation')
+            
+            if filters.get('search'):
+                search = filters['search']
+                queryset = queryset.filter(
+                    Q(full_name__icontains=search) |
+                    Q(registration_number__icontains=search) |
+                    Q(contact__icontains=search)
+                )
+            if filters.get('assessment_center'):
+                queryset = queryset.filter(assessment_center_id=filters['assessment_center'])
+            if filters.get('assessment_center_branch'):
+                queryset = queryset.filter(assessment_center_branch_id=filters['assessment_center_branch'])
+            if filters.get('occupation'):
+                queryset = queryset.filter(occupation_id=filters['occupation'])
+            if filters.get('sector'):
+                queryset = queryset.filter(occupation__sector_id=filters['sector'])
+            if filters.get('registration_category'):
+                queryset = queryset.filter(registration_category=filters['registration_category'])
+            if filters.get('entry_year'):
+                queryset = queryset.filter(entry_year=filters['entry_year'])
+            if filters.get('intake'):
+                queryset = queryset.filter(intake=filters['intake'])
+            if filters.get('verification_status'):
+                queryset = queryset.filter(verification_status=filters['verification_status'])
+            if filters.get('has_disability'):
+                queryset = queryset.filter(has_disability=filters['has_disability'].lower() == 'true')
+            if filters.get('is_refugee'):
+                queryset = queryset.filter(is_refugee=filters['is_refugee'].lower() == 'true')
+            if filters.get('is_enrolled'):
+                is_enrolled = filters['is_enrolled'].lower() == 'true'
+                if is_enrolled:
+                    queryset = queryset.filter(enrollments__is_active=True).distinct()
+                else:
+                    queryset = queryset.exclude(enrollments__is_active=True)
+            
+            candidates = list(queryset)
+            
+            if not candidates:
+                return Response(
+                    {'error': 'No candidates found matching the filters'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            # Validate all candidates have same registration category and occupation
+            candidates = list(Candidate.objects.filter(id__in=candidate_ids).select_related('occupation'))
+            
+            if len(candidates) != len(candidate_ids):
+                return Response(
+                    {'error': 'Some candidates not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
         
         # Check all candidates have same registration category and occupation
         reg_categories = set(c.registration_category for c in candidates)
