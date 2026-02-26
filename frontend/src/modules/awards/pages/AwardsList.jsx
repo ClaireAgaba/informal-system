@@ -263,26 +263,40 @@ const AwardsList = () => {
 
   // Print transcripts handler
   const handlePrintTranscripts = async () => {
-    const ids = selectAllFiltered
-      ? awards.map((a) => a.id)
-      : selectedCandidates;
-
-    // Check if any selected candidate already has a printed transcript
-    const selectedAwards = awards.filter((a) => ids.includes(a.id));
-    const alreadyPrinted = selectedAwards.filter((a) => a.printed);
-
-    if (alreadyPrinted.length > 0) {
-      setShowValidationError(true);
-      return;
+    // For non-select-all, check locally if any are already printed
+    if (!selectAllFiltered) {
+      const selectedAwards = awards.filter((a) => selectedCandidates.includes(a.id));
+      const alreadyPrinted = selectedAwards.filter((a) => a.printed);
+      if (alreadyPrinted.length > 0) {
+        setShowValidationError(true);
+        return;
+      }
     }
 
     try {
       setPrinting(true);
 
-      const response = await apiClient.post('/awards/bulk-print-transcripts/',
-        { candidate_ids: ids },
-        { responseType: 'blob' }
-      );
+      const requestData = {};
+
+      if (selectAllFiltered) {
+        requestData.select_all = true;
+        requestData.filters = {
+          search: searchQuery,
+          category: filters.registration_category,
+          entry_year: filters.entry_year,
+          intake: filters.intake,
+          center: filters.center,
+          occupation: filters.occupation,
+          printed: filters.printed,
+        };
+      } else {
+        requestData.candidate_ids = selectedCandidates;
+      }
+
+      const response = await apiClient.post('/awards/bulk-print-transcripts/', requestData, {
+        responseType: 'blob',
+        timeout: 600000, // 10 minute timeout for large batches
+      });
 
       // Create download link for PDF
       const blob = new Blob([response.data], { type: 'application/pdf' });
@@ -295,13 +309,20 @@ const AwardsList = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      toast.success(`Generated transcripts for ${ids.length} candidate(s)`);
+      const count = selectAllFiltered ? totalCount : selectedCandidates.length;
+      toast.success(`Generated transcripts for ${count} candidate(s)`);
       handleClearSelection();
       fetchAwards(currentPage); // Refresh to update printed status
     } catch (err) {
       console.error('Error printing transcripts:', err);
-      if (err.response?.data?.error) {
-        toast.error(err.response.data.error);
+      if (err.response?.data) {
+        try {
+          const text = await err.response.data.text();
+          const errorData = JSON.parse(text);
+          toast.error(errorData.error || 'Failed to generate transcripts');
+        } catch {
+          toast.error('Failed to generate transcripts');
+        }
       } else {
         toast.error('Failed to generate transcripts');
       }

@@ -493,36 +493,45 @@ class AwardsViewSet(viewsets.ViewSet):
         """
         Generate transcripts for multiple candidates and merge into a single PDF.
         Only allows printing for candidates who haven't been printed yet.
+        Supports select_all mode with filters for large batches.
         """
         candidate_ids = request.data.get('candidate_ids', [])
+        select_all = request.data.get('select_all', False)
+        filters = request.data.get('filters', {})
         
-        if not candidate_ids:
-            return Response(
-                {'error': 'No candidates selected'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # Get candidates based on select_all or candidate_ids
+        if select_all:
+            candidates_qs = self._get_base_queryset()
+            candidates_qs = self._apply_filters(candidates_qs, type('obj', (object,), {'query_params': filters})())
+            candidates_qs = candidates_qs.order_by('registration_number')
+        else:
+            if not candidate_ids:
+                return Response(
+                    {'error': 'No candidates selected'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            candidates_qs = Candidate.objects.filter(id__in=candidate_ids).select_related(
+                'occupation', 'assessment_center'
+            ).order_by('registration_number')
         
         # Check if any candidate already has a transcript printed
-        already_printed = Candidate.objects.filter(
-            id__in=candidate_ids,
+        already_printed = candidates_qs.filter(
             transcript_serial_number__isnull=False
         ).exclude(transcript_serial_number='')
         
         if already_printed.exists():
             return Response(
                 {
-                    'error': 'All selected candidate(s) already have printed transcripts. Only reprints are allowed through the reprint process.',
+                    'error': f'{already_printed.count()} candidate(s) already have printed transcripts. Use reprint option.',
                     'already_printed_count': already_printed.count()
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Get candidates
-        candidates = Candidate.objects.filter(id__in=candidate_ids).select_related(
-            'occupation', 'assessment_center'
-        ).order_by('registration_number')
+        # Get candidates list
+        candidates = list(candidates_qs)
         
-        if not candidates.exists():
+        if not candidates:
             return Response(
                 {'error': 'No valid candidates found'},
                 status=status.HTTP_404_NOT_FOUND
