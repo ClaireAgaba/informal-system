@@ -2117,18 +2117,16 @@ class FormalResultViewSet(viewsets.ViewSet):
                 elements.append(t)
                 
             else:
-                # MODULE-BASED: Simple 2-column table (Theory Grade | Practical Grade)
-                # Group results by module
-                module_results = {}
+                # MODULE-BASED: Simple table with Theory and Practical grades
+                # Get theory and practical grades directly from results
+                theory_grade = '-'
+                practical_grade = '-'
+                
                 for r in results:
-                    if r.exam:
-                        mod_id = r.exam.id
-                        if mod_id not in module_results:
-                            module_results[mod_id] = {'module': r.exam, 'theory': '-', 'practical': '-'}
-                        if r.type == 'theory':
-                            module_results[mod_id]['theory'] = r.grade or '-'
-                        else:
-                            module_results[mod_id]['practical'] = r.grade or '-'
+                    if r.type == 'theory' and r.grade:
+                        theory_grade = r.grade
+                    elif r.type == 'practical' and r.grade:
+                        practical_grade = r.grade
                 
                 # Get ALL active modules in the level (not just from results)
                 modules_trained = []
@@ -2138,20 +2136,20 @@ class FormalResultViewSet(viewsets.ViewSet):
                     for mod in active_modules:
                         modules_trained.append(f"{mod.module_name} ({mod.credit_units or 0} CU)")
                 
-                # Build table
+                # Build table with single row for theory and practical
                 module_table_data = [[
                     Paragraph("<b>Theory</b>", info_label_style),
                     Paragraph("<b>Grade</b>", info_label_style),
                     Paragraph("<b>Practical</b>", info_label_style),
                     Paragraph("<b>Grade</b>", info_label_style)
                 ]]
-                for mod_id, data in module_results.items():
-                    module_table_data.append([
-                        Paragraph("Theory", info_value_style),
-                        Paragraph(data['theory'], info_value_style),
-                        Paragraph("Practical", info_value_style),
-                        Paragraph(data['practical'], info_value_style)
-                    ])
+                # Add data row with theory and practical grades
+                module_table_data.append([
+                    Paragraph("Theory", info_value_style),
+                    Paragraph(theory_grade, info_value_style),
+                    Paragraph("Practical", info_value_style),
+                    Paragraph(practical_grade, info_value_style)
+                ])
                 
                 t = Table(module_table_data, colWidths=[3.5*cm, 3.5*cm, 3.5*cm, 3.5*cm], repeatRows=1)
                 t.setStyle(TableStyle([
