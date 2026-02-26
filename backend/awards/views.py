@@ -14,6 +14,9 @@ from occupations.models import OccupationModule, OccupationPaper
 from io import BytesIO
 from PyPDF2 import PdfMerger
 from django.conf import settings
+import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import re
 
 
 def formal_candidate_qualifies(candidate):
@@ -856,6 +859,179 @@ class AwardsViewSet(viewsets.ViewSet):
         
         response = HttpResponse(output.read(), content_type='application/pdf')
         response['Content-Disposition'] = 'attachment; filename="Reprinted_Transcripts.pdf"'
+        
+        return response
+
+    @action(detail=False, methods=['post'], url_path='bulk-transcripts-zip')
+    def bulk_transcripts_zip(self, request):
+        """
+        Generate transcripts for multiple candidates in parallel and return as a ZIP file.
+        Supports select_all mode with filters for 500+ candidates.
+        ZIP folder named: {center_no} {occupation_name} {series}
+        """
+        candidate_ids = request.data.get('candidate_ids', [])
+        select_all = request.data.get('select_all', False)
+        filters = request.data.get('filters', {})
+        is_reprint = request.data.get('is_reprint', False)
+        reason_id = request.data.get('reason_id')
+        
+        # Get candidates based on select_all or candidate_ids
+        if select_all:
+            candidates_qs = self._get_base_queryset()
+            candidates_qs = self._apply_filters(candidates_qs, type('obj', (object,), {'query_params': filters})())
+            candidates_qs = candidates_qs.order_by('registration_number')
+        else:
+            if not candidate_ids:
+                return Response(
+                    {'error': 'No candidates selected'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            candidates_qs = Candidate.objects.filter(id__in=candidate_ids).select_related(
+                'occupation', 'assessment_center'
+            ).order_by('registration_number')
+        
+        candidates = list(candidates_qs)
+        
+        if not candidates:
+            return Response(
+                {'error': 'No candidates found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # For non-reprint, check if any candidate already has a transcript
+        if not is_reprint:
+            already_printed = [c for c in candidates if c.transcript_serial_number]
+            if already_printed:
+                return Response(
+                    {
+                        'error': f'{len(already_printed)} candidate(s) already have printed transcripts. Use reprint option.',
+                        'already_printed_count': len(already_printed)
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # For reprint, validate reason
+        add_watermark = False
+        if is_reprint:
+            if not reason_id:
+                return Response(
+                    {'error': 'Reprint reason is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            try:
+                reprint_reason = ReprintReason.objects.get(id=reason_id, is_active=True)
+                add_watermark = reprint_reason.requires_duplicate_watermark
+            except ReprintReason.DoesNotExist:
+                return Response(
+                    {'error': 'Invalid reprint reason'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Determine folder name from first candidate's data
+        first_candidate = candidates[0]
+        center_no = first_candidate.assessment_center.center_no if first_candidate.assessment_center else 'UNKNOWN'
+        occupation_name = first_candidate.occupation.occ_name if first_candidate.occupation else 'Unknown'
+        
+        # Get assessment series from results
+        series_name = 'Series'
+        if first_candidate.registration_category == 'modular':
+            result = ModularResult.objects.filter(candidate=first_candidate).select_related('assessment_series').first()
+            if result and result.assessment_series:
+                series_name = result.assessment_series.name or 'Series'
+        else:
+            result = FormalResult.objects.filter(candidate=first_candidate).select_related('assessment_series').first()
+            if result and result.assessment_series:
+                series_name = result.assessment_series.name or 'Series'
+        
+        # Sanitize folder name
+        folder_name = f"{center_no} {occupation_name} {series_name}"
+        folder_name = re.sub(r'[<>:"/\\|?*]', '_', folder_name)  # Remove invalid chars
+        
+        # Import transcript generation functions
+        from results.views import ModularResultViewSet, FormalResultViewSet
+        
+        def generate_transcript(candidate_data):
+            """Generate PDF for a single candidate. Returns (candidate_id, reg_no, pdf_bytes, error)"""
+            candidate_id, reg_no, reg_category, user = candidate_data
+            
+            try:
+                class MockRequest:
+                    def __init__(self, user, candidate_id, duplicate_watermark=False):
+                        self.user = user
+                        self.query_params = {
+                            'candidate_id': str(candidate_id),
+                            'duplicate_watermark': 'true' if duplicate_watermark else 'false'
+                        }
+                
+                mock_request = MockRequest(user, candidate_id, add_watermark)
+                
+                if reg_category == 'modular':
+                    if ModularResult.objects.filter(candidate_id=candidate_id).exists():
+                        viewset = ModularResultViewSet()
+                        response = viewset.transcript_pdf(mock_request)
+                        if response.status_code == 200:
+                            return (candidate_id, reg_no, response.content, None)
+                else:
+                    if FormalResult.objects.filter(candidate_id=candidate_id).exists():
+                        viewset = FormalResultViewSet()
+                        response = viewset.transcript_pdf(mock_request)
+                        if response.status_code == 200:
+                            return (candidate_id, reg_no, response.content, None)
+                
+                return (candidate_id, reg_no, None, 'No results found')
+            except Exception as e:
+                return (candidate_id, reg_no, None, str(e))
+        
+        # Prepare candidate data for parallel processing
+        candidate_data_list = [
+            (c.id, c.registration_number or str(c.id), c.registration_category, request.user)
+            for c in candidates
+        ]
+        
+        # Generate PDFs in parallel using ThreadPoolExecutor
+        # Use max 10 workers to avoid overwhelming the system
+        max_workers = min(10, len(candidates))
+        pdf_results = []
+        errors = []
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_candidate = {
+                executor.submit(generate_transcript, data): data[1]
+                for data in candidate_data_list
+            }
+            
+            for future in as_completed(future_to_candidate):
+                reg_no = future_to_candidate[future]
+                try:
+                    result = future.result()
+                    candidate_id, reg_no, pdf_bytes, error = result
+                    if pdf_bytes:
+                        pdf_results.append((reg_no, pdf_bytes))
+                    elif error:
+                        errors.append({'reg_no': reg_no, 'error': error})
+                except Exception as e:
+                    errors.append({'reg_no': reg_no, 'error': str(e)})
+        
+        if not pdf_results:
+            return Response(
+                {'error': 'No transcripts could be generated', 'errors': errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create ZIP file in memory
+        zip_buffer = BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for reg_no, pdf_bytes in pdf_results:
+                # Each PDF named by registration number
+                filename = f"{folder_name}/{reg_no}.pdf"
+                zip_file.writestr(filename, pdf_bytes)
+        
+        zip_buffer.seek(0)
+        
+        # Return ZIP file
+        response = HttpResponse(zip_buffer.read(), content_type='application/zip')
+        safe_filename = folder_name.replace(' ', '_')
+        response['Content-Disposition'] = f'attachment; filename="{safe_filename}.zip"'
         
         return response
 

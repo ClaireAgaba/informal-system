@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Award, Search, ChevronLeft, ChevronRight, User, Filter, Printer, RefreshCw, X, AlertTriangle, Download, FileText } from 'lucide-react';
+import { Award, Search, ChevronLeft, ChevronRight, User, Filter, Printer, RefreshCw, X, AlertTriangle, Download, FileText, Archive } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import apiClient from '../../../services/apiClient';
@@ -26,6 +26,7 @@ const AwardsList = () => {
   const [uniqueCenters, setUniqueCenters] = useState([]);
   const [uniqueOccupations, setUniqueOccupations] = useState([]);
   const [exporting, setExporting] = useState(false);
+  const [downloadingZip, setDownloadingZip] = useState(false);
   const itemsPerPage = 50;
   const searchTimerRef = useRef(null);
 
@@ -283,6 +284,91 @@ const AwardsList = () => {
       }
     } finally {
       setPrinting(false);
+    }
+  };
+
+  // Download transcripts as ZIP handler
+  const handleDownloadZip = async (isReprint = false) => {
+    if (isReprint && !selectedReprintReason) {
+      toast.error('Please select a reprint reason');
+      return;
+    }
+
+    try {
+      setDownloadingZip(true);
+      
+      const requestData = {
+        is_reprint: isReprint,
+      };
+
+      if (selectAllFiltered) {
+        requestData.select_all = true;
+        requestData.filters = {
+          search: searchQuery,
+          category: filters.registration_category,
+          entry_year: filters.entry_year,
+          intake: filters.intake,
+          center: filters.center,
+          occupation: filters.occupation,
+          printed: filters.printed,
+        };
+      } else {
+        requestData.candidate_ids = selectedCandidates;
+      }
+
+      if (isReprint) {
+        requestData.reason_id = selectedReprintReason;
+      }
+
+      const response = await apiClient.post('/awards/bulk-transcripts-zip/', requestData, {
+        responseType: 'blob',
+        timeout: 600000, // 10 minute timeout for large batches
+      });
+
+      // Get filename from Content-Disposition header or use default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'Transcripts.zip';
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (match) filename = match[1];
+      }
+
+      // Create download link
+      const blob = new Blob([response.data], { type: 'application/zip' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      const count = selectAllFiltered ? totalCount : selectedCandidates.length;
+      toast.success(`Downloaded ${count} transcript(s) as ZIP`);
+      
+      if (isReprint) {
+        setShowReprintModal(false);
+        setSelectedReprintReason('');
+      }
+      handleClearSelection();
+      fetchAwards(currentPage);
+    } catch (err) {
+      console.error('Error downloading transcripts:', err);
+      if (err.response?.data) {
+        // Try to parse error from blob
+        try {
+          const text = await err.response.data.text();
+          const errorData = JSON.parse(text);
+          toast.error(errorData.error || 'Failed to download transcripts');
+        } catch {
+          toast.error('Failed to download transcripts');
+        }
+      } else {
+        toast.error('Failed to download transcripts');
+      }
+    } finally {
+      setDownloadingZip(false);
     }
   };
 
@@ -558,8 +644,16 @@ const AwardsList = () => {
                 {printing ? 'Printing...' : 'Print Transcripts'}
               </button>
               <button
+                onClick={() => handleDownloadZip(false)}
+                disabled={downloadingZip}
+                className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Archive className="w-4 h-4 mr-2" />
+                {downloadingZip ? 'Generating ZIP...' : 'Download ZIP'}
+              </button>
+              <button
                 onClick={() => setShowReprintModal(true)}
-                disabled={reprinting}
+                disabled={reprinting || downloadingZip}
                 className="flex items-center px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
