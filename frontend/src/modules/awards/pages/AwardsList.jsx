@@ -10,7 +10,9 @@ const AwardsList = () => {
   const [awards, setAwards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => {
+    return localStorage.getItem('awards_search') || '';
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -30,14 +32,31 @@ const AwardsList = () => {
   const itemsPerPage = 50;
   const searchTimerRef = useRef(null);
 
-  // Filter states
-  const [filters, setFilters] = useState({
-    registration_category: '',
-    entry_year: '',
-    intake: '',
-    center: '',
-    printed: '',
-    occupation: '',
+  // Filter states - load from localStorage
+  const [filters, setFilters] = useState(() => {
+    const saved = localStorage.getItem('awards_filters');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return {
+          registration_category: '',
+          entry_year: '',
+          intake: '',
+          center: '',
+          printed: '',
+          occupation: '',
+        };
+      }
+    }
+    return {
+      registration_category: '',
+      entry_year: '',
+      intake: '',
+      center: '',
+      printed: '',
+      occupation: '',
+    };
   });
 
   const buildQueryParams = useCallback((page = 1, overrides = {}) => {
@@ -104,6 +123,7 @@ const AwardsList = () => {
   // Debounced search
   const handleSearchChange = (value) => {
     setSearchQuery(value);
+    localStorage.setItem('awards_search', value);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
       setCurrentPage(1);
@@ -116,6 +136,7 @@ const AwardsList = () => {
   // Apply filters
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters);
+    localStorage.setItem('awards_filters', JSON.stringify(newFilters));
     setCurrentPage(1);
     setSelectedCandidates([]);
     setSelectAllFiltered(false);
@@ -134,6 +155,8 @@ const AwardsList = () => {
     };
     setFilters(empty);
     setSearchQuery('');
+    localStorage.removeItem('awards_filters');
+    localStorage.removeItem('awards_search');
     setCurrentPage(1);
     setSelectedCandidates([]);
     setSelectAllFiltered(false);
