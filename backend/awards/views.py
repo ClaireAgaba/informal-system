@@ -929,7 +929,7 @@ class AwardsViewSet(viewsets.ViewSet):
         
         # Determine folder name from first candidate's data
         first_candidate = candidates[0]
-        center_no = first_candidate.assessment_center.center_no if first_candidate.assessment_center else 'UNKNOWN'
+        center_no = first_candidate.assessment_center.center_number if first_candidate.assessment_center else 'UNKNOWN'
         occupation_name = first_candidate.occupation.occ_name if first_candidate.occupation else 'Unknown'
         
         # Get assessment series from results
