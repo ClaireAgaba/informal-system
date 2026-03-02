@@ -170,3 +170,121 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
         wb.save(response)
         
         return response
+
+    @action(detail=True, methods=['get'])
+    def export_registration_summary(self, request, pk=None):
+        """Export registration summary by category down to the module level into an Excel file"""
+        from django.http import HttpResponse
+        from datetime import date
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill
+        from candidates.models import CandidateEnrollment
+        from collections import defaultdict
+
+        series = self.get_object()
+
+        # Fetch active enrollments with related fields to optimize querying
+        enrollments = CandidateEnrollment.objects.filter(
+            assessment_series=series,
+            is_active=True
+        ).select_related(
+            'candidate',
+            'candidate__occupation',
+            'occupation_level'
+        ).prefetch_related(
+            'modules__module',
+            'papers__paper',
+            'occupation_level__modules'
+        )
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Registration Summary"
+
+        headers = [
+            ('Registration Category', 20),
+            ('Occupation Code', 20),
+            ('Occupation Name', 30),
+            ('Module / Paper Code', 25),
+            ('Level', 15),
+            ('Candidates', 12)
+        ]
+
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+
+        for col, (header, width) in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            ws.column_dimensions[cell.column_letter].width = width
+
+        # Dictionary to store the counts
+        # Key: (Category, Occupation Code, Occupation Name, Module Code, Level)
+        # Value: Count
+        counts = defaultdict(int)
+
+        category_map = {'modular': 'Modular', 'formal': 'Formal', 'workers_pas': "Worker's PAS"}
+
+        for enrollment in enrollments:
+            c = enrollment.candidate
+            cat = category_map.get(c.registration_category, c.registration_category)
+            occ_code = c.occupation.occ_code if c.occupation else 'N/A'
+            occ_name = c.occupation.occ_name if c.occupation else 'N/A'
+
+            if c.is_formal() and enrollment.occupation_level:
+                level_name = enrollment.occupation_level.level_name
+                level_modules = enrollment.occupation_level.modules.all()
+                if level_modules:
+                    for mod in level_modules:
+                        key = (cat, occ_code, occ_name, mod.module_code, level_name)
+                        counts[key] += 1
+                else:
+                    # In case a formal level has no modules explicitly added yet
+                    key = (cat, occ_code, occ_name, 'N/A', level_name)
+                    counts[key] += 1
+            elif c.is_modular():
+                level_name = 'N/A'
+                modules = enrollment.modules.all()
+                if modules:
+                    for m in modules:
+                        key = (cat, occ_code, occ_name, m.module.module_code, level_name)
+                        counts[key] += 1
+                else:
+                     key = (cat, occ_code, occ_name, 'N/A', level_name)
+                     counts[key] += 1
+            elif c.is_workers_pas():
+                level_name = enrollment.occupation_level.level_name if enrollment.occupation_level else 'N/A'
+                papers = enrollment.papers.all()
+                modules = enrollment.modules.all()
+                
+                if not papers and not modules:
+                    key = (cat, occ_code, occ_name, 'N/A', level_name)
+                    counts[key] += 1
+                
+                for p in papers:
+                    key = (cat, occ_code, occ_name, p.paper.paper_code, level_name)
+                    counts[key] += 1
+                    
+                for m in modules:
+                    key = (cat, occ_code, occ_name, m.module.module_code, level_name)
+                    counts[key] += 1
+
+        row = 2
+        for (cat, occ_code, occ_name, mod_code, level), count in sorted(counts.items()):
+            ws.cell(row=row, column=1, value=cat)
+            ws.cell(row=row, column=2, value=occ_code)
+            ws.cell(row=row, column=3, value=occ_name)
+            ws.cell(row=row, column=4, value=mod_code)
+            ws.cell(row=row, column=5, value=level)
+            ws.cell(row=row, column=6, value=count)
+            row += 1
+
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        safe_series_name = str(series.name).replace(" ", "_").lower()
+        response['Content-Disposition'] = f'attachment; filename=registration_summary_{safe_series_name}_{date.today().strftime("%Y%m%d")}.xlsx'
+        wb.save(response)
+        
+        return response

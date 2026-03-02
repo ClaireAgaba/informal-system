@@ -13,6 +13,7 @@ export const assessmentSeriesApi = {
   releaseResults: (id) => apiClient.post(`${SERIES_BASE}/${id}/release-results/`),
   getByYear: (year) => apiClient.get(`${SERIES_BASE}/`, { params: { year } }),
   exportSpecialNeeds: (id) => apiClient.get(`${SERIES_BASE}/${id}/export_special_needs/`, { responseType: 'blob' }),
+  exportRegistrationSummary: (id) => apiClient.get(`${SERIES_BASE}/${id}/export_registration_summary/`, { responseType: 'blob' }),
 };
 
 export default assessmentSeriesApi;

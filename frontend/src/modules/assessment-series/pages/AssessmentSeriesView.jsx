@@ -23,6 +23,7 @@ const AssessmentSeriesView = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [exporting, setExporting] = useState(false);
+  const [exportingSummary, setExportingSummary] = useState(false);
 
   // Redirect if ID is invalid
   if (!id || id === 'undefined' || id === 'new') {
@@ -95,6 +96,41 @@ const AssessmentSeriesView = () => {
       toast.error('Failed to download export');
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleExportSummary = async () => {
+    setExportingSummary(true);
+    try {
+      const response = await assessmentSeriesApi.exportRegistrationSummary(id);
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `registration_summary_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (filenameMatch && filenameMatch.length > 1) {
+          filename = filenameMatch[1];
+        } else {
+          const fallbackMatch = contentDisposition.match(/filename=([^;]+)/);
+          if (fallbackMatch && fallbackMatch.length > 1) {
+            filename = fallbackMatch[1].trim();
+          }
+        }
+      }
+
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Summary export downloaded successfully!');
+    } catch (error) {
+      toast.error('Failed to download summary export');
+    } finally {
+      setExportingSummary(false);
     }
   };
 
@@ -329,6 +365,17 @@ const AssessmentSeriesView = () => {
               >
                 <Download className="w-4 h-4 mr-2" />
                 Export Special Needs & Refugees
+              </Button>
+
+              <Button
+                variant="primary"
+                size="md"
+                className="w-full mt-2"
+                onClick={handleExportSummary}
+                loading={exportingSummary}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export Registration Summary
               </Button>
 
               <div className="pt-4 border-t border-gray-200">
