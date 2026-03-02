@@ -330,6 +330,8 @@ class CandidateViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(registration_category=request.data['registration_category'])
             if request.data.get('assessment_center'):
                 queryset = queryset.filter(assessment_center_id=request.data['assessment_center'])
+            if request.data.get('assessment_center_branch'):
+                queryset = queryset.filter(assessment_center_branch_id=request.data['assessment_center_branch'])
             if request.data.get('occupation'):
                 queryset = queryset.filter(occupation_id=request.data['occupation'])
             if request.data.get('has_disability'):
@@ -377,11 +379,10 @@ class CandidateViewSet(viewsets.ModelViewSet):
         else:
             return Response({'error': 'No candidates selected'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Use values for faster data retrieval (avoid model instantiation)
         candidates = queryset.values(
             'registration_number', 'full_name', 'date_of_birth', 'gender',
             'nationality', 'contact', 'has_disability', 'is_refugee',
-            'assessment_center__center_name', 'registration_category',
+            'assessment_center__center_name', 'assessment_center_branch__branch_code', 'registration_category',
             'occupation__occ_name', 'occupation__sector__name', 'district__name',
             'nature_of_disability__name', 'disability_specification'
         )
@@ -393,7 +394,7 @@ class CandidateViewSet(viewsets.ModelViewSet):
         
         # Define headers and column widths
         headers = [
-            ('Reg No', 20), ('Full Name', 25), ('Center', 30), ('Category', 12), 
+            ('Reg No', 20), ('Full Name', 25), ('Center', 30), ('Branch', 20), ('Category', 12), 
             ('Occupation', 20), ('Sector', 15), ('Disability', 10), 
             ('Nature of Disability', 25), ('Disability Notes', 30),
             ('Refugee', 10), ('Nationality', 12), ('Age', 6), 
@@ -427,18 +428,19 @@ class CandidateViewSet(viewsets.ModelViewSet):
             ws.cell(row=row_num, column=1, value=c['registration_number'] or '')
             ws.cell(row=row_num, column=2, value=c['full_name'] or '')
             ws.cell(row=row_num, column=3, value=c['assessment_center__center_name'] or '')
-            ws.cell(row=row_num, column=4, value=category_map.get(c['registration_category'], ''))
-            ws.cell(row=row_num, column=5, value=c['occupation__occ_name'] or '')
-            ws.cell(row=row_num, column=6, value=c['occupation__sector__name'] or '')
-            ws.cell(row=row_num, column=7, value='Yes' if c['has_disability'] else 'No')
-            ws.cell(row=row_num, column=8, value=c['nature_of_disability__name'] or '')
-            ws.cell(row=row_num, column=9, value=c['disability_specification'] or '')
-            ws.cell(row=row_num, column=10, value='Yes' if c['is_refugee'] else 'No')
-            ws.cell(row=row_num, column=11, value=c['nationality'] or 'Uganda')
-            ws.cell(row=row_num, column=12, value=calc_age(c['date_of_birth']))
-            ws.cell(row=row_num, column=13, value=c['district__name'] or '')
-            ws.cell(row=row_num, column=14, value=gender_map.get(c['gender'], ''))
-            ws.cell(row=row_num, column=15, value=c['contact'] or '')
+            ws.cell(row=row_num, column=4, value=c['assessment_center_branch__branch_code'] or '')
+            ws.cell(row=row_num, column=5, value=category_map.get(c['registration_category'], ''))
+            ws.cell(row=row_num, column=6, value=c['occupation__occ_name'] or '')
+            ws.cell(row=row_num, column=7, value=c['occupation__sector__name'] or '')
+            ws.cell(row=row_num, column=8, value='Yes' if c['has_disability'] else 'No')
+            ws.cell(row=row_num, column=9, value=c['nature_of_disability__name'] or '')
+            ws.cell(row=row_num, column=10, value=c['disability_specification'] or '')
+            ws.cell(row=row_num, column=11, value='Yes' if c['is_refugee'] else 'No')
+            ws.cell(row=row_num, column=12, value=c['nationality'] or 'Uganda')
+            ws.cell(row=row_num, column=13, value=calc_age(c['date_of_birth']))
+            ws.cell(row=row_num, column=14, value=c['district__name'] or '')
+            ws.cell(row=row_num, column=15, value=gender_map.get(c['gender'], ''))
+            ws.cell(row=row_num, column=16, value=c['contact'] or '')
         
         # Create response
         response = HttpResponse(
