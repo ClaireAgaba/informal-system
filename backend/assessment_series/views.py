@@ -206,6 +206,7 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
             ('Occupation Code', 20),
             ('Occupation Name', 30),
             ('Module / Paper Code', 25),
+            ('Module / Paper Name', 35),
             ('Level', 15),
             ('Candidates', 12)
         ]
@@ -220,7 +221,7 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
             ws.column_dimensions[cell.column_letter].width = width
 
         # Dictionary to store the counts
-        # Key: (Category, Occupation Code, Occupation Name, Module Code, Level)
+        # Key: (Category, Occupation Code, Occupation Name, Module Code, Module Name, Level)
         # Value: Count
         counts = defaultdict(int)
 
@@ -237,21 +238,21 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
                 level_modules = enrollment.occupation_level.modules.all()
                 if level_modules:
                     for mod in level_modules:
-                        key = (cat, occ_code, occ_name, mod.module_code, level_name)
+                        key = (cat, occ_code, occ_name, mod.module_code, mod.module_name, level_name)
                         counts[key] += 1
                 else:
                     # In case a formal level has no modules explicitly added yet
-                    key = (cat, occ_code, occ_name, 'N/A', level_name)
+                    key = (cat, occ_code, occ_name, 'N/A', 'N/A', level_name)
                     counts[key] += 1
             elif c.is_modular():
                 level_name = 'N/A'
                 modules = enrollment.modules.all()
                 if modules:
                     for m in modules:
-                        key = (cat, occ_code, occ_name, m.module.module_code, level_name)
+                        key = (cat, occ_code, occ_name, m.module.module_code, m.module.module_name, level_name)
                         counts[key] += 1
                 else:
-                     key = (cat, occ_code, occ_name, 'N/A', level_name)
+                     key = (cat, occ_code, occ_name, 'N/A', 'N/A', level_name)
                      counts[key] += 1
             elif c.is_workers_pas():
                 level_name = enrollment.occupation_level.level_name if enrollment.occupation_level else 'N/A'
@@ -259,25 +260,26 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
                 modules = enrollment.modules.all()
                 
                 if not papers and not modules:
-                    key = (cat, occ_code, occ_name, 'N/A', level_name)
+                    key = (cat, occ_code, occ_name, 'N/A', 'N/A', level_name)
                     counts[key] += 1
                 
                 for p in papers:
-                    key = (cat, occ_code, occ_name, p.paper.paper_code, level_name)
+                    key = (cat, occ_code, occ_name, p.paper.paper_code, p.paper.paper_name, level_name)
                     counts[key] += 1
                     
                 for m in modules:
-                    key = (cat, occ_code, occ_name, m.module.module_code, level_name)
+                    key = (cat, occ_code, occ_name, m.module.module_code, m.module.module_name, level_name)
                     counts[key] += 1
 
         row = 2
-        for (cat, occ_code, occ_name, mod_code, level), count in sorted(counts.items()):
+        for (cat, occ_code, occ_name, mod_code, mod_name, level), count in sorted(counts.items()):
             ws.cell(row=row, column=1, value=cat)
             ws.cell(row=row, column=2, value=occ_code)
             ws.cell(row=row, column=3, value=occ_name)
             ws.cell(row=row, column=4, value=mod_code)
-            ws.cell(row=row, column=5, value=level)
-            ws.cell(row=row, column=6, value=count)
+            ws.cell(row=row, column=5, value=mod_name)
+            ws.cell(row=row, column=6, value=level)
+            ws.cell(row=row, column=7, value=count)
             row += 1
 
         response = HttpResponse(
