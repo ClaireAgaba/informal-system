@@ -59,6 +59,19 @@ const FormalAddResultsModal = ({ isOpen, onClose, candidateId, enrollments }) =>
           setIsRetake(data.is_retake);
           setFailedItems(data.failed_items || []);
           console.log('Retake info:', data);
+          
+          // Auto-populate results with failed items for retake
+          if (data.is_retake && data.failed_items?.length > 0) {
+            const autoResults = data.failed_items.map(item => ({
+              type: item.result_type, // Lock to the failed type (theory/practical)
+              mark: '',
+              paper_id: item.paper_id || null,
+              exam_id: item.exam_id || null,
+              isLocked: true, // Flag to prevent editing type
+              failedInfo: item, // Store failed info for display
+            }));
+            setResults(autoResults);
+          }
         } catch (error) {
           console.error('Error fetching failed papers:', error);
           setIsRetake(false);
@@ -265,33 +278,53 @@ const FormalAddResultsModal = ({ isOpen, onClose, candidateId, enrollments }) =>
               <>
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="text-sm font-medium text-gray-700">
-                    Results ({structureType === 'modules' ? 'Module-based: 2 rows per exam' : 'Paper-based: 1 row per paper'})
+                    {isRetake 
+                      ? `Retake Results (${results.length} failed paper${results.length !== 1 ? 's' : ''} to re-enter)`
+                      : `Results (${structureType === 'modules' ? 'Module-based: 2 rows per exam' : 'Paper-based: 1 row per paper'})`
+                    }
                   </h4>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addResult}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add {structureType === 'modules' ? 'Exam' : 'Paper'}
-                  </Button>
+                  {/* Hide Add button for retake enrollments - items are auto-populated */}
+                  {!isRetake && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addResult}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add {structureType === 'modules' ? 'Exam' : 'Paper'}
+                    </Button>
+                  )}
                 </div>
 
                 {results.length === 0 ? (
                   <div className="text-center py-8 border border-dashed border-gray-300 rounded-md">
                     <p className="text-sm text-gray-500">
-                      No results added yet. Click "Add {structureType === 'modules' ? 'Exam' : 'Paper'}" to start.
+                      {isRetake 
+                        ? 'Loading failed papers...'
+                        : `No results added yet. Click "Add ${structureType === 'modules' ? 'Exam' : 'Paper'}" to start.`
+                      }
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-4 max-h-96 overflow-y-auto">
                     {results.map((result, index) => (
-                      <div key={index} className="p-4 border border-gray-200 rounded-md bg-gray-50">
+                      <div key={index} className={`p-4 border rounded-md ${result.isLocked ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-gray-50'}`}>
+                        {/* Show failed paper info for retake */}
+                        {result.isLocked && result.failedInfo && (
+                          <div className="mb-3 pb-2 border-b border-amber-200">
+                            <p className="text-xs font-medium text-amber-800">
+                              Retaking: {result.failedInfo.code} - {result.failedInfo.name}
+                            </p>
+                            <p className="text-xs text-amber-600">
+                              Previous: {result.failedInfo.mark}% ({result.failedInfo.result_type})
+                            </p>
+                          </div>
+                        )}
                         <div className="flex items-start gap-4">
-                          <div className={`flex-1 grid ${structureType === 'papers' ? 'grid-cols-3' : 'grid-cols-2'} gap-4`}>
-                            {/* Paper Selection (only for paper-based) */}
-                            {structureType === 'papers' && (
+                          <div className={`flex-1 grid ${structureType === 'papers' && !result.isLocked ? 'grid-cols-3' : 'grid-cols-2'} gap-4`}>
+                            {/* Paper Selection (only for paper-based and non-locked) */}
+                            {structureType === 'papers' && !result.isLocked && (
                               <div>
                                 <label className="block text-xs font-medium text-gray-700 mb-1">
                                   Paper *
@@ -312,16 +345,16 @@ const FormalAddResultsModal = ({ isOpen, onClose, candidateId, enrollments }) =>
                               </div>
                             )}
 
-                            {/* Type */}
+                            {/* Type - locked for retake */}
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">
-                                Type * {structureType === 'papers' && <span className="text-xs text-gray-500">(Auto-set)</span>}
+                                Type * {result.isLocked && <span className="text-xs text-amber-600">(Locked)</span>}
                               </label>
                               <select
                                 value={result.type}
                                 onChange={(e) => updateResult(index, 'type', e.target.value)}
-                                className={`w-full px-2 py-1 text-sm border border-gray-300 rounded-md ${structureType === 'papers' ? 'bg-gray-100' : ''}`}
-                                disabled={structureType === 'papers'}
+                                className={`w-full px-2 py-1 text-sm border border-gray-300 rounded-md ${result.isLocked || structureType === 'papers' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                disabled={result.isLocked || structureType === 'papers'}
                                 required
                               >
                                 <option value="theory">Theory</option>
@@ -348,14 +381,16 @@ const FormalAddResultsModal = ({ isOpen, onClose, candidateId, enrollments }) =>
                             </div>
                           </div>
 
-                          {/* Remove Button */}
-                          <button
-                            type="button"
-                            onClick={() => removeResult(index)}
-                            className="mt-6 text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {/* Remove Button - hidden for locked retake items */}
+                          {!result.isLocked && (
+                            <button
+                              type="button"
+                              onClick={() => removeResult(index)}
+                              className="mt-6 text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -363,7 +398,10 @@ const FormalAddResultsModal = ({ isOpen, onClose, candidateId, enrollments }) =>
                 )}
 
                 <p className="mt-2 text-xs text-gray-500">
-                  * Use -1 for missing marks
+                  {isRetake 
+                    ? '* Enter the new marks for the failed papers. Use -1 for missing marks.'
+                    : '* Use -1 for missing marks'
+                  }
                 </p>
               </>
             )}
