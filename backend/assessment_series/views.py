@@ -173,114 +173,169 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def export_registration_summary(self, request, pk=None):
-        """Export registration summary by category down to the module level into an Excel file"""
+        """
+        Export registration summary grouped by center and occupation.
+        Creates multiple sheets:
+        - Level 1, Level 2, Level 3, Level 4 (for Formal candidates)
+        - Modular
+        - Workers PAS
+        """
         from django.http import HttpResponse
         from datetime import date
         import openpyxl
         from openpyxl.styles import Font, PatternFill
         from candidates.models import CandidateEnrollment
         from collections import defaultdict
+        from decimal import Decimal
 
         series = self.get_object()
 
-        # Fetch active enrollments with related fields to optimize querying
+        # Fetch active enrollments with related fields
         enrollments = CandidateEnrollment.objects.filter(
             assessment_series=series,
             is_active=True
         ).select_related(
             'candidate',
             'candidate__occupation',
+            'candidate__assessment_center',
             'occupation_level'
-        ).prefetch_related(
-            'modules__module',
-            'papers__paper',
-            'occupation_level__modules'
         )
 
         wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Registration Summary"
-
-        headers = [
-            ('Registration Category', 20),
-            ('Occupation Code', 20),
-            ('Occupation Name', 30),
-            ('Module / Paper Code', 25),
-            ('Module / Paper Name', 35),
-            ('Level', 15),
-            ('Candidates', 12)
+        
+        # Remove default sheet
+        wb.remove(wb.active)
+        
+        # Define sheet configurations
+        # Formal levels - will create sheets for each level found
+        formal_levels = ['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5']
+        
+        # Headers for formal sheets (with level column)
+        formal_headers = [
+            ('Center Code', 15),
+            ('Center Name', 40),
+            ('Occ Code', 12),
+            ('Occ Name', 30),
+            ('Reg Category', 15),
+            ('Level', 12),
+            ('No of Candidates', 18),
+            ('Amount Billed', 18),
         ]
-
+        
+        # Headers for modular and workers_pas sheets (no level column)
+        other_headers = [
+            ('Center Code', 15),
+            ('Center Name', 40),
+            ('Occ Code', 12),
+            ('Occ Name', 30),
+            ('Reg Category', 15),
+            ('No of Candidates', 18),
+            ('Amount Billed', 18),
+        ]
+        
         header_font = Font(bold=True, color="FFFFFF")
         header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
-
-        for col, (header, width) in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=col, value=header)
-            cell.font = header_font
-            cell.fill = header_fill
-            ws.column_dimensions[cell.column_letter].width = width
-
-        # Dictionary to store the counts
-        # Key: (Category, Occupation Code, Occupation Name, Module Code, Module Name, Level)
-        # Value: Count
-        counts = defaultdict(int)
-
-        category_map = {'modular': 'Modular', 'formal': 'Formal', 'workers_pas': "Worker's PAS"}
-
+        
+        def create_sheet_with_headers(wb, sheet_name, headers):
+            ws = wb.create_sheet(title=sheet_name)
+            for col, (header, width) in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+                ws.column_dimensions[cell.column_letter].width = width
+            return ws
+        
+        # Data structures to aggregate by center/occupation
+        # For formal: key = (center_code, center_name, occ_code, occ_name, level)
+        # For modular/workers_pas: key = (center_code, center_name, occ_code, occ_name)
+        formal_data = defaultdict(lambda: {'count': 0, 'amount': Decimal('0.00')})
+        modular_data = defaultdict(lambda: {'count': 0, 'amount': Decimal('0.00')})
+        workers_pas_data = defaultdict(lambda: {'count': 0, 'amount': Decimal('0.00')})
+        
         for enrollment in enrollments:
             c = enrollment.candidate
-            cat = category_map.get(c.registration_category, c.registration_category)
+            center = c.assessment_center
+            center_code = center.center_number if center else 'N/A'
+            center_name = center.center_name if center else 'N/A'
             occ_code = c.occupation.occ_code if c.occupation else 'N/A'
             occ_name = c.occupation.occ_name if c.occupation else 'N/A'
-
-            if c.is_formal() and enrollment.occupation_level:
-                level_name = enrollment.occupation_level.level_name
-                level_modules = enrollment.occupation_level.modules.all()
-                if level_modules:
-                    for mod in level_modules:
-                        key = (cat, occ_code, occ_name, mod.module_code, mod.module_name, level_name)
-                        counts[key] += 1
-                else:
-                    # In case a formal level has no modules explicitly added yet
-                    key = (cat, occ_code, occ_name, 'N/A', 'N/A', level_name)
-                    counts[key] += 1
-            elif c.is_modular():
-                level_name = 'N/A'
-                modules = enrollment.modules.all()
-                if modules:
-                    for m in modules:
-                        key = (cat, occ_code, occ_name, m.module.module_code, m.module.module_name, level_name)
-                        counts[key] += 1
-                else:
-                     key = (cat, occ_code, occ_name, 'N/A', 'N/A', level_name)
-                     counts[key] += 1
-            elif c.is_workers_pas():
+            amount = enrollment.total_amount or Decimal('0.00')
+            
+            if c.is_formal():
                 level_name = enrollment.occupation_level.level_name if enrollment.occupation_level else 'N/A'
-                papers = enrollment.papers.all()
-                modules = enrollment.modules.all()
-                
-                if not papers and not modules:
-                    key = (cat, occ_code, occ_name, 'N/A', 'N/A', level_name)
-                    counts[key] += 1
-                
-                for p in papers:
-                    key = (cat, occ_code, occ_name, p.paper.paper_code, p.paper.paper_name, level_name)
-                    counts[key] += 1
-                    
-                for m in modules:
-                    key = (cat, occ_code, occ_name, m.module.module_code, m.module.module_name, level_name)
-                    counts[key] += 1
-
-        row = 2
-        for (cat, occ_code, occ_name, mod_code, mod_name, level), count in sorted(counts.items()):
-            ws.cell(row=row, column=1, value=cat)
-            ws.cell(row=row, column=2, value=occ_code)
-            ws.cell(row=row, column=3, value=occ_name)
-            ws.cell(row=row, column=4, value=mod_code)
-            ws.cell(row=row, column=5, value=mod_name)
-            ws.cell(row=row, column=6, value=level)
-            ws.cell(row=row, column=7, value=count)
-            row += 1
+                key = (center_code, center_name, occ_code, occ_name, level_name)
+                formal_data[key]['count'] += 1
+                formal_data[key]['amount'] += amount
+            elif c.is_modular():
+                key = (center_code, center_name, occ_code, occ_name)
+                modular_data[key]['count'] += 1
+                modular_data[key]['amount'] += amount
+            elif c.is_workers_pas():
+                key = (center_code, center_name, occ_code, occ_name)
+                workers_pas_data[key]['count'] += 1
+                workers_pas_data[key]['amount'] += amount
+        
+        # Group formal data by level
+        formal_by_level = defaultdict(list)
+        for (center_code, center_name, occ_code, occ_name, level), data in sorted(formal_data.items()):
+            formal_by_level[level].append({
+                'center_code': center_code,
+                'center_name': center_name,
+                'occ_code': occ_code,
+                'occ_name': occ_name,
+                'level': level,
+                'count': data['count'],
+                'amount': data['amount']
+            })
+        
+        # Create formal level sheets
+        for level in formal_levels:
+            if level in formal_by_level:
+                ws = create_sheet_with_headers(wb, level, formal_headers)
+                row = 2
+                for item in formal_by_level[level]:
+                    ws.cell(row=row, column=1, value=item['center_code'])
+                    ws.cell(row=row, column=2, value=item['center_name'])
+                    ws.cell(row=row, column=3, value=item['occ_code'])
+                    ws.cell(row=row, column=4, value=item['occ_name'])
+                    ws.cell(row=row, column=5, value='Formal')
+                    ws.cell(row=row, column=6, value=item['level'])
+                    ws.cell(row=row, column=7, value=item['count'])
+                    ws.cell(row=row, column=8, value=float(item['amount']))
+                    row += 1
+        
+        # Create Modular sheet
+        if modular_data:
+            ws = create_sheet_with_headers(wb, 'Modular', other_headers)
+            row = 2
+            for (center_code, center_name, occ_code, occ_name), data in sorted(modular_data.items()):
+                ws.cell(row=row, column=1, value=center_code)
+                ws.cell(row=row, column=2, value=center_name)
+                ws.cell(row=row, column=3, value=occ_code)
+                ws.cell(row=row, column=4, value=occ_name)
+                ws.cell(row=row, column=5, value='Modular')
+                ws.cell(row=row, column=6, value=data['count'])
+                ws.cell(row=row, column=7, value=float(data['amount']))
+                row += 1
+        
+        # Create Workers PAS sheet
+        if workers_pas_data:
+            ws = create_sheet_with_headers(wb, 'Workers PAS', other_headers)
+            row = 2
+            for (center_code, center_name, occ_code, occ_name), data in sorted(workers_pas_data.items()):
+                ws.cell(row=row, column=1, value=center_code)
+                ws.cell(row=row, column=2, value=center_name)
+                ws.cell(row=row, column=3, value=occ_code)
+                ws.cell(row=row, column=4, value=occ_name)
+                ws.cell(row=row, column=5, value="Worker's PAS")
+                ws.cell(row=row, column=6, value=data['count'])
+                ws.cell(row=row, column=7, value=float(data['amount']))
+                row += 1
+        
+        # If no data at all, create an empty summary sheet
+        if not wb.sheetnames:
+            ws = wb.create_sheet(title="No Data")
+            ws.cell(row=1, column=1, value="No enrollment data found for this series")
 
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
