@@ -40,7 +40,12 @@ const EnrollmentModal = ({ candidate, onClose }) => {
         return;
       }
       const level = options.levels?.find(l => l.id === parseInt(formData.occupation_level));
-      fee = level?.formal_fee || 0;
+      // Use retaker fee (50% discount) if candidate has failed papers in this level
+      if (level?.is_retaker && level?.retaker_fee) {
+        fee = parseFloat(level.retaker_fee);
+      } else {
+        fee = parseFloat(level?.formal_fee || 0);
+      }
     } else if (regCategory === 'modular') {
       const moduleCount = formData.modules.length;
       if (moduleCount === 1) {
@@ -203,7 +208,7 @@ const EnrollmentModal = ({ candidate, onClose }) => {
             </select>
           </div>
 
-          {/* Formal: Show levels */}
+          {/* Formal: Show levels with retaker info */}
           {regCategory === 'formal' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -218,10 +223,40 @@ const EnrollmentModal = ({ candidate, onClose }) => {
                 <option value="">Select level</option>
                 {options?.levels?.map((level) => (
                   <option key={level.id} value={level.id}>
-                    {level.level_name} - UGX {parseFloat(level.formal_fee).toLocaleString()}
+                    {level.level_name} - UGX {level.is_retaker 
+                      ? `${parseFloat(level.retaker_fee).toLocaleString()} (Retake - 50% off)`
+                      : parseFloat(level.formal_fee).toLocaleString()
+                    }
                   </option>
                 ))}
               </select>
+              
+              {/* Show retaker info if selected level has failed papers */}
+              {formData.occupation_level && (() => {
+                const selectedLevel = options?.levels?.find(l => l.id === parseInt(formData.occupation_level));
+                if (selectedLevel?.is_retaker && selectedLevel?.failed_papers?.length > 0) {
+                  return (
+                    <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <p className="text-sm font-medium text-amber-900 mb-2">
+                        ⚠️ Retake Enrollment - Failed Papers:
+                      </p>
+                      <ul className="text-sm text-amber-800 space-y-1">
+                        {selectedLevel.failed_papers.map((paper, idx) => (
+                          <li key={idx} className="flex items-center">
+                            <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                            {paper.paper_code || paper.module_code} - {paper.paper_name || paper.module_name} 
+                            <span className="ml-2 text-xs">({paper.type}: {paper.mark}% - {paper.grade})</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-xs text-amber-700 mt-2">
+                        50% discount applied for retake enrollment.
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
           )}
 

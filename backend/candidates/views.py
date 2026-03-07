@@ -26,6 +26,7 @@ from .serializers import (
 )
 from occupations.models import OccupationLevel, OccupationModule, OccupationPaper
 from assessment_series.models import AssessmentSeries
+from results.models import FormalResult, ModularResult, WorkersPasResult
 
 
 class CandidateViewSet(viewsets.ModelViewSet):
@@ -486,11 +487,24 @@ class CandidateViewSet(viewsets.ModelViewSet):
         reg_category = candidate.registration_category
         
         # Check if assessment series has "don't charge" enabled
+        is_retaker = False
         if assessment_series.dont_charge:
             total_amount = Decimal('0.00')
         elif reg_category == 'formal':
             # Formal: use formal_fee from the level
-            total_amount = occupation_level.formal_fee
+            # Check if candidate has failed papers in this level (retaker)
+            failed_results = FormalResult.objects.filter(
+                candidate=candidate,
+                level=occupation_level
+            )
+            has_failed = any(not r.is_passing for r in failed_results)
+            
+            if has_failed:
+                # Retaker: 50% discount
+                is_retaker = True
+                total_amount = occupation_level.formal_fee / 2
+            else:
+                total_amount = occupation_level.formal_fee
         
         elif reg_category == 'modular':
             # Modular: use modular fee based on number of modules
@@ -575,12 +589,13 @@ class CandidateViewSet(viewsets.ModelViewSet):
                 # Return created enrollment
                 enrollment_serializer = CandidateEnrollmentSerializer(enrollment)
 
-                self._log_activity(candidate, 'candidate_enrolled', 'Candidate enrolled', details={
+                self._log_activity(candidate, 'candidate_enrolled', 'Candidate enrolled' + (' (Retake)' if is_retaker else ''), details={
                     'assessment_series_id': assessment_series.id,
                     'assessment_series_name': assessment_series.name,
                     'enrollment_id': enrollment.id,
                     'registration_category': reg_category,
                     'total_amount': str(total_amount),
+                    'is_retaker': is_retaker,
                 })
                 return Response(enrollment_serializer.data, status=status.HTTP_201_CREATED)
         
@@ -840,11 +855,66 @@ class CandidateViewSet(viewsets.ModelViewSet):
         }
         
         if reg_category == 'formal':
-            # Formal: show all levels
-            levels = occupation.levels.filter(is_active=True).values(
-                'id', 'level_name', 'formal_fee'
-            )
-            response_data['levels'] = list(levels)
+            # Formal: show all levels with retaker info
+            levels_data = []
+            for level in occupation.levels.filter(is_active=True):
+                level_data = {
+                    'id': level.id,
+                    'level_name': level.level_name,
+                    'formal_fee': str(level.formal_fee),
+                }
+                
+                # Check for failed papers in this level (retaker detection)
+                # Get all results for this candidate in this level
+                failed_results = FormalResult.objects.filter(
+                    candidate=candidate,
+                    level=level
+                ).select_related('paper', 'exam')
+                
+                # Find papers that are NOT successful (failed or missing)
+                failed_papers = []
+                passed_paper_ids = set()
+                
+                for result in failed_results:
+                    if result.is_passing:
+                        # Track passed papers
+                        if result.paper:
+                            passed_paper_ids.add((result.paper_id, result.type))
+                        elif result.exam:
+                            passed_paper_ids.add((result.exam_id, result.type))
+                    else:
+                        # Failed paper
+                        if result.paper:
+                            failed_papers.append({
+                                'id': result.paper_id,
+                                'paper_code': result.paper.paper_code,
+                                'paper_name': result.paper.paper_name,
+                                'type': result.type,
+                                'mark': float(result.mark) if result.mark else None,
+                                'grade': result.grade,
+                            })
+                        elif result.exam:
+                            failed_papers.append({
+                                'id': result.exam_id,
+                                'module_code': result.exam.module_code,
+                                'module_name': result.exam.module_name,
+                                'type': result.type,
+                                'mark': float(result.mark) if result.mark else None,
+                                'grade': result.grade,
+                            })
+                
+                # If there are failed papers, this is a retaker situation
+                if failed_papers:
+                    level_data['is_retaker'] = True
+                    level_data['failed_papers'] = failed_papers
+                    # 50% discount for retakers
+                    level_data['retaker_fee'] = str(Decimal(level.formal_fee) / 2)
+                else:
+                    level_data['is_retaker'] = False
+                
+                levels_data.append(level_data)
+            
+            response_data['levels'] = levels_data
         
         elif reg_category == 'modular':
             # Modular: show level 1 with its modules
