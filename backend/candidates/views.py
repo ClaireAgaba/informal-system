@@ -855,62 +855,102 @@ class CandidateViewSet(viewsets.ModelViewSet):
         }
         
         if reg_category == 'formal':
-            # Formal: show all levels with retaker info
+            # Formal: show only eligible levels based on candidate's progress
+            # Logic: 
+            # - If candidate has never enrolled, show only Level 1
+            # - If candidate has failed papers in a level, only show that level (retake)
+            # - If candidate passed all papers in a level, show next level
+            
+            all_levels = list(occupation.levels.filter(is_active=True).order_by('level_name'))
             levels_data = []
-            for level in occupation.levels.filter(is_active=True):
-                level_data = {
-                    'id': level.id,
-                    'level_name': level.level_name,
-                    'formal_fee': str(level.formal_fee),
-                }
-                
-                # Check for failed papers in this level (retaker detection)
+            
+            # Determine highest completed level and current level status
+            highest_completed_level_idx = -1  # -1 means no level completed yet
+            current_level_with_failures = None
+            
+            for idx, level in enumerate(all_levels):
                 # Get all results for this candidate in this level
-                failed_results = FormalResult.objects.filter(
+                level_results = FormalResult.objects.filter(
                     candidate=candidate,
                     level=level
                 ).select_related('paper', 'exam')
                 
-                # Find papers that are NOT successful (failed or missing)
+                if not level_results.exists():
+                    # No results in this level yet
+                    continue
+                
+                # Check if all papers passed or some failed
+                all_passed = all(r.is_passing for r in level_results)
+                has_failures = any(not r.is_passing for r in level_results)
+                
+                if all_passed:
+                    highest_completed_level_idx = idx
+                elif has_failures:
+                    current_level_with_failures = level
+                    break  # Stop here, they need to retake this level
+            
+            # Now build the eligible levels list
+            for idx, level in enumerate(all_levels):
+                # Get results for this level
+                level_results = FormalResult.objects.filter(
+                    candidate=candidate,
+                    level=level
+                ).select_related('paper', 'exam')
+                
+                # Determine eligibility
+                is_eligible = False
+                is_retaker = False
                 failed_papers = []
-                passed_paper_ids = set()
+                all_passed = False
                 
-                for result in failed_results:
-                    if result.is_passing:
-                        # Track passed papers
-                        if result.paper:
-                            passed_paper_ids.add((result.paper_id, result.type))
-                        elif result.exam:
-                            passed_paper_ids.add((result.exam_id, result.type))
-                    else:
-                        # Failed paper
-                        if result.paper:
-                            failed_papers.append({
-                                'id': result.paper_id,
-                                'paper_code': result.paper.paper_code,
-                                'paper_name': result.paper.paper_name,
-                                'type': result.type,
-                                'mark': float(result.mark) if result.mark else None,
-                                'grade': result.grade,
-                            })
-                        elif result.exam:
-                            failed_papers.append({
-                                'id': result.exam_id,
-                                'module_code': result.exam.module_code,
-                                'module_name': result.exam.module_name,
-                                'type': result.type,
-                                'mark': float(result.mark) if result.mark else None,
-                                'grade': result.grade,
-                            })
-                
-                # If there are failed papers, this is a retaker situation
-                if failed_papers:
-                    level_data['is_retaker'] = True
-                    level_data['failed_papers'] = failed_papers
-                    # 50% discount for retakers
-                    level_data['retaker_fee'] = str(Decimal(level.formal_fee) / 2)
+                if current_level_with_failures:
+                    # Candidate has failures - only show that level as retake
+                    if level == current_level_with_failures:
+                        is_eligible = True
+                        is_retaker = True
+                        # Collect failed papers
+                        for result in level_results:
+                            if not result.is_passing:
+                                if result.paper:
+                                    failed_papers.append({
+                                        'id': result.paper_id,
+                                        'paper_code': result.paper.paper_code,
+                                        'paper_name': result.paper.paper_name,
+                                        'type': result.type,
+                                        'mark': float(result.mark) if result.mark else None,
+                                        'grade': result.grade,
+                                    })
+                                elif result.exam:
+                                    failed_papers.append({
+                                        'id': result.exam_id,
+                                        'module_code': result.exam.module_code,
+                                        'module_name': result.exam.module_name,
+                                        'type': result.type,
+                                        'mark': float(result.mark) if result.mark else None,
+                                        'grade': result.grade,
+                                    })
                 else:
-                    level_data['is_retaker'] = False
+                    # No current failures - check if this is the next eligible level
+                    if idx == highest_completed_level_idx + 1:
+                        is_eligible = True
+                        # Check if they have results in this level
+                        if level_results.exists():
+                            all_passed = all(r.is_passing for r in level_results)
+                
+                if not is_eligible:
+                    continue
+                
+                level_data = {
+                    'id': level.id,
+                    'level_name': level.level_name,
+                    'formal_fee': str(level.formal_fee),
+                    'is_retaker': is_retaker,
+                    'all_passed': all_passed,
+                }
+                
+                if is_retaker and failed_papers:
+                    level_data['failed_papers'] = failed_papers
+                    level_data['retaker_fee'] = str(Decimal(level.formal_fee) / 2)
                 
                 levels_data.append(level_data)
             

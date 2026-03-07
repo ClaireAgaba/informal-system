@@ -1241,18 +1241,25 @@ const CandidateView = () => {
                                 )}
                               </div>
 
-                              {/* De-enroll Button */}
+                              {/* De-enroll Button - disabled if all papers passed */}
                               <div className="ml-4">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleDeEnroll(enrollment.id, enrollment.assessment_series_name)}
-                                  loading={deEnrollMutation.isPending}
-                                  className="text-red-600 hover:text-red-700 hover:border-red-600"
-                                >
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  De-enroll
-                                </Button>
+                                {enrollment.all_papers_passed ? (
+                                  <div className="flex items-center text-green-600 text-sm">
+                                    <span className="mr-2">✓</span>
+                                    All Passed
+                                  </div>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleDeEnroll(enrollment.id, enrollment.assessment_series_name)}
+                                    loading={deEnrollMutation.isPending}
+                                    className="text-red-600 hover:text-red-700 hover:border-red-600"
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    De-enroll
+                                  </Button>
+                                )}
                               </div>
                             </div>
                           </Card.Content>

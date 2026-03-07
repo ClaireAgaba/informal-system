@@ -421,13 +421,34 @@ class CandidateEnrollmentSerializer(serializers.ModelSerializer):
         
         return None
     
+    all_papers_passed = serializers.SerializerMethodField()
+    
+    def get_all_papers_passed(self, obj):
+        """Check if all papers in this enrollment level have been passed"""
+        from results.models import FormalResult
+        
+        if not obj.occupation_level:
+            return False
+        
+        # Get all results for this candidate in this level
+        results = FormalResult.objects.filter(
+            candidate=obj.candidate,
+            level=obj.occupation_level
+        )
+        
+        if not results.exists():
+            return False
+        
+        # Check if all results are passing
+        return all(r.is_passing for r in results)
+    
     class Meta:
         model = CandidateEnrollment
         fields = [
             'id', 'candidate', 'assessment_series', 'assessment_series_name',
             'occupation_level', 'level_id', 'level_name', 'occupation_name', 'structure_type',
             'total_amount', 'modules', 'papers', 'is_active',
-            'enrolled_at', 'updated_at'
+            'enrolled_at', 'updated_at', 'all_papers_passed'
         ]
         read_only_fields = ['enrolled_at', 'updated_at']
 
