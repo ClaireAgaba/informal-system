@@ -1839,14 +1839,38 @@ class FormalResultViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Check if candidate qualifies for transcript (ALL results must be successful)
-        formal_results = FormalResult.objects.filter(candidate=candidate)
-        if not formal_results.exists():
+        # Check if candidate qualifies for transcript (best result per paper/exam must be successful)
+        all_formal_results = FormalResult.objects.filter(candidate=candidate).select_related(
+            'paper', 'exam', 'level', 'assessment_series'
+        ).order_by('-assessment_series__start_date')
+        
+        if not all_formal_results.exists():
             return Response(
                 {'error': 'Candidate does not qualify for transcript. No results found.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Get best result per paper/exam and type (successful retake overrides failed)
+        first_result = all_formal_results.first()
+        is_paper_based = first_result.paper is not None
+        
+        best_results = {}
+        for result in all_formal_results:
+            if is_paper_based:
+                key = (result.paper_id, result.type)
+            else:
+                key = (result.exam_id, result.type)
+            
+            if key not in best_results:
+                best_results[key] = result
+            else:
+                existing = best_results[key]
+                if result.is_passing and not existing.is_passing:
+                    best_results[key] = result
+        
+        formal_results = list(best_results.values())
+        
+        # Check if all best results are successful
         all_successful = all(r.comment == 'Successful' for r in formal_results)
         
         if not all_successful:
@@ -1856,7 +1880,6 @@ class FormalResultViewSet(viewsets.ViewSet):
             )
         
         # Check qualification based on level structure type
-        first_result = formal_results.first()
         if first_result and first_result.level:
             level = first_result.level
             
@@ -1893,9 +1916,9 @@ class FormalResultViewSet(viewsets.ViewSet):
         
         # Get award from candidate's level
         qr_award = ""
-        first_result = formal_results.first()
-        if first_result and first_result.level:
-            qr_award = first_result.level.award or ""
+        first_result_for_award = formal_results[0] if formal_results else None
+        if first_result_for_award and first_result_for_award.level:
+            qr_award = first_result_for_award.level.award or ""
         
         # Generate QR Code with candidate info (JSON format for scanner compatibility)
         qr_data = json.dumps({
@@ -2088,21 +2111,45 @@ class FormalResultViewSet(viewsets.ViewSet):
         elements.append(Spacer(1, 0.1*cm))
 
         # Formal Results - check level structure type
-        results = FormalResult.objects.filter(candidate=candidate).select_related(
+        all_results = FormalResult.objects.filter(candidate=candidate).select_related(
             'level', 'exam', 'exam__level', 'paper', 'assessment_series'
-        ).order_by('level', 'type')
+        ).order_by('-assessment_series__start_date')
         
         completion_date = None
         level_total_cus = 0
         
-        if results.exists():
+        if all_results.exists():
             # Get first result to determine structure type
-            first_result = results.first()
+            first_result = all_results.first()
             is_paper_based = first_result.level and first_result.level.structure_type == 'papers'
             
-            # Get completion date from assessment series (use completion_year if set, else series name)
-            if first_result.assessment_series:
-                completion_date = first_result.assessment_series.completion_year or first_result.assessment_series.name
+            # Get best result per paper/exam and type (successful retake overrides failed)
+            best_results = {}
+            for result in all_results:
+                if is_paper_based:
+                    key = (result.paper_id, result.type)
+                else:
+                    key = (result.exam_id, result.type)
+                
+                if key not in best_results:
+                    best_results[key] = result
+                else:
+                    existing = best_results[key]
+                    if result.is_passing and not existing.is_passing:
+                        best_results[key] = result
+            
+            results = list(best_results.values())
+            
+            # Get completion date from most recent series in best results
+            latest_series = None
+            for result in results:
+                if result.assessment_series:
+                    if latest_series is None or (result.assessment_series.start_date and 
+                        (latest_series.start_date is None or result.assessment_series.start_date > latest_series.start_date)):
+                        latest_series = result.assessment_series
+            
+            if latest_series:
+                completion_date = latest_series.completion_year or latest_series.name
             
             # Calculate level total CUs
             if first_result.level:
@@ -2234,9 +2281,9 @@ class FormalResultViewSet(viewsets.ViewSet):
                 
                 # Get ALL active modules in the level (not just from results)
                 modules_trained = []
-                first_result = results.first()
-                if first_result and first_result.level:
-                    active_modules = OccupationModule.objects.filter(level=first_result.level, is_active=True).order_by('module_name')
+                level_result = results[0] if results else None
+                if level_result and level_result.level:
+                    active_modules = OccupationModule.objects.filter(level=level_result.level, is_active=True).order_by('module_name')
                     for mod in active_modules:
                         modules_trained.append(f"{mod.module_name} ({mod.credit_units or 0} CU)")
                 
@@ -2277,11 +2324,11 @@ class FormalResultViewSet(viewsets.ViewSet):
         # Footer info - get duration and award from level (in table for alignment)
         duration = "-"
         award = "-"
-        if results.exists():
-            first_result = results.first()
-            if first_result.level:
-                duration = first_result.level.contact_hours if first_result.level.contact_hours else "-"
-                award = first_result.level.award if first_result.level.award else "-"
+        if results:
+            footer_result = results[0] if results else None
+            if footer_result and footer_result.level:
+                duration = footer_result.level.contact_hours if footer_result.level.contact_hours else "-"
+                award = footer_result.level.award if footer_result.level.award else "-"
         
         elements.append(Spacer(1, 0.3*cm))
         footer_data = [

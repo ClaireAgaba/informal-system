@@ -134,19 +134,12 @@ class AwardsViewSet(viewsets.ViewSet):
             ))
         )
 
+        # For formal candidates, we can't use database-level exclude because
+        # retakes may override failed results. We filter in _serialize_candidate instead.
         formal_candidates = Candidate.objects.filter(
             registration_category='formal'
         ).filter(
             Exists(FormalResult.objects.filter(candidate=OuterRef('pk')))
-        ).exclude(
-            Exists(FormalResult.objects.filter(
-                candidate=OuterRef('pk')
-            ).filter(
-                Q(mark__isnull=True) |
-                Q(mark=-1) |
-                Q(type='practical', mark__lt=65) |
-                Q(type='theory', mark__lt=50)
-            ))
         )
 
         return (modular_candidates | formal_candidates).select_related(
