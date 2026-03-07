@@ -62,6 +62,8 @@ const CandidateView = () => {
   const [showTRSNoModal, setShowTRSNoModal] = useState(false);
   const [trSNoValue, setTRSNoValue] = useState('');
   const [savingTRSNo, setSavingTRSNo] = useState(false);
+  const [showRevokeModal, setShowRevokeModal] = useState(false);
+  const [revokeReason, setRevokeReason] = useState('');
   const photoInputRef = useRef(null);
   const [showPhotoConfirm, setShowPhotoConfirm] = useState(null);
 
@@ -183,6 +185,29 @@ const CandidateView = () => {
       return;
     }
     declineMutation.mutate(declineReason);
+  };
+
+  // Revoke transcript mutation
+  const revokeTranscriptMutation = useMutation({
+    mutationFn: (reason) => candidateApi.revokeTranscript(id, reason),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries(['candidate', id]);
+      toast.success(response.data.message || 'Transcript serial number revoked successfully!');
+      setShowRevokeModal(false);
+      setRevokeReason('');
+    },
+    onError: (error) => {
+      const errorMsg = error.response?.data?.error || error.message;
+      toast.error(`Failed to revoke transcript: ${errorMsg}`);
+    },
+  });
+
+  const handleRevokeTranscript = () => {
+    if (!revokeReason.trim()) {
+      toast.error('Please provide a reason for revoking the transcript');
+      return;
+    }
+    revokeTranscriptMutation.mutate(revokeReason);
   };
 
   // Submit mutation (for draft candidates)
@@ -434,6 +459,8 @@ const CandidateView = () => {
             variant="primary"
             size="md"
             onClick={() => navigate(`/candidates/${id}/edit`)}
+            disabled={candidate?.is_graduated}
+            title={candidate?.is_graduated ? 'Cannot edit graduated candidate' : ''}
           >
             <Edit className="w-4 h-4 mr-2" />
             Edit
@@ -531,8 +558,20 @@ const CandidateView = () => {
                         }}
                       >
                         <FileText className="w-4 h-4 mr-2" />
-                        Add TR SNo
+                        {candidate.transcript_serial_number ? 'Edit TR SNo' : 'Add TR SNo'}
                       </button>
+                      {candidate.transcript_serial_number && (
+                        <button
+                          className="w-full px-4 py-2 text-left text-sm text-orange-600 hover:bg-orange-50 flex items-center"
+                          onClick={() => {
+                            setShowActionsDropdown(false);
+                            setShowRevokeModal(true);
+                          }}
+                        >
+                          <XCircle className="w-4 h-4 mr-2" />
+                          Revoke TR SNo
+                        </button>
+                      )}
                       <button
                         className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center"
                         onClick={async () => {
@@ -674,13 +713,23 @@ const CandidateView = () => {
                 )}
               </p>
 
-              <div className="mt-4">
+              <div className="mt-4 flex flex-col gap-2">
                 {candidate.is_submitted ? (
                   getStatusBadge(candidate.verification_status)
                 ) : (
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800">
                     <AlertCircle className="w-4 h-4 mr-1" />
                     Pending Submission
+                  </span>
+                )}
+                {/* Graduation Status Badge */}
+                {candidate.is_submitted && (
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                    candidate.is_graduated 
+                      ? 'bg-purple-100 text-purple-800' 
+                      : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {candidate.is_graduated ? '🎓 Graduated' : 'Active'}
                   </span>
                 )}
               </div>
@@ -1147,11 +1196,22 @@ const CandidateView = () => {
                       variant="primary"
                       size="sm"
                       onClick={() => setShowEnrollmentModal(true)}
+                      disabled={candidate?.is_graduated}
+                      title={candidate?.is_graduated ? 'Cannot enroll graduated candidate' : ''}
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Enroll
                     </Button>
                   </div>
+
+                  {/* Graduated notice */}
+                  {candidate?.is_graduated && (
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+                      <p className="text-purple-800 text-sm">
+                        🎓 This candidate has graduated and cannot be enrolled in new assessment series.
+                      </p>
+                    </div>
+                  )}
 
                   {enrollments.length === 0 ? (
                     <div className="text-center py-12 bg-gray-50 rounded-lg">
@@ -1161,6 +1221,7 @@ const CandidateView = () => {
                         variant="primary"
                         size="sm"
                         onClick={() => setShowEnrollmentModal(true)}
+                        disabled={candidate?.is_graduated}
                       >
                         <Plus className="w-4 h-4 mr-2" />
                         Enroll Candidate
@@ -1277,6 +1338,7 @@ const CandidateView = () => {
                   registrationCategory={candidate.registration_category}
                   hasEnrollments={enrollments && enrollments.length > 0}
                   enrollments={enrollments}
+                  isGraduated={candidate?.is_graduated}
                 />
               )}
 
@@ -1683,6 +1745,72 @@ const CandidateView = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
                 {savingTRSNo ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Revoke Transcript Modal */}
+      {showRevokeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={() => setShowRevokeModal(false)}
+          />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Revoke Transcript Serial Number
+              </h3>
+              <button
+                onClick={() => setShowRevokeModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="mb-4">
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
+                <p className="text-orange-800 text-sm">
+                  <strong>Warning:</strong> Revoking the transcript serial number will:
+                </p>
+                <ul className="text-orange-700 text-sm mt-2 list-disc list-inside">
+                  <li>Remove the candidate's graduated status</li>
+                  <li>Allow editing of candidate details again</li>
+                  <li>Clear transcript collection information</li>
+                </ul>
+              </div>
+              <p className="text-sm text-gray-600 mb-2">
+                Current TR SNo: <strong>{candidate.transcript_serial_number}</strong>
+              </p>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Reason for Revocation <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={revokeReason}
+                onChange={(e) => setRevokeReason(e.target.value)}
+                placeholder="Enter reason for revoking the transcript serial number..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                rows={3}
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowRevokeModal(false);
+                  setRevokeReason('');
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRevokeTranscript}
+                disabled={revokeTranscriptMutation.isPending || !revokeReason.trim()}
+                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
+              >
+                {revokeTranscriptMutation.isPending ? 'Revoking...' : 'Revoke TR SNo'}
               </button>
             </div>
           </div>

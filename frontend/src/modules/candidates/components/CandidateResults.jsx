@@ -16,7 +16,7 @@ import {
   getStatusBadgeColor,
 } from '../utils/gradingSystem';
 
-const CandidateResults = ({ candidateId, registrationCategory, hasEnrollments, enrollments }) => {
+const CandidateResults = ({ candidateId, registrationCategory, hasEnrollments, enrollments, isGraduated = false }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -89,6 +89,7 @@ const CandidateResults = ({ candidateId, registrationCategory, hasEnrollments, e
           onAddResults={() => setShowAddModal(true)}
           onEditResults={() => setShowEditModal(true)}
           isCenterRep={currentUser?.user_type === 'center_representative'}
+          isGraduated={isGraduated}
         />
         <AddResultsModal
           isOpen={showAddModal}
@@ -115,6 +116,7 @@ const CandidateResults = ({ candidateId, registrationCategory, hasEnrollments, e
           onAddResults={() => setShowAddModal(true)}
           isCenterRep={currentUser?.user_type === 'center_representative'}
           onEditResults={() => setShowEditModal(true)}
+          isGraduated={isGraduated}
         />
         <FormalAddResultsModal
           isOpen={showAddModal}
@@ -140,6 +142,7 @@ const CandidateResults = ({ candidateId, registrationCategory, hasEnrollments, e
           results={results} 
           onAddResults={() => setShowAddModal(true)}
           isCenterRep={currentUser?.user_type === 'center_representative'}
+          isGraduated={isGraduated}
         />
         <WorkersPasAddResultsModal
           isOpen={showAddModal}
@@ -163,7 +166,7 @@ const CandidateResults = ({ candidateId, registrationCategory, hasEnrollments, e
 };
 
 // Modular Results Component
-const ModularResults = ({ results, onAddResults, onEditResults, isCenterRep }) => {
+const ModularResults = ({ results, onAddResults, onEditResults, isCenterRep, isGraduated }) => {
   const hasResults = results && results.length > 0;
 
   return (
@@ -178,8 +181,8 @@ const ModularResults = ({ results, onAddResults, onEditResults, isCenterRep }) =
               Total Modules: {results.length}
             </div>
           )}
-          {/* Hide Add/Edit buttons for center representatives */}
-          {!isCenterRep && (
+          {/* Hide Add/Edit buttons for center representatives or graduated candidates */}
+          {!isCenterRep && !isGraduated && (
             hasResults ? (
               <Button
                 variant="primary"
@@ -202,6 +205,14 @@ const ModularResults = ({ results, onAddResults, onEditResults, isCenterRep }) =
           )}
         </div>
       </div>
+      {/* Graduated notice */}
+      {isGraduated && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+          <p className="text-purple-800 text-sm">
+            🎓 This candidate has graduated. Results cannot be edited.
+          </p>
+        </div>
+      )}
 
       {/* Results Table */}
       {!hasResults ? (
@@ -295,7 +306,7 @@ const ModularResults = ({ results, onAddResults, onEditResults, isCenterRep }) =
 };
 
 // Formal Results Component
-const FormalResults = ({ results, onAddResults, onEditResults, isCenterRep }) => {
+const FormalResults = ({ results, onAddResults, onEditResults, isCenterRep, isGraduated }) => {
   const hasResults = results && results.length > 0;
 
   // Group results by level and exam/paper
@@ -336,8 +347,8 @@ const FormalResults = ({ results, onAddResults, onEditResults, isCenterRep }) =>
               Total Results: {results.length}
             </div>
           )}
-          {/* Hide Add/Edit buttons for center representatives */}
-          {!isCenterRep && (
+          {/* Hide Add/Edit buttons for center representatives or graduated candidates */}
+          {!isCenterRep && !isGraduated && (
             <>
               <Button
                 variant="outline"
@@ -470,7 +481,7 @@ const FormalResults = ({ results, onAddResults, onEditResults, isCenterRep }) =>
 };
 
 // Workers PAS Results Component
-const WorkersPasResults = ({ results, onAddResults, isCenterRep }) => {
+const WorkersPasResults = ({ results, onAddResults, isCenterRep, isGraduated }) => {
   const hasResults = results && results.length > 0;
 
   return (
@@ -485,8 +496,8 @@ const WorkersPasResults = ({ results, onAddResults, isCenterRep }) => {
               Total Papers: {results.length}
             </div>
           )}
-          {/* Hide Add Results button for center representatives */}
-          {!isCenterRep && (
+          {/* Hide Add Results button for center representatives or graduated candidates */}
+          {!isCenterRep && !isGraduated && (
             <Button
               variant="primary"
               size="sm"
@@ -499,11 +510,20 @@ const WorkersPasResults = ({ results, onAddResults, isCenterRep }) => {
         </div>
       </div>
 
+      {/* Graduated notice */}
+      {isGraduated && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+          <p className="text-purple-800 text-sm">
+            🎓 This candidate has graduated. Results cannot be edited.
+          </p>
+        </div>
+      )}
+
       {!hasResults ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
           <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-600 mb-4">No results recorded yet</p>
-          {!isCenterRep && (
+          {!isCenterRep && !isGraduated && (
             <Button variant="primary" size="sm" onClick={onAddResults}>
               <Plus className="w-4 h-4 mr-2" />
               Add Results

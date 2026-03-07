@@ -458,6 +458,16 @@ class Candidate(models.Model):
         """Check if candidate is declined"""
         return self.verification_status == 'declined'
     
+    @property
+    def is_graduated(self):
+        """Check if candidate has graduated (has transcript serial number)"""
+        return bool(self.transcript_serial_number)
+    
+    @property
+    def graduation_status(self):
+        """Get graduation status label"""
+        return 'Graduated' if self.is_graduated else 'Active'
+    
     def get_registration_category_code(self):
         """Get registration category code for registration number"""
         category_codes = {

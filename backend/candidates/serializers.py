@@ -108,6 +108,8 @@ class CandidateDetailSerializer(serializers.ModelSerializer):
     verified_by_name = serializers.CharField(source='verified_by.fullname', read_only=True)
     age = serializers.SerializerMethodField()
     nationality_display = serializers.SerializerMethodField()
+    is_graduated = serializers.BooleanField(read_only=True)
+    graduation_status = serializers.CharField(read_only=True)
     
     class Meta:
         model = Candidate

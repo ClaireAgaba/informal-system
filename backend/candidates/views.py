@@ -1320,6 +1320,50 @@ class CandidateViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK
         )
     
+    @action(detail=True, methods=['post'], url_path='revoke-transcript')
+    def revoke_transcript(self, request, pk=None):
+        """Revoke transcript serial number for a candidate"""
+        candidate = self.get_object()
+        
+        if not candidate.transcript_serial_number:
+            return Response(
+                {'error': 'Candidate does not have a transcript serial number'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        reason = request.data.get('reason', '')
+        if not reason:
+            return Response(
+                {'error': 'Reason for revocation is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        old_serial = candidate.transcript_serial_number
+        
+        # Clear transcript data
+        candidate.transcript_serial_number = None
+        candidate.transcript_collected = False
+        candidate.transcript_collector_name = None
+        candidate.transcript_collector_phone = None
+        candidate.transcript_collection_date = None
+        candidate.save()
+        
+        # Log the revocation
+        self._log_activity(
+            candidate, 
+            'transcript_revoked', 
+            f'Transcript serial number {old_serial} revoked. Reason: {reason}'
+        )
+        
+        serializer = self.get_serializer(candidate)
+        return Response(
+            {
+                'message': f'Transcript serial number {old_serial} has been revoked',
+                'candidate': serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
+    
     @action(detail=True, methods=['get'])
     def results(self, request, pk=None):
         """Get candidate results based on registration category"""

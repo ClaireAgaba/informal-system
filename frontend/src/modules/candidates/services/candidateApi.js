@@ -126,6 +126,9 @@ export const candidateApi = {
   // Mark payment as cleared
   markPaymentCleared: (id) => apiClient.post(`${CANDIDATES_BASE}/${id}/mark_payment_cleared/`),
 
+  // Revoke transcript serial number
+  revokeTranscript: (id, reason) => apiClient.post(`${CANDIDATES_BASE}/${id}/revoke-transcript/`, { reason }),
+
   // Get candidate results
   getResults: (id) => apiClient.get(`${CANDIDATES_BASE}/${id}/results/`),
 
