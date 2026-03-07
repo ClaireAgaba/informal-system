@@ -65,7 +65,9 @@ const EnrollmentList = () => {
     assessment_series: '',
     assessment_center: '',
     occupation: '',
+    occupation_level: '',
   });
+  const [occupationLevels, setOccupationLevels] = useState([]);
 
   // Fetch enrollments
   const { data, isLoading, error } = useQuery({
@@ -102,13 +104,33 @@ const EnrollmentList = () => {
   const totalCount = data?.data?.count || 0;
   const totalPages = Math.ceil(totalCount / pageSize);
 
+  // Fetch levels when occupation changes (for formal filter)
+  useEffect(() => {
+    const fetchOccupationLevels = async () => {
+      if (filters.occupation && filters.registration_category === 'formal') {
+        try {
+          const response = await occupationApi.getById(filters.occupation);
+          setOccupationLevels(response.data.levels || []);
+        } catch (error) {
+          console.error('Error fetching occupation levels:', error);
+          setOccupationLevels([]);
+        }
+      } else {
+        setOccupationLevels([]);
+      }
+    };
+    fetchOccupationLevels();
+  }, [filters.occupation, filters.registration_category]);
+
   const handleClearFilters = () => {
     setFilters({
       registration_category: '',
       assessment_series: '',
       assessment_center: '',
       occupation: '',
+      occupation_level: '',
     });
+    setOccupationLevels([]);
     setSearchQuery('');
   };
 
@@ -432,7 +454,7 @@ const EnrollmentList = () => {
                   </label>
                   <select
                     value={filters.occupation}
-                    onChange={(e) => setFilters({ ...filters, occupation: e.target.value })}
+                    onChange={(e) => setFilters({ ...filters, occupation: e.target.value, occupation_level: '' })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="">All</option>
@@ -441,6 +463,25 @@ const EnrollmentList = () => {
                     ))}
                   </select>
                 </div>
+
+                {/* Level filter - only shows for Formal category when occupation is selected */}
+                {filters.registration_category === 'formal' && filters.occupation && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Level
+                    </label>
+                    <select
+                      value={filters.occupation_level}
+                      onChange={(e) => setFilters({ ...filters, occupation_level: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="">All Levels</option>
+                      {occupationLevels.map((level) => (
+                        <option key={level.id} value={level.id}>{level.level_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="flex items-end">
                   <Button

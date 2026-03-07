@@ -2940,6 +2940,11 @@ def enrollment_list_view(request):
             Q(candidate__occupation_id=occupation)
         )
     
+    # Filter by occupation level (for formal candidates)
+    occupation_level = request.query_params.get('occupation_level')
+    if occupation_level:
+        queryset = queryset.filter(occupation_level_id=occupation_level)
+    
     # Search by registration number or name
     search = request.query_params.get('search')
     if search:
