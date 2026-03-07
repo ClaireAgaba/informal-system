@@ -210,8 +210,8 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
         wb.remove(wb.active)
         
         # Define sheet configurations
-        # Formal levels - will create sheets for each level found
-        formal_levels = ['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5']
+        # Formal levels - will match level names that START with these prefixes
+        formal_level_prefixes = ['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5']
         
         # Headers for formal sheets (with level column)
         formal_headers = [
@@ -303,25 +303,33 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
                 workers_pas_data[key]['count'] += 1
                 workers_pas_data[key]['amount'] += amount
         
-        # Group formal data by level
+        # Helper function to get level prefix (e.g., "Level 1 CK" -> "Level 1")
+        def get_level_prefix(level_name):
+            for prefix in formal_level_prefixes:
+                if level_name and level_name.startswith(prefix):
+                    return prefix
+            return level_name  # Return as-is if no match
+        
+        # Group formal data by level prefix
         formal_by_level = defaultdict(list)
         for (center_code, center_name, occ_code, occ_name, level), data in sorted(formal_data.items()):
-            formal_by_level[level].append({
+            level_prefix = get_level_prefix(level)
+            formal_by_level[level_prefix].append({
                 'center_code': center_code,
                 'center_name': center_name,
                 'occ_code': occ_code,
                 'occ_name': occ_name,
-                'level': level,
+                'level': level,  # Keep original level name for display
                 'count': data['count'],
                 'amount': data['amount']
             })
         
         # Create formal level sheets
-        for level in formal_levels:
-            if level in formal_by_level:
-                ws = create_sheet_with_headers(wb, level, formal_headers)
+        for level_prefix in formal_level_prefixes:
+            if level_prefix in formal_by_level:
+                ws = create_sheet_with_headers(wb, level_prefix, formal_headers)
                 row = 2
-                for item in formal_by_level[level]:
+                for item in formal_by_level[level_prefix]:
                     ws.cell(row=row, column=1, value=item['center_code'])
                     ws.cell(row=row, column=2, value=item['center_name'])
                     ws.cell(row=row, column=3, value=item['occ_code'])
