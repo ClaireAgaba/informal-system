@@ -28,18 +28,42 @@ def formal_candidate_qualifies(candidate):
     
     For paper-based levels: Check if earned CUs >= required CUs
     
+    Uses best result per paper/exam type - successful retake overrides failed original.
+    
     Returns (qualifies: bool, message: str) tuple.
     """
-    formal_results = list(candidate.formal_results.all())
-    if not formal_results:
+    all_results = list(candidate.formal_results.select_related(
+        'assessment_series', 'paper', 'exam', 'level'
+    ).order_by('-assessment_series__start_date'))
+    
+    if not all_results:
         return False, "No results found"
     
     # Get the level from first result
-    first_result = formal_results[0]
+    first_result = all_results[0]
     if not first_result.level:
         return False, "No level found"
     
     level = first_result.level
+    is_paper_based = first_result.paper is not None
+    
+    # Get best result per paper/exam and type (successful overrides failed)
+    best_results = {}
+    for result in all_results:
+        if is_paper_based:
+            key = (result.paper_id, result.type)
+        else:
+            key = (result.exam_id, result.type)
+        
+        if key not in best_results:
+            best_results[key] = result
+        else:
+            # If current result is passing and existing is not, replace
+            existing = best_results[key]
+            if result.is_passing and not existing.is_passing:
+                best_results[key] = result
+    
+    formal_results = list(best_results.values())
     
     if level.structure_type == 'modules':
         # For module-based levels, formal candidates just need Theory + Practical passed
@@ -194,12 +218,42 @@ class AwardsViewSet(viewsets.ViewSet):
             if not qualifies:
                 return None
             
-            formal_results_list = list(candidate.formal_results.all())
-            if formal_results_list:
-                if formal_results_list[0].level:
-                    award = formal_results_list[0].level.award or ""
-                if formal_results_list[0].assessment_series:
-                    completion_year = formal_results_list[0].assessment_series.completion_year or formal_results_list[0].assessment_series.name or ""
+            # Get best results per paper/exam type to determine completion date
+            all_results = list(candidate.formal_results.select_related(
+                'assessment_series', 'paper', 'exam', 'level'
+            ).order_by('-assessment_series__start_date'))
+            
+            if all_results:
+                first_result = all_results[0]
+                is_paper_based = first_result.paper is not None
+                
+                # Get best result per paper/exam and type
+                best_results = {}
+                for result in all_results:
+                    if is_paper_based:
+                        key = (result.paper_id, result.type)
+                    else:
+                        key = (result.exam_id, result.type)
+                    
+                    if key not in best_results:
+                        best_results[key] = result
+                    else:
+                        existing = best_results[key]
+                        if result.is_passing and not existing.is_passing:
+                            best_results[key] = result
+                
+                # Get the most recent series from best results (completion date)
+                latest_series = None
+                for result in best_results.values():
+                    if result.assessment_series:
+                        if latest_series is None or (result.assessment_series.start_date and 
+                            (latest_series.start_date is None or result.assessment_series.start_date > latest_series.start_date)):
+                            latest_series = result.assessment_series
+                
+                if first_result.level:
+                    award = first_result.level.award or ""
+                if latest_series:
+                    completion_year = latest_series.completion_year or latest_series.name or ""
 
         return {
             'id': candidate.id,

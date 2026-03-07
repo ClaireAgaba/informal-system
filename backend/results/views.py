@@ -476,14 +476,34 @@ class ModularResultViewSet(viewsets.ViewSet):
         
         if is_formal:
             # Get formal results
-            formal_results = FormalResult.objects.filter(candidate=candidate).select_related(
+            all_formal_results = FormalResult.objects.filter(candidate=candidate).select_related(
                 'exam', 'exam__level', 'paper', 'paper__level', 'assessment_series'
-            )
+            ).order_by('-assessment_series__start_date')  # Most recent first
             
-            if formal_results.exists():
+            if all_formal_results.exists():
                 # Determine if module-based or paper-based
-                first_result = formal_results.first()
+                first_result = all_formal_results.first()
                 is_paper_based = first_result.paper is not None
+                
+                # Get best result per paper/exam and type (successful overrides failed)
+                # Group by (paper_id or exam_id, type) and keep the best result
+                best_results = {}
+                for result in all_formal_results:
+                    if is_paper_based:
+                        key = (result.paper_id, result.type)
+                    else:
+                        key = (result.exam_id, result.type)
+                    
+                    if key not in best_results:
+                        best_results[key] = result
+                    else:
+                        # If current result is passing and existing is not, replace
+                        existing = best_results[key]
+                        if result.is_passing and not existing.is_passing:
+                            best_results[key] = result
+                        # If both passing or both failing, keep most recent (already sorted by date desc)
+                
+                formal_results = list(best_results.values())
                 
                 if is_paper_based:
                     # Paper-based formal results table (Image 5 format)
