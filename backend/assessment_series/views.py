@@ -259,15 +259,15 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
             ('Amount Billed', 18),
         ]
         
-        # Headers for workers_pas enrollments detail sheet (per module/paper)
+        # Headers for workers_pas enrollments detail sheet (per paper)
         workers_pas_detail_headers = [
             ('Center Code', 15),
             ('Center Name', 40),
             ('Occ Code', 12),
             ('Occ Name', 30),
             ('Level', 15),
-            ('Module Code', 15),
-            ('Module Name', 35),
+            ('Paper Code', 15),
+            ('Paper Name', 35),
             ('Reg Category', 15),
             ('No of Candidates', 18),
         ]
@@ -328,13 +328,15 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
                 workers_pas_data[key]['count'] += 1
                 workers_pas_data[key]['amount'] += amount
                 
-                # Track per-module details for workers_pas detail sheet
-                level_name = enrollment.occupation_level.level_name if enrollment.occupation_level else 'N/A'
-                modules = enrollment.modules.all()
-                for m in modules:
-                    module_code = m.module.module_code if m.module else 'N/A'
-                    module_name = m.module.module_name if m.module else 'N/A'
-                    detail_key = (center_code, center_name, occ_code, occ_name, level_name, module_code, module_name)
+                # Track per-paper details for workers_pas detail sheet (Workers PAS uses papers, not modules)
+                papers = enrollment.papers.all()
+                for p in papers:
+                    paper = p.paper
+                    # Get level from paper's module's level
+                    level_name = paper.module.level.level_name if paper and paper.module and paper.module.level else 'N/A'
+                    paper_code = paper.paper_code if paper else 'N/A'
+                    paper_name = paper.paper_name if paper else 'N/A'
+                    detail_key = (center_code, center_name, occ_code, occ_name, level_name, paper_code, paper_name)
                     workers_pas_detail_data[detail_key] += 1
         
         # Helper function to get level prefix (e.g., "Level 1 CK" -> "Level 1")
@@ -417,18 +419,18 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
                 ws.cell(row=row, column=7, value=float(data['amount']))
                 row += 1
         
-        # Create Workers PAS Enrollments detail sheet (per module breakdown with level)
+        # Create Workers PAS Enrollments detail sheet (per paper breakdown with level)
         if workers_pas_detail_data:
             ws = create_sheet_with_headers(wb, 'Workers PAS Enrollments', workers_pas_detail_headers)
             row = 2
-            for (center_code, center_name, occ_code, occ_name, level, module_code, module_name), count in sorted(workers_pas_detail_data.items()):
+            for (center_code, center_name, occ_code, occ_name, level, paper_code, paper_name), count in sorted(workers_pas_detail_data.items()):
                 ws.cell(row=row, column=1, value=center_code)
                 ws.cell(row=row, column=2, value=center_name)
                 ws.cell(row=row, column=3, value=occ_code)
                 ws.cell(row=row, column=4, value=occ_name)
                 ws.cell(row=row, column=5, value=level)
-                ws.cell(row=row, column=6, value=module_code)
-                ws.cell(row=row, column=7, value=module_name)
+                ws.cell(row=row, column=6, value=paper_code)
+                ws.cell(row=row, column=7, value=paper_name)
                 ws.cell(row=row, column=8, value="Worker's PAS")
                 ws.cell(row=row, column=9, value=count)
                 row += 1
