@@ -180,6 +180,11 @@ export const candidateApi = {
     return apiClient.get(`/results/formal/list/?${params.toString()}`);
   },
 
+  // Get failed papers for retake filtering
+  getFailedPapers: (candidateId, levelId) => {
+    return apiClient.get(`/results/formal/failed-papers/?candidate_id=${candidateId}&level_id=${levelId}`);
+  },
+
   // Export candidates to Excel
   export: (data) => {
     return apiClient.post(`${CANDIDATES_BASE}/export/`, data, {

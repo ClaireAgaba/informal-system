@@ -1356,6 +1356,69 @@ class FormalResultViewSet(viewsets.ViewSet):
     """
     permission_classes = [AllowAny]  # Temporarily allow all to test
     
+    @action(detail=False, methods=['get'], url_path='failed-papers')
+    def failed_papers(self, request):
+        """Get failed papers/exams for a candidate in a given level (for retake filtering)"""
+        candidate_id = request.query_params.get('candidate_id')
+        level_id = request.query_params.get('level_id')
+        
+        if not candidate_id or not level_id:
+            return Response(
+                {'error': 'candidate_id and level_id are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            candidate = Candidate.objects.get(id=candidate_id)
+            level = OccupationLevel.objects.get(id=level_id)
+        except (Candidate.DoesNotExist, OccupationLevel.DoesNotExist):
+            return Response(
+                {'error': 'Candidate or level not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Get all results for this candidate in this level
+        results = FormalResult.objects.filter(
+            candidate=candidate,
+            level=level
+        ).select_related('paper', 'exam')
+        
+        # Find failed papers/exams
+        failed_items = []
+        for result in results:
+            if not result.is_passing:
+                if result.paper:
+                    failed_items.append({
+                        'type': 'paper',
+                        'id': result.paper_id,
+                        'paper_id': result.paper_id,
+                        'code': result.paper.paper_code,
+                        'name': result.paper.paper_name,
+                        'result_type': result.type,
+                        'mark': float(result.mark) if result.mark else None,
+                        'grade': result.grade,
+                    })
+                elif result.exam:
+                    failed_items.append({
+                        'type': 'exam',
+                        'id': result.exam_id,
+                        'exam_id': result.exam_id,
+                        'code': result.exam.module_code,
+                        'name': result.exam.module_name,
+                        'result_type': result.type,
+                        'mark': float(result.mark) if result.mark else None,
+                        'grade': result.grade,
+                    })
+        
+        # Check if there are any failed items (is_retake)
+        is_retake = len(failed_items) > 0
+        
+        return Response({
+            'is_retake': is_retake,
+            'failed_items': failed_items,
+            'structure_type': level.structure_type,
+        })
+    
     @action(detail=False, methods=['post'], url_path='add')
     def add_results(self, request):
         """Add formal results for a candidate"""
@@ -1434,6 +1497,13 @@ class FormalResultViewSet(viewsets.ViewSet):
         created_count = 0
         updated_count = 0
         
+        # Check if this is a retake enrollment (candidate has previous failed results in this level)
+        previous_results = FormalResult.objects.filter(
+            candidate=candidate,
+            level=level
+        )
+        is_retake_enrollment = any(not r.is_passing for r in previous_results)
+        
         if structure_type == 'modules':
             # Module-based: Get the first exam for this level if not provided
             for result_data in results_data:
@@ -1454,10 +1524,17 @@ class FormalResultViewSet(viewsets.ViewSet):
                 try:
                     exam = OccupationModule.objects.get(id=exam_id)
                     
+                    # Check if this specific exam/type was previously failed (for retake status)
+                    is_retake = False
+                    if is_retake_enrollment:
+                        prev_result = previous_results.filter(exam=exam, type=result_type).first()
+                        if prev_result and not prev_result.is_passing:
+                            is_retake = True
+                    
                     # Create or update result
                     defaults_data = {
                         'mark': mark,
-                        'status': 'normal',
+                        'status': 'retake' if is_retake else 'normal',
                     }
                     
                     if request.user and request.user.is_authenticated:
@@ -1507,10 +1584,17 @@ class FormalResultViewSet(viewsets.ViewSet):
                 try:
                     paper = OccupationPaper.objects.get(id=paper_id)
                     
+                    # Check if this specific paper/type was previously failed (for retake status)
+                    is_retake = False
+                    if is_retake_enrollment:
+                        prev_result = previous_results.filter(paper=paper, type=result_type).first()
+                        if prev_result and not prev_result.is_passing:
+                            is_retake = True
+                    
                     # Create or update result
                     defaults_data = {
                         'mark': mark,
-                        'status': 'normal',
+                        'status': 'retake' if is_retake else 'normal',
                     }
                     
                     if request.user and request.user.is_authenticated:

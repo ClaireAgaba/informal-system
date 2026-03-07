@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { X, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import candidateApi from '../services/candidateApi';
 import Button from '@shared/components/Button';
 
@@ -11,6 +11,8 @@ const FormalAddResultsModal = ({ isOpen, onClose, candidateId, enrollments }) =>
   const [structureType, setStructureType] = useState('');
   const [results, setResults] = useState([]);
   const [error, setError] = useState('');
+  const [isRetake, setIsRetake] = useState(false);
+  const [failedItems, setFailedItems] = useState([]);
 
   // Debug and extract enrollment data
   console.log('Enrollments in modal:', enrollments);
@@ -47,15 +49,48 @@ const FormalAddResultsModal = ({ isOpen, onClose, candidateId, enrollments }) =>
     }
   }, [enrollment, selectedSeries, seriesId, levelId, structureTypeFromEnrollment]);
 
-  // Get exams/papers from enrollment
-  const items = structureType === 'modules' 
+  // Fetch failed papers to check if this is a retake enrollment
+  useEffect(() => {
+    const fetchFailedPapers = async () => {
+      if (candidateId && levelId) {
+        try {
+          const response = await candidateApi.getFailedPapers(candidateId, levelId);
+          const data = response.data;
+          setIsRetake(data.is_retake);
+          setFailedItems(data.failed_items || []);
+          console.log('Retake info:', data);
+        } catch (error) {
+          console.error('Error fetching failed papers:', error);
+          setIsRetake(false);
+          setFailedItems([]);
+        }
+      }
+    };
+    fetchFailedPapers();
+  }, [candidateId, levelId]);
+
+  // Get exams/papers from enrollment - filter to only failed items for retake
+  const allItems = structureType === 'modules' 
     ? enrollment?.modules || []
     : enrollment?.papers || [];
   
+  // If this is a retake, filter to only show failed items
+  const items = isRetake 
+    ? allItems.filter(item => {
+        // For papers, check if paper_id matches any failed item
+        if (structureType === 'papers') {
+          return failedItems.some(f => f.paper_id === item.paper);
+        }
+        // For modules/exams, check if exam_id matches
+        return failedItems.some(f => f.exam_id === item.module);
+      })
+    : allItems;
+  
   console.log('Structure type:', structureType);
-  console.log('Items (papers/modules):', items);
-  console.log('Enrollment papers:', enrollment?.papers);
-  console.log('Enrollment modules:', enrollment?.modules);
+  console.log('All items:', allItems);
+  console.log('Filtered items (for retake):', items);
+  console.log('Is retake:', isRetake);
+  console.log('Failed items:', failedItems);
 
   // Add mutation
   const addMutation = useMutation({
@@ -201,6 +236,29 @@ const FormalAddResultsModal = ({ isOpen, onClose, candidateId, enrollments }) =>
                 </div>
               </div>
             </div>
+
+            {/* Retake Warning */}
+            {isRetake && (
+              <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-md">
+                <div className="flex items-start">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 mr-3 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-800">Retake Enrollment</p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Only failed papers are available for entry. Results will be marked as "Retake".
+                    </p>
+                    <div className="mt-2">
+                      <p className="text-xs font-medium text-amber-800">Failed papers:</p>
+                      <ul className="mt-1 text-xs text-amber-700">
+                        {failedItems.map((item, idx) => (
+                          <li key={idx}>• {item.code} - {item.name} ({item.result_type}: {item.mark}%)</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Results Entry */}
             {(levelId || seriesId) && (
