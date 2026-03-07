@@ -199,6 +199,9 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
             'candidate__occupation',
             'candidate__assessment_center',
             'occupation_level'
+        ).prefetch_related(
+            'modules__module',
+            'papers__paper'
         )
 
         wb = openpyxl.Workbook()
@@ -222,8 +225,21 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
             ('Amount Billed', 18),
         ]
         
-        # Headers for modular and workers_pas sheets (no level column)
-        other_headers = [
+        # Headers for modular sheets (with module code/name)
+        modular_headers = [
+            ('Center Code', 15),
+            ('Center Name', 40),
+            ('Occ Code', 12),
+            ('Occ Name', 30),
+            ('Module Code', 15),
+            ('Module Name', 35),
+            ('Reg Category', 15),
+            ('No of Candidates', 18),
+            ('Amount Billed', 18),
+        ]
+        
+        # Headers for workers_pas sheets
+        workers_pas_headers = [
             ('Center Code', 15),
             ('Center Name', 40),
             ('Occ Code', 12),
@@ -247,7 +263,8 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
         
         # Data structures to aggregate by center/occupation
         # For formal: key = (center_code, center_name, occ_code, occ_name, level)
-        # For modular/workers_pas: key = (center_code, center_name, occ_code, occ_name)
+        # For modular: key = (center_code, center_name, occ_code, occ_name, module_code, module_name)
+        # For workers_pas: key = (center_code, center_name, occ_code, occ_name)
         formal_data = defaultdict(lambda: {'count': 0, 'amount': Decimal('0.00')})
         modular_data = defaultdict(lambda: {'count': 0, 'amount': Decimal('0.00')})
         workers_pas_data = defaultdict(lambda: {'count': 0, 'amount': Decimal('0.00')})
@@ -267,9 +284,20 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
                 formal_data[key]['count'] += 1
                 formal_data[key]['amount'] += amount
             elif c.is_modular():
-                key = (center_code, center_name, occ_code, occ_name)
-                modular_data[key]['count'] += 1
-                modular_data[key]['amount'] += amount
+                # Get modules for this enrollment
+                modules = enrollment.modules.all()
+                if modules:
+                    for m in modules:
+                        module_code = m.module.module_code if m.module else 'N/A'
+                        module_name = m.module.module_name if m.module else 'N/A'
+                        key = (center_code, center_name, occ_code, occ_name, module_code, module_name)
+                        modular_data[key]['count'] += 1
+                        modular_data[key]['amount'] += amount
+                else:
+                    # No modules assigned - count the enrollment
+                    key = (center_code, center_name, occ_code, occ_name, 'N/A', 'N/A')
+                    modular_data[key]['count'] += 1
+                    modular_data[key]['amount'] += amount
             elif c.is_workers_pas():
                 key = (center_code, center_name, occ_code, occ_name)
                 workers_pas_data[key]['count'] += 1
@@ -306,21 +334,23 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
         
         # Create Modular sheet
         if modular_data:
-            ws = create_sheet_with_headers(wb, 'Modular', other_headers)
+            ws = create_sheet_with_headers(wb, 'Modular', modular_headers)
             row = 2
-            for (center_code, center_name, occ_code, occ_name), data in sorted(modular_data.items()):
+            for (center_code, center_name, occ_code, occ_name, module_code, module_name), data in sorted(modular_data.items()):
                 ws.cell(row=row, column=1, value=center_code)
                 ws.cell(row=row, column=2, value=center_name)
                 ws.cell(row=row, column=3, value=occ_code)
                 ws.cell(row=row, column=4, value=occ_name)
-                ws.cell(row=row, column=5, value='Modular')
-                ws.cell(row=row, column=6, value=data['count'])
-                ws.cell(row=row, column=7, value=float(data['amount']))
+                ws.cell(row=row, column=5, value=module_code)
+                ws.cell(row=row, column=6, value=module_name)
+                ws.cell(row=row, column=7, value='Modular')
+                ws.cell(row=row, column=8, value=data['count'])
+                ws.cell(row=row, column=9, value=float(data['amount']))
                 row += 1
         
         # Create Workers PAS sheet
         if workers_pas_data:
-            ws = create_sheet_with_headers(wb, 'Workers PAS', other_headers)
+            ws = create_sheet_with_headers(wb, 'Workers PAS', workers_pas_headers)
             row = 2
             for (center_code, center_name, occ_code, occ_name), data in sorted(workers_pas_data.items()):
                 ws.cell(row=row, column=1, value=center_code)
