@@ -1853,63 +1853,6 @@ class MarksheetViewSet(viewsets.ViewSet):
         buffer.close()
         response.write(pdf)
         return response
-
-
-def calculate_grade(mark, grade_type='practical'):
-    """
-    Calculate grade based on mark using UVTAB grading system
-    
-    Practical grading (pass mark: 65%):
-    A+: 90-100, A: 85-89, B+: 75-84, B: 65-74, B-: 60-64, 
-    C: 55-59, C-: 50-54, D: 40-49, D-: 30-39, E: 0-29
-    
-    Theory grading (pass mark: 50%):
-    A+: 85-100, A: 80-84, B: 70-79, B-: 60-69, C: 50-59,
-    C-: 40-49, D: 30-39, E: 0-29
-    """
-    if mark is None or mark == -1:
-        return None
-    
-    if grade_type == 'practical':
-        # Practical grading
-        if mark >= 90:
-            return 'A+'
-        elif mark >= 85:
-            return 'A'
-        elif mark >= 75:
-            return 'B+'
-        elif mark >= 65:
-            return 'B'
-        elif mark >= 60:
-            return 'B-'
-        elif mark >= 55:
-            return 'C'
-        elif mark >= 50:
-            return 'C-'
-        elif mark >= 40:
-            return 'D'
-        elif mark >= 30:
-            return 'D-'
-        else:
-            return 'E'
-    else:
-        # Theory grading
-        if mark >= 85:
-            return 'A+'
-        elif mark >= 80:
-            return 'A'
-        elif mark >= 70:
-            return 'B'
-        elif mark >= 60:
-            return 'B-'
-        elif mark >= 50:
-            return 'C'
-        elif mark >= 40:
-            return 'C-'
-        elif mark >= 30:
-            return 'D'
-        else:
-            return 'E'
     
     @action(detail=False, methods=['post'], url_path='extract-marks')
     def extract_marks(self, request):
@@ -1918,7 +1861,7 @@ def calculate_grade(mark, grade_type='practical'):
         Returns an Excel file with all results data for re-enrollment purposes.
         """
         from results.models import FormalResult, WorkersPasResult
-        from centers.models import AssessmentCenter
+        from assessment_centers.models import AssessmentCenter
         from occupations.models import Occupation
         
         assessment_center_id = request.data.get('assessment_center')
@@ -2133,3 +2076,60 @@ def calculate_grade(mark, grade_type='practical'):
         
         wb.save(response)
         return response
+
+
+def calculate_grade(mark, grade_type='practical'):
+    """
+    Calculate grade based on mark using UVTAB grading system
+    
+    Practical grading (pass mark: 65%):
+    A+: 90-100, A: 85-89, B+: 75-84, B: 65-74, B-: 60-64, 
+    C: 55-59, C-: 50-54, D: 40-49, D-: 30-39, E: 0-29
+    
+    Theory grading (pass mark: 50%):
+    A+: 85-100, A: 80-84, B: 70-79, B-: 60-69, C: 50-59,
+    C-: 40-49, D: 30-39, E: 0-29
+    """
+    if mark is None or mark == -1:
+        return None
+    
+    if grade_type == 'practical':
+        # Practical grading
+        if mark >= 90:
+            return 'A+'
+        elif mark >= 85:
+            return 'A'
+        elif mark >= 75:
+            return 'B+'
+        elif mark >= 65:
+            return 'B'
+        elif mark >= 60:
+            return 'B-'
+        elif mark >= 55:
+            return 'C'
+        elif mark >= 50:
+            return 'C-'
+        elif mark >= 40:
+            return 'D'
+        elif mark >= 30:
+            return 'D-'
+        else:
+            return 'E'
+    else:
+        # Theory grading
+        if mark >= 85:
+            return 'A+'
+        elif mark >= 80:
+            return 'A'
+        elif mark >= 70:
+            return 'B'
+        elif mark >= 60:
+            return 'B-'
+        elif mark >= 50:
+            return 'C'
+        elif mark >= 40:
+            return 'C-'
+        elif mark >= 30:
+            return 'D'
+        else:
+            return 'E'
