@@ -2391,22 +2391,41 @@ def bulk_clear_candidate_data(request):
             continue
         
         # Delete all modular results
+        modular_count = ModularResult.objects.filter(candidate=candidate).count()
         modular_deleted = ModularResult.objects.filter(candidate=candidate).delete()
         total_cleared['modular_results'] += modular_deleted[0] if modular_deleted else 0
         
         # Delete all formal results
+        formal_count = FormalResult.objects.filter(candidate=candidate).count()
         formal_deleted = FormalResult.objects.filter(candidate=candidate).delete()
         total_cleared['formal_results'] += formal_deleted[0] if formal_deleted else 0
         
         # Delete all workers PAS results
+        workers_count = WorkersPasResult.objects.filter(candidate=candidate).count()
         workers_deleted = WorkersPasResult.objects.filter(candidate=candidate).delete()
         total_cleared['workers_pas_results'] += workers_deleted[0] if workers_deleted else 0
         
         # Delete all enrollments
+        enrollment_count = CandidateEnrollment.objects.filter(candidate=candidate).count()
         enrollments_deleted = CandidateEnrollment.objects.filter(candidate=candidate).delete()
         total_cleared['enrollments'] += enrollments_deleted[0] if enrollments_deleted else 0
         
         total_cleared['candidates_processed'] += 1
+        
+        # Log activity for the bulk clear
+        actor = request.user if request.user and request.user.is_authenticated else None
+        CandidateActivity.objects.create(
+            candidate=candidate,
+            actor=actor,
+            action='bulk_data_cleared',
+            description='All results and enrollments cleared via bulk action',
+            details={
+                'modular_results_deleted': modular_count,
+                'formal_results_deleted': formal_count,
+                'workers_pas_results_deleted': workers_count,
+                'enrollments_deleted': enrollment_count
+            }
+        )
     
     return Response({
         'message': f'Successfully cleared data for {total_cleared["candidates_processed"]} candidate(s)',

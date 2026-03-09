@@ -16,7 +16,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
 from io import BytesIO
 
-from candidates.models import EnrollmentModule, Candidate, CandidateEnrollment, EnrollmentPaper
+from candidates.models import EnrollmentModule, Candidate, CandidateEnrollment, EnrollmentPaper, CandidateActivity
 from occupations.models import OccupationModule, OccupationLevel, OccupationPaper
 from assessment_series.models import AssessmentSeries
 from results.models import ModularResult
@@ -528,17 +528,39 @@ class MarksheetViewSet(viewsets.ViewSet):
                     continue
                 
                 # Create or update result
+                defaults_data = {
+                    'mark': practical_mark,
+                    'status': 'normal'
+                }
+                # Add entered_by if user is authenticated
+                if request.user and request.user.is_authenticated:
+                    defaults_data['entered_by'] = request.user
+                
                 result, created = ModularResult.objects.update_or_create(
                     candidate=candidate,
                     assessment_series=assessment_series,
                     module=module,
                     type='practical',  # Modular is practical
-                    defaults={
-                        'mark': practical_mark,
-                        'status': 'normal'
-                    }
+                    defaults=defaults_data
                 )
                 updated_count += 1
+                
+                # Log activity for this candidate
+                actor = request.user if request.user and request.user.is_authenticated else None
+                CandidateActivity.objects.create(
+                    candidate=candidate,
+                    actor=actor,
+                    action='modular_marks_uploaded',
+                    description=f'Marks uploaded via Excel for module {module.module_code}',
+                    details={
+                        'module_id': module.id,
+                        'module_code': module.module_code,
+                        'assessment_series_id': assessment_series.id,
+                        'assessment_series_name': assessment_series.name,
+                        'mark': float(practical_mark),
+                        'upload_method': 'excel'
+                    }
+                )
         
         # Prepare response
         response_data = {
@@ -665,17 +687,24 @@ class MarksheetViewSet(viewsets.ViewSet):
                             if theory_mark < 0 or theory_mark > 100:
                                 errors.append(f'Row {row_num}: Invalid theory mark {theory_mark}. Must be between 0 and 100')
                             else:
+                                defaults_data = {'mark': theory_mark, 'status': 'normal'}
+                                if request.user and request.user.is_authenticated:
+                                    defaults_data['entered_by'] = request.user
                                 FormalResult.objects.update_or_create(
                                     candidate=candidate,
                                     assessment_series=assessment_series,
                                     level=level,
                                     type='theory',
-                                    defaults={
-                                        'mark': theory_mark,
-                                        'status': 'normal'
-                                    }
+                                    defaults=defaults_data
                                 )
                                 updated_count += 1
+                                # Log activity
+                                actor = request.user if request.user and request.user.is_authenticated else None
+                                CandidateActivity.objects.create(
+                                    candidate=candidate, actor=actor, action='formal_marks_uploaded',
+                                    description=f'Theory marks uploaded via Excel for level {level.level_name}',
+                                    details={'level_id': level.id, 'type': 'theory', 'mark': theory_mark, 'upload_method': 'excel'}
+                                )
                         except (ValueError, TypeError):
                             errors.append(f'Row {row_num}: Invalid theory mark value "{theory_mark}"')
                     
@@ -686,17 +715,24 @@ class MarksheetViewSet(viewsets.ViewSet):
                             if practical_mark < 0 or practical_mark > 100:
                                 errors.append(f'Row {row_num}: Invalid practical mark {practical_mark}. Must be between 0 and 100')
                             else:
+                                defaults_data = {'mark': practical_mark, 'status': 'normal'}
+                                if request.user and request.user.is_authenticated:
+                                    defaults_data['entered_by'] = request.user
                                 FormalResult.objects.update_or_create(
                                     candidate=candidate,
                                     assessment_series=assessment_series,
                                     level=level,
                                     type='practical',
-                                    defaults={
-                                        'mark': practical_mark,
-                                        'status': 'normal'
-                                    }
+                                    defaults=defaults_data
                                 )
                                 updated_count += 1
+                                # Log activity
+                                actor = request.user if request.user and request.user.is_authenticated else None
+                                CandidateActivity.objects.create(
+                                    candidate=candidate, actor=actor, action='formal_marks_uploaded',
+                                    description=f'Practical marks uploaded via Excel for level {level.level_name}',
+                                    details={'level_id': level.id, 'type': 'practical', 'mark': practical_mark, 'upload_method': 'excel'}
+                                )
                         except (ValueError, TypeError):
                             errors.append(f'Row {row_num}: Invalid practical mark value "{practical_mark}"')
         
@@ -778,16 +814,16 @@ class MarksheetViewSet(viewsets.ViewSet):
                                 errors.append(f'Row {row_num}: Invalid mark {mark} for paper {paper.paper_code}. Must be between 0 and 100')
                                 continue
                             
+                            defaults_data = {'mark': mark, 'status': 'normal'}
+                            if request.user and request.user.is_authenticated:
+                                defaults_data['entered_by'] = request.user
                             FormalResult.objects.update_or_create(
                                 candidate=candidate,
                                 assessment_series=assessment_series,
                                 level=level,
                                 paper=paper,
-                                type=paper.paper_type,  # Use the paper's actual type (theory/practical)
-                                defaults={
-                                    'mark': mark,
-                                    'status': 'normal'
-                                }
+                                type=paper.paper_type,
+                                defaults=defaults_data
                             )
                             row_updated = True
                         except (ValueError, TypeError):
@@ -795,6 +831,13 @@ class MarksheetViewSet(viewsets.ViewSet):
                     
                     if row_updated:
                         updated_count += 1
+                        # Log activity for paper-based upload
+                        actor = request.user if request.user and request.user.is_authenticated else None
+                        CandidateActivity.objects.create(
+                            candidate=candidate, actor=actor, action='formal_marks_uploaded',
+                            description=f'Marks uploaded via Excel for level {level.level_name}',
+                            details={'level_id': level.id, 'upload_method': 'excel'}
+                        )
         
         # Prepare response
         response_data = {
@@ -955,16 +998,16 @@ class MarksheetViewSet(viewsets.ViewSet):
                             errors.append(f'Row {row_num}: Paper {paper.paper_code} has no associated module')
                             continue
                         
+                        defaults_data = {'mark': mark, 'status': 'normal'}
+                        if request.user and request.user.is_authenticated:
+                            defaults_data['entered_by'] = request.user
                         WorkersPasResult.objects.update_or_create(
                             candidate=candidate,
                             assessment_series=assessment_series,
                             level=level,
                             module=module,
                             paper=paper,
-                            defaults={
-                                'mark': mark,
-                                'status': 'normal'
-                            }
+                            defaults=defaults_data
                         )
                         row_updated = True
                     except (ValueError, TypeError):
@@ -972,6 +1015,13 @@ class MarksheetViewSet(viewsets.ViewSet):
                 
                 if row_updated:
                     updated_count += 1
+                    # Log activity
+                    actor = request.user if request.user and request.user.is_authenticated else None
+                    CandidateActivity.objects.create(
+                        candidate=candidate, actor=actor, action='workers_pas_marks_uploaded',
+                        description=f'Marks uploaded via Excel for level {level.level_name}',
+                        details={'level_id': level.id, 'upload_method': 'excel'}
+                    )
                 elif not any(f'Row {row_num}:' in err for err in errors):
                     skipped_count += 1
         
