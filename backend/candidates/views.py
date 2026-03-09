@@ -2338,8 +2338,7 @@ def bulk_clear_candidate_data(request):
             search = filters['search']
             candidates = candidates.filter(
                 Q(full_name__icontains=search) |
-                Q(registration_number__icontains=search) |
-                Q(nin__icontains=search)
+                Q(registration_number__icontains=search)
             )
         if filters.get('registration_category'):
             candidates = candidates.filter(registration_category=filters['registration_category'])
