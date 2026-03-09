@@ -855,58 +855,27 @@ class CandidateViewSet(viewsets.ModelViewSet):
         }
         
         if reg_category == 'formal':
-            # Formal: show only eligible levels based on candidate's progress
-            # Logic: 
-            # - If candidate has never enrolled, show only Level 1
-            # - If candidate has failed papers in a level, only show that level (retake)
-            # - If candidate passed all papers in a level, show next level
-            
+            # Formal: show all active levels, with retake info if applicable
             all_levels = list(occupation.levels.filter(is_active=True).order_by('level_name'))
             levels_data = []
             
-            # Determine highest completed level and current level status
-            highest_completed_level_idx = -1  # -1 means no level completed yet
-            current_level_with_failures = None
-            
-            for idx, level in enumerate(all_levels):
+            for level in all_levels:
                 # Get all results for this candidate in this level
                 level_results = FormalResult.objects.filter(
                     candidate=candidate,
                     level=level
                 ).select_related('paper', 'exam')
                 
-                if not level_results.exists():
-                    # No results in this level yet
-                    continue
-                
-                # Check if all papers passed or some failed
-                all_passed = all(r.is_passing for r in level_results)
-                has_failures = any(not r.is_passing for r in level_results)
-                
-                if all_passed:
-                    highest_completed_level_idx = idx
-                elif has_failures:
-                    current_level_with_failures = level
-                    break  # Stop here, they need to retake this level
-            
-            # Now build the eligible levels list
-            for idx, level in enumerate(all_levels):
-                # Get results for this level
-                level_results = FormalResult.objects.filter(
-                    candidate=candidate,
-                    level=level
-                ).select_related('paper', 'exam')
-                
-                # Determine eligibility
-                is_eligible = False
+                # Check if candidate has failed papers (needs retake)
                 is_retaker = False
                 failed_papers = []
                 all_passed = False
                 
-                if current_level_with_failures:
-                    # Candidate has failures - only show that level as retake
-                    if level == current_level_with_failures:
-                        is_eligible = True
+                if level_results.exists():
+                    all_passed = all(r.is_passing for r in level_results)
+                    has_failures = any(not r.is_passing for r in level_results)
+                    
+                    if has_failures:
                         is_retaker = True
                         # Collect failed papers
                         for result in level_results:
@@ -929,16 +898,6 @@ class CandidateViewSet(viewsets.ModelViewSet):
                                         'mark': float(result.mark) if result.mark else None,
                                         'grade': result.grade,
                                     })
-                else:
-                    # No current failures - check if this is the next eligible level
-                    if idx == highest_completed_level_idx + 1:
-                        is_eligible = True
-                        # Check if they have results in this level
-                        if level_results.exists():
-                            all_passed = all(r.is_passing for r in level_results)
-                
-                if not is_eligible:
-                    continue
                 
                 level_data = {
                     'id': level.id,
