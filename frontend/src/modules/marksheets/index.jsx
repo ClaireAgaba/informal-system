@@ -4,6 +4,7 @@ import GenerateMarksheets from './pages/GenerateMarksheets';
 import UploadMarksheets from './pages/UploadMarksheets';
 import PrintMarksheets from './pages/PrintMarksheets';
 import ExportResults from './pages/ExportResults';
+import ExtractMarks from './pages/ExtractMarks';
 
 export default function MarksheetsModule() {
   return (
@@ -13,6 +14,7 @@ export default function MarksheetsModule() {
       <Route path="upload" element={<UploadMarksheets />} />
       <Route path="print" element={<PrintMarksheets />} />
       <Route path="export" element={<ExportResults />} />
+      <Route path="extract" element={<ExtractMarks />} />
     </Routes>
   );
 }

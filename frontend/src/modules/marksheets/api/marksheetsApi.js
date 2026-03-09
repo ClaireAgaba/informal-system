@@ -54,6 +54,12 @@ const marksheetsApi = {
       responseType: 'blob'
     });
   },
+
+  extractMarks: (data) => {
+    return apiClient.post('/results/marksheets/extract-marks/', data, {
+      responseType: 'blob'
+    });
+  },
 };
 
 export default marksheetsApi;

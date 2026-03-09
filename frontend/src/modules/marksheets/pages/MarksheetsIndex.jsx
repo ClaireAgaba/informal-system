@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { FileSpreadsheet, Upload, Printer, FileDown, ChevronRight } from 'lucide-react';
+import { FileSpreadsheet, Upload, Printer, FileDown, ChevronRight, FileSearch } from 'lucide-react';
 
 export default function MarksheetsIndex() {
   const submodules = [
@@ -30,6 +30,13 @@ export default function MarksheetsIndex() {
       icon: FileDown,
       path: '/marksheets/export',
       color: 'green',
+    },
+    {
+      name: 'Extract Marks',
+      description: 'Extract existing marks for re-enrollment',
+      icon: FileSearch,
+      path: '/marksheets/extract',
+      color: 'orange',
     },
   ];
 
