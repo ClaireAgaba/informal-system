@@ -2349,8 +2349,9 @@ def bulk_clear_candidate_data(request):
             candidates = candidates.filter(occupation_id=filters['occupation'])
         if filters.get('entry_year'):
             candidates = candidates.filter(entry_year=filters['entry_year'])
-        if filters.get('assessment_intake'):
-            candidates = candidates.filter(assessment_intake=filters['assessment_intake'])
+        if filters.get('intake') or filters.get('assessment_intake'):
+            intake_value = filters.get('intake') or filters.get('assessment_intake')
+            candidates = candidates.filter(assessment_intake=intake_value)
         if filters.get('is_enrolled'):
             if filters['is_enrolled'] == 'yes':
                 candidates = candidates.filter(candidateenrollment__isnull=False).distinct()
