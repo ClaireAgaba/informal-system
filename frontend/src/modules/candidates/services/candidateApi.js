@@ -211,8 +211,8 @@ export const candidateApi = {
   },
 
   // Bulk clear all results, enrollments, and fees for multiple candidates
-  bulkClearData: (candidateIds) => {
-    return apiClient.post(`${CANDIDATES_BASE}/bulk-clear-data/`, { candidate_ids: candidateIds });
+  bulkClearData: (payload) => {
+    return apiClient.post(`${CANDIDATES_BASE}/bulk-clear-data/`, payload);
   },
 
   // Change assessment series for a candidate

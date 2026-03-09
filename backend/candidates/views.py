@@ -2323,15 +2323,48 @@ def bulk_clear_candidate_data(request):
         return Response({'error': 'Permission denied. Center representatives cannot perform this action.'}, status=status.HTTP_403_FORBIDDEN)
 
     candidate_ids = request.data.get('candidate_ids', [])
+    select_all = request.data.get('select_all', False)
+    filters = request.data.get('filters', {})
     
-    if not candidate_ids:
+    from results.models import ModularResult, FormalResult, WorkersPasResult
+    from fees.models import CandidateFee
+    
+    # Build queryset based on select_all or candidate_ids
+    if select_all:
+        candidates = Candidate.objects.all()
+        
+        # Apply filters
+        if filters.get('search'):
+            search = filters['search']
+            candidates = candidates.filter(
+                Q(full_name__icontains=search) |
+                Q(registration_number__icontains=search) |
+                Q(nin__icontains=search)
+            )
+        if filters.get('registration_category'):
+            candidates = candidates.filter(registration_category=filters['registration_category'])
+        if filters.get('assessment_center'):
+            candidates = candidates.filter(assessment_center_id=filters['assessment_center'])
+        if filters.get('occupation'):
+            candidates = candidates.filter(occupation_id=filters['occupation'])
+        if filters.get('entry_year'):
+            candidates = candidates.filter(entry_year=filters['entry_year'])
+        if filters.get('assessment_intake'):
+            candidates = candidates.filter(assessment_intake=filters['assessment_intake'])
+        if filters.get('is_enrolled'):
+            if filters['is_enrolled'] == 'yes':
+                candidates = candidates.filter(candidateenrollment__isnull=False).distinct()
+            elif filters['is_enrolled'] == 'no':
+                candidates = candidates.filter(candidateenrollment__isnull=True)
+        if filters.get('status'):
+            candidates = candidates.filter(status=filters['status'])
+    elif candidate_ids:
+        candidates = Candidate.objects.filter(id__in=candidate_ids)
+    else:
         return Response(
             {'error': 'No candidates selected'},
             status=status.HTTP_400_BAD_REQUEST
         )
-    
-    from results.models import ModularResult, FormalResult, WorkersPasResult
-    from fees.models import CandidateFee
     
     total_cleared = {
         'modular_results': 0,
@@ -2341,8 +2374,6 @@ def bulk_clear_candidate_data(request):
         'candidates_processed': 0,
     }
     skipped = []
-    
-    candidates = Candidate.objects.filter(id__in=candidate_ids)
     
     for candidate in candidates:
         # Block if candidate has marked/approved fees

@@ -276,20 +276,24 @@ const CandidateList = () => {
 
   // Handle bulk clear data (results, enrollments, fees)
   const handleBulkClearData = async () => {
-    if (selectedCandidates.length === 0) {
+    if (selectedCandidates.length === 0 && !selectAllPages) {
       alert('Please select candidates to clear data');
       return;
     }
 
+    const count = selectAllPages ? totalCount : selectedCandidates.length;
     const confirmed = window.confirm(
-      `Are you sure you want to clear ALL results, enrollments, and fees for ${selectedCandidates.length} candidate(s)? This action cannot be undone.`
+      `Are you sure you want to clear ALL results, enrollments, and fees for ${count} candidate(s)? This action cannot be undone.`
     );
 
     if (!confirmed) return;
 
     try {
       setClearing(true);
-      const response = await candidateApi.bulkClearData(selectedCandidates);
+      const payload = selectAllPages
+        ? { select_all: true, filters: { ...filters, search: searchQuery } }
+        : { candidate_ids: selectedCandidates };
+      const response = await candidateApi.bulkClearData(payload);
       const { cleared } = response.data;
 
       const totalResults = cleared.modular_results + cleared.formal_results + cleared.workers_pas_results;
