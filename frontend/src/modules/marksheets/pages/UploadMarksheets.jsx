@@ -153,16 +153,26 @@ export default function UploadMarksheets() {
       setUploadResult(response.data);
       queryClient.invalidateQueries(['modular-results']);
       queryClient.invalidateQueries(['formal-results']);
-      // Reset form
-      setFormData({
-        assessment_series: '',
-        registration_category: '',
-        occupation: '',
-        module: '',
-        level: '',
-        assessment_center: '',
-      });
-      setSelectedFile(null);
+      
+      // Only reset form if upload was fully successful (no errors)
+      // If there are errors, keep form state so user can fix Excel and re-upload
+      const hasErrors = response.data.errors && response.data.errors.length > 0;
+      const hasUpdates = response.data.updated_count > 0;
+      
+      if (!hasErrors && hasUpdates) {
+        setFormData({
+          assessment_series: '',
+          registration_category: '',
+          occupation: '',
+          module: '',
+          level: '',
+          assessment_center: '',
+        });
+        setSelectedFile(null);
+      } else {
+        // Clear only the file so user can select a new one
+        setSelectedFile(null);
+      }
     },
     onError: (err) => {
       // Check if the error response has detailed error information
