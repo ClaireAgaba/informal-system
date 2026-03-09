@@ -123,6 +123,7 @@ const CandidateView = () => {
     onSuccess: () => {
       queryClient.invalidateQueries(['candidate-enrollments', id]);
       queryClient.invalidateQueries(['candidate', id]);
+      queryClient.invalidateQueries(['candidate-fees-for', candidate?.id]);
       toast.success('Candidate de-enrolled successfully!');
     },
     onError: (error) => {
