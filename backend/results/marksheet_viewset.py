@@ -1909,7 +1909,7 @@ class MarksheetViewSet(viewsets.ViewSet):
         if registration_category == 'modular':
             # Modular: One row per module result
             headers = ['SN', 'REGISTRATION NO.', 'FULL NAME', 'OCCUPATION CODE',
-                      'ASSESSMENT SERIES', 'MODULE CODE', 'MODULE NAME', 'TYPE', 'MARK', 'GRADE', 'STATUS']
+                      'ENROLLMENT SERIES', 'RESULTS SERIES', 'MODULE CODE', 'MODULE NAME', 'TYPE', 'MARK', 'GRADE', 'STATUS']
             
             # Write headers
             for col_num, header in enumerate(headers, 1):
@@ -1922,6 +1922,11 @@ class MarksheetViewSet(viewsets.ViewSet):
             # Write data rows
             row_num = 2
             for candidate in candidates:
+                # Get enrollment series for this candidate
+                enrollments = CandidateEnrollment.objects.filter(candidate=candidate).select_related('assessment_series')
+                enrollment_series_list = [e.assessment_series.name for e in enrollments if e.assessment_series]
+                enrollment_series_str = ', '.join(enrollment_series_list) if enrollment_series_list else ''
+                
                 results = ModularResult.objects.filter(candidate=candidate).select_related(
                     'assessment_series', 'module'
                 ).order_by('assessment_series__name', 'module__module_code')
@@ -1931,13 +1936,14 @@ class MarksheetViewSet(viewsets.ViewSet):
                     ws.cell(row=row_num, column=2, value=candidate.registration_number)
                     ws.cell(row=row_num, column=3, value=candidate.full_name)
                     ws.cell(row=row_num, column=4, value=occupation.occ_code)
-                    ws.cell(row=row_num, column=5, value=result.assessment_series.name if result.assessment_series else '')
-                    ws.cell(row=row_num, column=6, value=result.module.module_code if result.module else '')
-                    ws.cell(row=row_num, column=7, value=result.module.module_name if result.module else '')
-                    ws.cell(row=row_num, column=8, value=result.type)
-                    ws.cell(row=row_num, column=9, value=float(result.mark) if result.mark is not None else '')
-                    ws.cell(row=row_num, column=10, value=result.grade or '')
-                    ws.cell(row=row_num, column=11, value=result.status)
+                    ws.cell(row=row_num, column=5, value=enrollment_series_str)
+                    ws.cell(row=row_num, column=6, value=result.assessment_series.name if result.assessment_series else '')
+                    ws.cell(row=row_num, column=7, value=result.module.module_code if result.module else '')
+                    ws.cell(row=row_num, column=8, value=result.module.module_name if result.module else '')
+                    ws.cell(row=row_num, column=9, value=result.type)
+                    ws.cell(row=row_num, column=10, value=float(result.mark) if result.mark is not None else '')
+                    ws.cell(row=row_num, column=11, value=result.grade or '')
+                    ws.cell(row=row_num, column=12, value=result.status)
                     row_num += 1
             
             # Adjust column widths
@@ -1946,17 +1952,18 @@ class MarksheetViewSet(viewsets.ViewSet):
             ws.column_dimensions['C'].width = 30
             ws.column_dimensions['D'].width = 15
             ws.column_dimensions['E'].width = 22
-            ws.column_dimensions['F'].width = 15
-            ws.column_dimensions['G'].width = 35
-            ws.column_dimensions['H'].width = 12
-            ws.column_dimensions['I'].width = 10
+            ws.column_dimensions['F'].width = 22
+            ws.column_dimensions['G'].width = 15
+            ws.column_dimensions['H'].width = 35
+            ws.column_dimensions['I'].width = 12
             ws.column_dimensions['J'].width = 10
-            ws.column_dimensions['K'].width = 12
+            ws.column_dimensions['K'].width = 10
+            ws.column_dimensions['L'].width = 12
         
         elif registration_category == 'formal':
             # Formal: One row per result (exam or paper based)
             headers = ['SN', 'REGISTRATION NO.', 'FULL NAME', 'OCCUPATION CODE',
-                      'ASSESSMENT SERIES', 'LEVEL', 'EXAM/PAPER CODE', 'EXAM/PAPER NAME', 
+                      'ENROLLMENT SERIES', 'RESULTS SERIES', 'LEVEL', 'EXAM/PAPER CODE', 'EXAM/PAPER NAME', 
                       'TYPE', 'MARK', 'GRADE', 'STATUS']
             
             # Write headers
@@ -1970,6 +1977,11 @@ class MarksheetViewSet(viewsets.ViewSet):
             # Write data rows
             row_num = 2
             for candidate in candidates:
+                # Get enrollment series for this candidate
+                enrollments = CandidateEnrollment.objects.filter(candidate=candidate).select_related('assessment_series')
+                enrollment_series_list = [e.assessment_series.name for e in enrollments if e.assessment_series]
+                enrollment_series_str = ', '.join(enrollment_series_list) if enrollment_series_list else ''
+                
                 results = FormalResult.objects.filter(candidate=candidate).select_related(
                     'assessment_series', 'level', 'exam', 'paper'
                 ).order_by('assessment_series__name', 'level__level_name')
@@ -1988,14 +2000,15 @@ class MarksheetViewSet(viewsets.ViewSet):
                     ws.cell(row=row_num, column=2, value=candidate.registration_number)
                     ws.cell(row=row_num, column=3, value=candidate.full_name)
                     ws.cell(row=row_num, column=4, value=occupation.occ_code)
-                    ws.cell(row=row_num, column=5, value=result.assessment_series.name if result.assessment_series else '')
-                    ws.cell(row=row_num, column=6, value=result.level.level_name if result.level else '')
-                    ws.cell(row=row_num, column=7, value=exam_paper_code)
-                    ws.cell(row=row_num, column=8, value=exam_paper_name)
-                    ws.cell(row=row_num, column=9, value=result.type)
-                    ws.cell(row=row_num, column=10, value=float(result.mark) if result.mark is not None else '')
-                    ws.cell(row=row_num, column=11, value=result.grade or '')
-                    ws.cell(row=row_num, column=12, value=result.status)
+                    ws.cell(row=row_num, column=5, value=enrollment_series_str)
+                    ws.cell(row=row_num, column=6, value=result.assessment_series.name if result.assessment_series else '')
+                    ws.cell(row=row_num, column=7, value=result.level.level_name if result.level else '')
+                    ws.cell(row=row_num, column=8, value=exam_paper_code)
+                    ws.cell(row=row_num, column=9, value=exam_paper_name)
+                    ws.cell(row=row_num, column=10, value=result.type)
+                    ws.cell(row=row_num, column=11, value=float(result.mark) if result.mark is not None else '')
+                    ws.cell(row=row_num, column=12, value=result.grade or '')
+                    ws.cell(row=row_num, column=13, value=result.status)
                     row_num += 1
             
             # Adjust column widths
@@ -2004,18 +2017,19 @@ class MarksheetViewSet(viewsets.ViewSet):
             ws.column_dimensions['C'].width = 30
             ws.column_dimensions['D'].width = 15
             ws.column_dimensions['E'].width = 22
-            ws.column_dimensions['F'].width = 18
+            ws.column_dimensions['F'].width = 22
             ws.column_dimensions['G'].width = 18
-            ws.column_dimensions['H'].width = 35
-            ws.column_dimensions['I'].width = 12
-            ws.column_dimensions['J'].width = 10
+            ws.column_dimensions['H'].width = 18
+            ws.column_dimensions['I'].width = 35
+            ws.column_dimensions['J'].width = 12
             ws.column_dimensions['K'].width = 10
-            ws.column_dimensions['L'].width = 12
+            ws.column_dimensions['L'].width = 10
+            ws.column_dimensions['M'].width = 12
         
         elif registration_category == 'workers_pas':
             # Workers PAS: One row per result
             headers = ['SN', 'REGISTRATION NO.', 'FULL NAME', 'OCCUPATION CODE',
-                      'ASSESSMENT SERIES', 'LEVEL', 'PAPER CODE', 'PAPER NAME', 
+                      'ENROLLMENT SERIES', 'RESULTS SERIES', 'LEVEL', 'PAPER CODE', 'PAPER NAME', 
                       'MARK', 'GRADE', 'STATUS']
             
             # Write headers
@@ -2029,6 +2043,11 @@ class MarksheetViewSet(viewsets.ViewSet):
             # Write data rows
             row_num = 2
             for candidate in candidates:
+                # Get enrollment series for this candidate
+                enrollments = CandidateEnrollment.objects.filter(candidate=candidate).select_related('assessment_series')
+                enrollment_series_list = [e.assessment_series.name for e in enrollments if e.assessment_series]
+                enrollment_series_str = ', '.join(enrollment_series_list) if enrollment_series_list else ''
+                
                 results = WorkersPasResult.objects.filter(candidate=candidate).select_related(
                     'assessment_series', 'paper', 'paper__level'
                 ).order_by('assessment_series__name', 'paper__paper_code')
@@ -2038,13 +2057,14 @@ class MarksheetViewSet(viewsets.ViewSet):
                     ws.cell(row=row_num, column=2, value=candidate.registration_number)
                     ws.cell(row=row_num, column=3, value=candidate.full_name)
                     ws.cell(row=row_num, column=4, value=occupation.occ_code)
-                    ws.cell(row=row_num, column=5, value=result.assessment_series.name if result.assessment_series else '')
-                    ws.cell(row=row_num, column=6, value=result.paper.level.level_name if result.paper and result.paper.level else '')
-                    ws.cell(row=row_num, column=7, value=result.paper.paper_code if result.paper else '')
-                    ws.cell(row=row_num, column=8, value=result.paper.paper_name if result.paper else '')
-                    ws.cell(row=row_num, column=9, value=float(result.mark) if result.mark is not None else '')
-                    ws.cell(row=row_num, column=10, value=result.grade or '')
-                    ws.cell(row=row_num, column=11, value=result.status)
+                    ws.cell(row=row_num, column=5, value=enrollment_series_str)
+                    ws.cell(row=row_num, column=6, value=result.assessment_series.name if result.assessment_series else '')
+                    ws.cell(row=row_num, column=7, value=result.paper.level.level_name if result.paper and result.paper.level else '')
+                    ws.cell(row=row_num, column=8, value=result.paper.paper_code if result.paper else '')
+                    ws.cell(row=row_num, column=9, value=result.paper.paper_name if result.paper else '')
+                    ws.cell(row=row_num, column=10, value=float(result.mark) if result.mark is not None else '')
+                    ws.cell(row=row_num, column=11, value=result.grade or '')
+                    ws.cell(row=row_num, column=12, value=result.status)
                     row_num += 1
             
             # Adjust column widths
@@ -2053,12 +2073,13 @@ class MarksheetViewSet(viewsets.ViewSet):
             ws.column_dimensions['C'].width = 30
             ws.column_dimensions['D'].width = 15
             ws.column_dimensions['E'].width = 22
-            ws.column_dimensions['F'].width = 18
-            ws.column_dimensions['G'].width = 15
-            ws.column_dimensions['H'].width = 35
-            ws.column_dimensions['I'].width = 10
+            ws.column_dimensions['F'].width = 22
+            ws.column_dimensions['G'].width = 18
+            ws.column_dimensions['H'].width = 15
+            ws.column_dimensions['I'].width = 35
             ws.column_dimensions['J'].width = 10
-            ws.column_dimensions['K'].width = 12
+            ws.column_dimensions['K'].width = 10
+            ws.column_dimensions['L'].width = 12
         
         else:
             return Response(
