@@ -28,6 +28,9 @@ const AwardsList = () => {
   const [showValidationError, setShowValidationError] = useState(false);
   const [uniqueCenters, setUniqueCenters] = useState([]);
   const [uniqueOccupations, setUniqueOccupations] = useState([]);
+  const [centerSearch, setCenterSearch] = useState('');
+  const [showCenterDropdown, setShowCenterDropdown] = useState(false);
+  const centerDropdownRef = useRef(null);
   const [exporting, setExporting] = useState(false);
   const [downloadingZip, setDownloadingZip] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
@@ -183,12 +186,47 @@ const AwardsList = () => {
     };
     setFilters(empty);
     setSearchQuery('');
+    setCenterSearch('');
     localStorage.removeItem('awards_filters');
     localStorage.removeItem('awards_search');
     setCurrentPage(1);
     setSelectedCandidates([]);
     setSelectAllFiltered(false);
     fetchAwards(1, { search: '', filters: empty });
+  };
+
+  // Close center dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (centerDropdownRef.current && !centerDropdownRef.current.contains(event.target)) {
+        setShowCenterDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filter centers based on search
+  const filteredCenters = uniqueCenters.filter((center) => {
+    const searchLower = centerSearch.toLowerCase();
+    const name = (center.name || center || '').toLowerCase();
+    const number = (center.number || '').toLowerCase();
+    return name.includes(searchLower) || number.includes(searchLower);
+  });
+
+  // Handle center selection
+  const handleCenterSelect = (centerName) => {
+    handleFilterChange({ ...filters, center: centerName });
+    setCenterSearch('');
+    setShowCenterDropdown(false);
+  };
+
+  // Get display text for selected center
+  const getSelectedCenterDisplay = () => {
+    if (!filters.center) return 'All Centers';
+    const found = uniqueCenters.find(c => (c.name || c) === filters.center);
+    if (found && found.number) return `(${found.number}) ${found.name}`;
+    return filters.center;
   };
 
   const handlePageChange = (page) => {
@@ -675,22 +713,52 @@ const AwardsList = () => {
                 </select>
               </div>
 
-              <div>
+              <div className="relative" ref={centerDropdownRef}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Center
                 </label>
-                <select
-                  value={filters.center}
-                  onChange={(e) => handleFilterChange({ ...filters, center: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <div
+                  onClick={() => setShowCenterDropdown(!showCenterDropdown)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg cursor-pointer bg-white flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">All</option>
-                  {uniqueCenters.map((center) => (
-                    <option key={center.name || center} value={center.name || center}>
-                      {center.number ? `(${center.number}) ` : ''}{center.name || center}
-                    </option>
-                  ))}
-                </select>
+                  <span className="truncate text-sm">{getSelectedCenterDisplay()}</span>
+                  <ChevronRight className={`h-4 w-4 text-gray-400 transition-transform ${showCenterDropdown ? 'rotate-90' : ''}`} />
+                </div>
+                {showCenterDropdown && (
+                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-hidden">
+                    <div className="p-2 border-b">
+                      <input
+                        type="text"
+                        value={centerSearch}
+                        onChange={(e) => setCenterSearch(e.target.value)}
+                        placeholder="Search centers..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                      <div
+                        onClick={() => handleCenterSelect('')}
+                        className={`px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm ${!filters.center ? 'bg-blue-100 font-medium' : ''}`}
+                      >
+                        All Centers
+                      </div>
+                      {filteredCenters.map((center) => (
+                        <div
+                          key={center.name || center}
+                          onClick={() => handleCenterSelect(center.name || center)}
+                          className={`px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm ${filters.center === (center.name || center) ? 'bg-blue-100 font-medium' : ''}`}
+                        >
+                          {center.number ? `(${center.number}) ` : ''}{center.name || center}
+                        </div>
+                      ))}
+                      {filteredCenters.length === 0 && (
+                        <div className="px-3 py-2 text-gray-500 text-sm">No centers found</div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
