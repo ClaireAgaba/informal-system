@@ -576,6 +576,16 @@ class AwardsViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
+        # Filter out candidates without photos - photos are required for transcripts
+        candidates_without_photos = [c for c in candidates if not c.passport_photo]
+        candidates = [c for c in candidates if c.passport_photo]
+        
+        if not candidates:
+            return Response(
+                {'error': f'No candidates with photos found. {len(candidates_without_photos)} candidate(s) are missing photos.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         # Check if any candidate already has a transcript printed
         already_printed = [c for c in candidates if c.transcript_serial_number]
         
@@ -851,14 +861,24 @@ class AwardsViewSet(viewsets.ViewSet):
             )
         
         # Get candidates
-        candidates = Candidate.objects.filter(id__in=candidate_ids).select_related(
+        candidates = list(Candidate.objects.filter(id__in=candidate_ids).select_related(
             'occupation', 'assessment_center'
-        ).order_by('registration_number')
+        ).order_by('registration_number'))
         
-        if not candidates.exists():
+        if not candidates:
             return Response(
                 {'error': 'No valid candidates found'},
                 status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Filter out candidates without photos - photos are required for transcripts
+        candidates_without_photos = [c for c in candidates if not c.passport_photo]
+        candidates = [c for c in candidates if c.passport_photo]
+        
+        if not candidates:
+            return Response(
+                {'error': f'No candidates with photos found. {len(candidates_without_photos)} candidate(s) are missing photos.'},
+                status=status.HTTP_400_BAD_REQUEST
             )
         
         # Import transcript generation functions
@@ -968,6 +988,16 @@ class AwardsViewSet(viewsets.ViewSet):
             return Response(
                 {'error': 'No candidates found'},
                 status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Filter out candidates without photos - photos are required for transcripts
+        candidates_without_photos = [c for c in candidates if not c.passport_photo]
+        candidates = [c for c in candidates if c.passport_photo]
+        
+        if not candidates:
+            return Response(
+                {'error': f'No candidates with photos found. {len(candidates_without_photos)} candidate(s) are missing photos.'},
+                status=status.HTTP_400_BAD_REQUEST
             )
         
         # For non-reprint, check if any candidate already has a transcript
