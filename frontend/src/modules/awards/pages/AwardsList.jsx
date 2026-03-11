@@ -9,6 +9,7 @@ const AwardsList = () => {
   const navigate = useNavigate();
   const [awards, setAwards] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState(() => {
     return localStorage.getItem('awards_search') || '';
@@ -95,6 +96,7 @@ const AwardsList = () => {
       setError('Failed to load awards data');
     } finally {
       setLoading(false);
+      setInitialLoad(false);
     }
   }, [buildQueryParams]);
 
@@ -109,7 +111,23 @@ const AwardsList = () => {
   };
 
   useEffect(() => {
-    fetchAwards(1);
+    // Pass initial search and filters explicitly to avoid stale closure issues
+    const initialSearch = localStorage.getItem('awards_search') || '';
+    const savedFilters = localStorage.getItem('awards_filters');
+    let initialFilters = {
+      registration_category: '',
+      entry_year: '',
+      intake: '',
+      center: '',
+      printed: '',
+      occupation: '',
+    };
+    if (savedFilters) {
+      try {
+        initialFilters = JSON.parse(savedFilters);
+      } catch {}
+    }
+    fetchAwards(1, { search: initialSearch, filters: initialFilters });
     fetchFilterOptions();
     fetchReprintReasons();
   }, []);
@@ -529,7 +547,8 @@ const AwardsList = () => {
     }
   };
 
-  if (loading) {
+  // Only show full-page spinner on initial load, not during filter/search
+  if (loading && initialLoad) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
