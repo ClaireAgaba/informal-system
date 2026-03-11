@@ -316,11 +316,20 @@ class AwardsViewSet(viewsets.ViewSet):
     def filter_options(self, request):
         """Return unique centers and occupations for filter dropdowns."""
         candidates_qs = self._get_base_queryset()
+        # Get centers with both name and number
         centers = list(
             candidates_qs.exclude(assessment_center__isnull=True)
-            .values_list('assessment_center__center_name', flat=True)
+            .values('assessment_center__center_name', 'assessment_center__center_number')
             .distinct().order_by('assessment_center__center_name')
         )
+        # Format centers as objects with name and number
+        centers = [
+            {
+                'name': c['assessment_center__center_name'],
+                'number': c['assessment_center__center_number']
+            }
+            for c in centers
+        ]
         occupations = list(
             candidates_qs.exclude(occupation__isnull=True)
             .values_list('occupation__occ_name', flat=True)

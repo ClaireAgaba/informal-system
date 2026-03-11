@@ -125,6 +125,8 @@ const AwardsList = () => {
     }
   };
 
+  const filterTimerRef = useRef(null);
+
   // Debounced search
   const handleSearchChange = (value) => {
     setSearchQuery(value);
@@ -138,14 +140,17 @@ const AwardsList = () => {
     }, 400);
   };
 
-  // Apply filters
+  // Apply filters with debounce to prevent jumping
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters);
     localStorage.setItem('awards_filters', JSON.stringify(newFilters));
-    setCurrentPage(1);
-    setSelectedCandidates([]);
-    setSelectAllFiltered(false);
-    fetchAwards(1, { filters: newFilters });
+    if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
+    filterTimerRef.current = setTimeout(() => {
+      setCurrentPage(1);
+      setSelectedCandidates([]);
+      setSelectAllFiltered(false);
+      fetchAwards(1, { filters: newFilters });
+    }, 300);
   };
 
   // Clear filters
@@ -662,7 +667,9 @@ const AwardsList = () => {
                 >
                   <option value="">All</option>
                   {uniqueCenters.map((center) => (
-                    <option key={center} value={center}>{center}</option>
+                    <option key={center.name || center} value={center.name || center}>
+                      {center.number ? `(${center.number}) ` : ''}{center.name || center}
+                    </option>
                   ))}
                 </select>
               </div>
