@@ -1026,7 +1026,9 @@ const CandidateList = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            window.open(`/candidates/${candidate.id}`, '_blank');
+                            const newTab = window.open(`/candidates/${candidate.id}`, '_blank');
+                            if (newTab) newTab.blur();
+                            window.focus();
                           }}
                           className="text-gray-400 hover:text-indigo-600"
                           title="Open in new tab"
