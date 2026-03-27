@@ -78,7 +78,7 @@ def get_nationality_from_country(country_code):
         
     Returns:
         str: Nationality demonym (e.g., 'Tanzanian', 'Ugandan')
-             Returns 'Ugandan' as default if country code not found
+             Returns the country name if demonym not found, or 'Ugandan' as fallback
     """
     if not country_code:
         return 'Ugandan'
@@ -86,4 +86,21 @@ def get_nationality_from_country(country_code):
     # Convert to string in case it's a Country object
     code = str(country_code).upper()
     
-    return COUNTRY_CODE_TO_DEMONYM.get(code, 'Ugandan')
+    # Return demonym if we have a mapping
+    if code in COUNTRY_CODE_TO_DEMONYM:
+        return COUNTRY_CODE_TO_DEMONYM[code]
+        
+    # If it's a Country object from django-countries, it has a name property
+    if hasattr(country_code, 'name') and country_code.name:
+        return country_code.name
+        
+    # If passed as a string code, try to resolve it using django-countries
+    try:
+        from django_countries import countries
+        country_name = dict(countries).get(code)
+        if country_name:
+            return str(country_name)
+    except ImportError:
+        pass
+        
+    return 'Ugandan'
