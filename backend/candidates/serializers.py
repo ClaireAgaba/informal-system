@@ -280,11 +280,20 @@ class CandidateCreateUpdateSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """Convert empty strings to None for foreign keys"""
-        # If nationality is Uganda (normalized), ensure candidate_country is UG
-        nationality = data.get('nationality')
-        if nationality == 'Uganda':
-            if not data.get('candidate_country'):
-                 data['candidate_country'] = 'UG'
+        # Always sync candidate_country if it's provided directly
+        # This is the primary nationality field (ISO code like 'AF', 'UG')
+        candidate_country = data.get('candidate_country')
+        if candidate_country:
+            # candidate_country is the source of truth — also update legacy nationality field
+            from django_countries import countries as country_list
+            country_name = dict(country_list).get(str(candidate_country).upper(), '')
+            if country_name:
+                data['nationality'] = str(country_name)
+        else:
+            # Legacy fallback: if only nationality text was sent, try to set candidate_country
+            nationality = data.get('nationality')
+            if nationality == 'Uganda':
+                data['candidate_country'] = 'UG'
 
         fk_fields = ['district', 'village', 'nature_of_disability', 
                      'assessment_center', 'assessment_center_branch', 'occupation']

@@ -198,7 +198,7 @@ const CandidateEdit = () => {
         full_name: candidate.full_name || '',
         date_of_birth: candidate.date_of_birth || '',
         gender: candidate.gender || '',
-        nationality: candidate.nationality || '',
+        candidate_country: candidate.candidate_country || 'UG',
         is_refugee: candidate.is_refugee || false,
         refugee_number: candidate.refugee_number || '',
         contact: candidate.contact || '',
@@ -551,25 +551,22 @@ const CandidateEdit = () => {
                         )}
                       </div>
 
-                      <div>
+                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Nationality *
                         </label>
                         <select
-                          {...register('nationality', { required: 'Nationality is required' })}
+                          {...register('candidate_country', { required: 'Nationality is required' })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                         >
-                          {candidate?.nationality && !nationalityOptions.some((n) => n.value === candidate.nationality) && (
-                            <option value={candidate.nationality}>{candidate.nationality}</option>
-                          )}
                           {nationalityOptions.map((n) => (
                             <option key={n.value} value={n.value}>
                               {n.label}
                             </option>
                           ))}
                         </select>
-                        {errors.nationality && (
-                          <p className="text-red-500 text-xs mt-1">{errors.nationality.message}</p>
+                        {errors.candidate_country && (
+                          <p className="text-red-500 text-xs mt-1">{errors.candidate_country.message}</p>
                         )}
                       </div>
 
