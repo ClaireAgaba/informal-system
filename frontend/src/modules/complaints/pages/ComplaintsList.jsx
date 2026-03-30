@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Plus, Search, Filter, Eye, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { FileText, Plus, Search, Filter, Eye, Clock, CheckCircle, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import complaintsApi from '../services/complaintsApi';
 
 const ComplaintsList = () => {
@@ -12,23 +12,37 @@ const ComplaintsList = () => {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [categories, setCategories] = useState([]);
   const [statistics, setStatistics] = useState(null);
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const pageSize = 10;
+
+  useEffect(() => {
+    fetchCategories();
+    fetchStatistics();
+  }, []);
 
   useEffect(() => {
     fetchComplaints();
-    fetchCategories();
-    fetchStatistics();
-  }, [statusFilter, categoryFilter]);
+  }, [statusFilter, categoryFilter, currentPage]);
 
   const fetchComplaints = async () => {
     try {
       setLoading(true);
-      const params = {};
+      const params = { page: currentPage };
       if (statusFilter) params.status = statusFilter;
       if (categoryFilter) params.category = categoryFilter;
       if (searchQuery) params.search = searchQuery;
       
       const response = await complaintsApi.getComplaints(params);
-      setComplaints(response.data.results || response.data);
+      if (response.data && response.data.results !== undefined) {
+        setComplaints(response.data.results);
+        setTotalItems(response.data.count || 0);
+      } else {
+        setComplaints(response.data || []);
+        setTotalItems((response.data || []).length);
+      }
     } catch (error) {
       console.error('Error fetching complaints:', error);
     } finally {
@@ -56,8 +70,14 @@ const ComplaintsList = () => {
 
   const handleSearch = (e) => {
     e.preventDefault();
-    fetchComplaints();
+    if (currentPage === 1) {
+      fetchComplaints();
+    } else {
+      setCurrentPage(1);
+    }
   };
+
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
   const getStatusBadge = (status) => {
     const statusConfig = {
@@ -78,11 +98,8 @@ const ComplaintsList = () => {
     );
   };
 
-  const filteredComplaints = complaints.filter(complaint =>
-    complaint.ticket_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    complaint.exam_center_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    complaint.program_name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Using complaints directly since API handles searching and pagination
+  const displayedComplaints = complaints;
 
   return (
     <div className="p-6">
@@ -155,8 +172,8 @@ const ComplaintsList = () => {
 
         {/* Search and Filters */}
         <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="md:col-span-2">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+            <div className="md:col-span-4 lg:col-span-4">
               <form onSubmit={handleSearch} className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
@@ -168,10 +185,13 @@ const ComplaintsList = () => {
                 />
               </form>
             </div>
-            <div>
+            <div className="md:col-span-2 lg:col-span-2">
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  if (currentPage !== 1) setCurrentPage(1);
+                }}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">All Status</option>
@@ -181,10 +201,13 @@ const ComplaintsList = () => {
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
-            <div>
+            <div className="md:col-span-3 lg:col-span-3">
               <select
                 value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
+                onChange={(e) => {
+                  setCategoryFilter(e.target.value);
+                  if (currentPage !== 1) setCurrentPage(1);
+                }}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">All Categories</option>
@@ -194,6 +217,35 @@ const ComplaintsList = () => {
                   </option>
                 ))}
               </select>
+            </div>
+            <div className="md:col-span-3 lg:col-span-3 flex justify-end items-center space-x-3">
+              <div className="text-sm text-gray-600 hidden xl:block">
+                <span>{totalItems} total</span>
+              </div>
+              <div className="text-sm font-medium text-gray-700 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                Page {currentPage} of {totalPages}
+              </div>
+              <div className="flex border border-gray-300 rounded-lg overflow-hidden shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-2 py-2 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Previous Page"
+                >
+                  <ChevronLeft className="w-5 h-5 text-gray-600" />
+                </button>
+                <div className="w-px bg-gray-300"></div>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  className="px-2 py-2 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Next Page"
+                >
+                  <ChevronRight className="w-5 h-5 text-gray-600" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -205,7 +257,7 @@ const ComplaintsList = () => {
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
-        ) : filteredComplaints.length === 0 ? (
+        ) : displayedComplaints.length === 0 ? (
           <div className="text-center py-12">
             <FileText className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No complaints found</h3>
@@ -239,7 +291,7 @@ const ComplaintsList = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredComplaints.map((complaint) => (
+              {displayedComplaints.map((complaint) => (
                 <tr 
                   key={complaint.id} 
                   onClick={() => navigate(`/complaints/${complaint.id}`)}
@@ -276,6 +328,31 @@ const ComplaintsList = () => {
               ))}
             </tbody>
           </table>
+        )}
+        
+        {/* Bottom Pagination */}
+        {displayedComplaints.length > 0 && totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              Showing <span className="font-medium">{((currentPage - 1) * pageSize) + 1}</span> to <span className="font-medium">{Math.min(currentPage * pageSize, totalItems)}</span> of <span className="font-medium">{totalItems}</span> results
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
