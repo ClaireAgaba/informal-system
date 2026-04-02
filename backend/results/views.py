@@ -2827,11 +2827,23 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         if results.exists():
             # Results table with Level, Module, Paper, Type, Grade, Comment
             results_data = [["LEVEL", "MODULE", "PAPER", "TYPE", "GRADE", "COMMENT"]]
+
+            data_center_style = ParagraphStyle(
+                'DataCenterStyle',
+                parent=styles['Normal'],
+                fontSize=8,
+                fontName='Helvetica',
+                alignment=TA_CENTER
+            )
+
             for result in results:
+                mod_text = f"{result.module.module_code}<br/>{result.module.module_name}" if result.module else "-"
+                pap_text = f"{result.paper.paper_code}<br/>{result.paper.paper_name}" if result.paper else "-"
+
                 results_data.append([
                     result.level.level_name if result.level else "-",
-                    f"{result.module.module_code}\n{result.module.module_name}" if result.module else "-",
-                    f"{result.paper.paper_code}\n{result.paper.paper_name}" if result.paper else "-",
+                    Paragraph(mod_text, data_center_style) if result.module else "-",
+                    Paragraph(pap_text, data_center_style) if result.paper else "-",
                     "Practical",
                     result.grade or "-",
                     result.comment or "-"
