@@ -2670,7 +2670,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         
         # Create PDF buffer
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch, leftMargin=0.5*inch, rightMargin=0.5*inch)
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch, leftMargin=0.5*inch, rightMargin=0.5*inch, title=f'{candidate.full_name} - Verified Results', author='UVTAB')
         elements = []
         styles = getSampleStyleSheet()
         
