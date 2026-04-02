@@ -2691,8 +2691,8 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             parent=styles['Heading2'],
             fontSize=13,
             textColor=colors.black,
-            spaceAfter=10,
-            spaceBefore=10,
+            spaceAfter=5,
+            spaceBefore=5,
             alignment=TA_CENTER,
             fontName='Helvetica-Bold'
         )
@@ -2739,13 +2739,12 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         ]))
         
         elements.append(header_table)
-        elements.append(Spacer(1, 0.3*inch))
+        elements.append(Spacer(1, 0.1*inch))
         
         # Title
         elements.append(Paragraph("VERIFICATION OF RESULTS", heading_style))
-        elements.append(Spacer(1, 0.1*inch))
         elements.append(Paragraph("TO WHOM IT MAY CONCERN", heading_style))
-        elements.append(Spacer(1, 0.2*inch))
+        elements.append(Spacer(1, 0.05*inch))
         
         # Intro text
         intro_style = ParagraphStyle('Intro', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER, fontName='Helvetica-Oblique')
@@ -2753,7 +2752,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             "This is to verify that this candidate registered and sat for UVTAB assessments with the following particulars and obtained the following",
             intro_style
         ))
-        elements.append(Spacer(1, 0.3*inch))
+        elements.append(Spacer(1, 0.15*inch))
         
         # Candidate info with photo
         candidate_photo = None
@@ -2784,7 +2783,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             ["OCCUPATION:", candidate.occupation.occ_name if candidate.occupation else "", "", ""],
         ]
         
-        info_table = Table(info_data, colWidths=[0.9*inch, 2.6*inch, 1.0*inch, 1.2*inch])
+        info_table = Table(info_data, colWidths=[1.15*inch, 2.35*inch, 1.0*inch, 1.2*inch])
         info_table.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
             ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
