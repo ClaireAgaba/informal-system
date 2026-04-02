@@ -2670,7 +2670,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         
         # Create PDF buffer
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch, leftMargin=0.5*inch, rightMargin=0.5*inch)
         elements = []
         styles = getSampleStyleSheet()
         
@@ -2784,7 +2784,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             ["OCCUPATION:", candidate.occupation.occ_name if candidate.occupation else "", "", ""],
         ]
         
-        info_table = Table(info_data, colWidths=[1.15*inch, 1.85*inch, 1.15*inch, 1.35*inch])
+        info_table = Table(info_data, colWidths=[0.9*inch, 2.6*inch, 1.0*inch, 1.2*inch])
         info_table.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
             ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
@@ -2802,7 +2802,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         # Combine photo and info table
         if candidate_photo:
             combined_data = [[candidate_photo, info_table]]
-            combined_table = Table(combined_data, colWidths=[1.3*inch, 6.5*inch])
+            combined_table = Table(combined_data, colWidths=[1.3*inch, 5.7*inch])
             combined_table.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('ALIGN', (0, 0), (0, -1), 'LEFT'),
@@ -2813,11 +2813,11 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         else:
             elements.append(info_table)
         
-        elements.append(Spacer(1, 0.4*inch))
+        elements.append(Spacer(1, 0.15*inch))
         
         # Results section
         elements.append(Paragraph("ASSESSMENT RESULTS", heading_style))
-        elements.append(Spacer(1, 0.2*inch))
+        elements.append(Spacer(1, 0.1*inch))
         
         # Get Workers PAS results
         results = WorkersPasResult.objects.filter(candidate=candidate).select_related(
@@ -2849,7 +2849,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
                     result.comment or "-"
                 ])
             
-            results_table = Table(results_data, colWidths=[1.2*inch, 1.8*inch, 1.8*inch, 1.0*inch, 0.9*inch, 1.3*inch])
+            results_table = Table(results_data, colWidths=[1.0*inch, 2.0*inch, 2.0*inch, 0.7*inch, 0.6*inch, 0.9*inch])
             results_table.setStyle(TableStyle([
                 # Header row
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a5568')),
@@ -2857,16 +2857,16 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('FONTSIZE', (0, 0), (-1, 0), 9),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                ('TOPPADDING', (0, 0), (-1, 0), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                ('TOPPADDING', (0, 0), (-1, 0), 6),
                 # Data rows
                 ('BACKGROUND', (0, 1), (-1, -1), colors.white),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
                 ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
                 ('FONTSIZE', (0, 1), (-1, -1), 8),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('TOPPADDING', (0, 1), (-1, -1), 6),
-                ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+                ('TOPPADDING', (0, 1), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
                 # Borders
                 ('BOX', (0, 0), (-1, -1), 1, colors.black),
                 ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
@@ -2876,7 +2876,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             elements.append(Paragraph("No results available", styles['Normal']))
         
         # Add footer section
-        elements.append(Spacer(1, 0.5*inch))
+        elements.append(Spacer(1, 0.2*inch))
         
         disclaimer_style = ParagraphStyle(
             'Disclaimer',
@@ -2940,7 +2940,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
                  footer_left_text[3], footer_left_text[4]],
                 [signature_img] + footer_right_text
             ]]
-            footer_table = Table(footer_data, colWidths=[4.5*inch, 3*inch])
+            footer_table = Table(footer_data, colWidths=[4.5*inch, 2.6*inch])
             footer_table.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('ALIGN', (0, 0), (0, -1), 'LEFT'),
@@ -2952,7 +2952,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
                  footer_left_text[3], footer_left_text[4]],
                 footer_right_text
             ]]
-            footer_table = Table(footer_data, colWidths=[5*inch, 2.5*inch])
+            footer_table = Table(footer_data, colWidths=[4.5*inch, 2.6*inch])
             footer_table.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('ALIGN', (0, 0), (0, -1), 'LEFT'),
