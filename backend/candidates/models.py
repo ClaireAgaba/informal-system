@@ -46,6 +46,7 @@ class Candidate(models.Model):
         ('pending_verification', 'Pending Verification'),
         ('verified', 'Verified'),
         ('declined', 'Declined'),
+        ('editable', 'Editable'),
     )
     
     # Registration Number (auto-generated on submission)

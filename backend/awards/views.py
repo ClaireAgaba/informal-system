@@ -17,6 +17,9 @@ from django.conf import settings
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
+import os
+import openpyxl
+from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 
 
 def formal_candidate_qualifies(candidate):
@@ -1232,3 +1235,167 @@ class AwardsViewSet(viewsets.ViewSet):
 
         serializer = TranscriptCollectionDetailSerializer(collection)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['post'], url_path='export-with-images')
+    def export_with_images(self, request):
+        """
+        Export transcript logs to Excel with a zipped folder of candidate images.
+        Returns a ZIP file containing:
+        - transcript_logs.xlsx (Excel file with candidate data)
+        - images/ folder with candidate photos named using registration number (/ replaced with -)
+        
+        Request body:
+        - candidate_ids: list of candidate IDs to export (optional, if not provided uses filters)
+        - filters: dict of filter params (used if candidate_ids not provided)
+        """
+        candidate_ids = request.data.get('candidate_ids', [])
+        
+        # Get candidates either by IDs or by applying filters
+        if candidate_ids:
+            # When specific IDs provided, still filter for printed transcripts only
+            candidates_qs = self._get_base_queryset().filter(
+                id__in=candidate_ids,
+                transcript_serial_number__isnull=False
+            ).exclude(transcript_serial_number='')
+        else:
+            # Always filter for printed transcripts (those with serial numbers)
+            candidates_qs = self._get_base_queryset().filter(
+                transcript_serial_number__isnull=False
+            ).exclude(transcript_serial_number='')
+            candidates_qs = self._apply_filters(candidates_qs, request)
+        
+        candidates_qs = candidates_qs.order_by('registration_number')
+        candidates = list(candidates_qs)
+        
+        if not candidates:
+            return Response(
+                {'error': 'No candidates found to export'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create Excel workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Certificate Data'
+        
+        # Define headers
+        headers = [
+            '#', 'Reg No', 'Name', 'Center', 'TR SNo', 
+            'Collection Status', 'Collector Name', 'Collector No', 'Collection Date', 'Image Filename'
+        ]
+        
+        # Style for headers
+        header_font = Font(bold=True, color='FFFFFF')
+        header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+        header_alignment = Alignment(horizontal='center', vertical='center')
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        # Write headers
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = thin_border
+        
+        # Prepare image data
+        images_to_zip = []
+        
+        # Write data rows
+        for idx, candidate in enumerate(candidates, 1):
+            row = idx + 1
+            
+            # Convert registration number: replace / with -
+            reg_no = candidate.registration_number or ''
+            safe_reg_no = reg_no.replace('/', '-')
+            
+            # Determine image filename
+            image_filename = ''
+            if candidate.passport_photo:
+                # Get file extension from original file
+                original_name = candidate.passport_photo.name
+                ext = os.path.splitext(original_name)[1] if original_name else '.jpg'
+                if not ext:
+                    ext = '.jpg'
+                image_filename = f"{safe_reg_no}{ext}"
+                images_to_zip.append({
+                    'filename': image_filename,
+                    'photo_field': candidate.passport_photo
+                })
+            
+            # Serialize candidate data
+            item = self._serialize_candidate(candidate)
+            if not item:
+                continue
+            
+            # Write row data
+            ws.cell(row=row, column=1, value=idx).border = thin_border
+            ws.cell(row=row, column=2, value=item.get('registration_number', '')).border = thin_border
+            ws.cell(row=row, column=3, value=item.get('full_name', '')).border = thin_border
+            ws.cell(row=row, column=4, value=item.get('center_name', '')).border = thin_border
+            ws.cell(row=row, column=5, value=item.get('tr_sno', '')).border = thin_border
+            ws.cell(row=row, column=6, value='Taken' if item.get('transcript_collected') else 'Not Taken').border = thin_border
+            ws.cell(row=row, column=7, value=item.get('transcript_collector_name', '')).border = thin_border
+            ws.cell(row=row, column=8, value=item.get('transcript_collector_phone', '')).border = thin_border
+            ws.cell(row=row, column=9, value=item.get('transcript_collection_date', '')).border = thin_border
+            ws.cell(row=row, column=10, value=image_filename).border = thin_border
+        
+        # Auto-adjust column widths
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column].width = adjusted_width
+        
+        # Create ZIP file in memory
+        zip_buffer = BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Add Excel file to ZIP
+            excel_buffer = BytesIO()
+            wb.save(excel_buffer)
+            excel_buffer.seek(0)
+            zip_file.writestr('certificate_data.xlsx', excel_buffer.getvalue())
+            
+            # Add images to ZIP
+            for img_data in images_to_zip:
+                try:
+                    photo_field = img_data['photo_field']
+                    if photo_field and photo_field.name:
+                        # Read image file
+                        photo_field.open('rb')
+                        image_content = photo_field.read()
+                        photo_field.close()
+                        
+                        # Add to ZIP in images folder
+                        zip_file.writestr(f"images/{img_data['filename']}", image_content)
+                except Exception as e:
+                    # Log error but continue with other images
+                    print(f"Error adding image {img_data['filename']}: {e}")
+                    continue
+        
+        zip_buffer.seek(0)
+        
+        # Create response
+        from datetime import datetime
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        
+        filename = f"Certificate_Data_{len(candidates)}_{timestamp}.zip"
+        
+        response = HttpResponse(
+            zip_buffer.getvalue(),
+            content_type='application/zip'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response

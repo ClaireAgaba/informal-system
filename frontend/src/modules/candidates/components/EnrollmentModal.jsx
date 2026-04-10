@@ -47,12 +47,20 @@ const EnrollmentModal = ({ candidate, onClose }) => {
         fee = parseFloat(level?.formal_fee || 0);
       }
     } else if (regCategory === 'modular') {
-      const moduleCount = formData.modules.length;
-      if (moduleCount === 1) {
-        fee = parseFloat(options.level?.modular_fee_single_module || 0);
-      } else if (moduleCount === 2) {
-        fee = parseFloat(options.level?.modular_fee_double_module || 0);
-      }
+      // Calculate fee based on retake vs new modules
+      const singleModuleFee = parseFloat(options.level?.modular_fee_single_module || 0);
+      const retakeFee = parseFloat(options.level?.modular_fee_retake || singleModuleFee / 2);
+      
+      let totalFee = 0;
+      formData.modules.forEach(moduleId => {
+        const module = options.modules?.find(m => m.id === moduleId);
+        if (module?.is_retake) {
+          totalFee += retakeFee;
+        } else {
+          totalFee += singleModuleFee;
+        }
+      });
+      fee = totalFee;
     } else if (regCategory === 'workers_pas') {
       // For Workers PAS: fee per paper selected
       const paperCount = formData.papers.length;
@@ -127,6 +135,13 @@ const EnrollmentModal = ({ candidate, onClose }) => {
   };
 
   const handleModuleToggle = (moduleId) => {
+    // Check if module is available (not passed, not enrolled)
+    const module = options?.modules?.find(m => m.id === moduleId);
+    if (module && !module.available) {
+      toast.error(`Cannot select this module: ${module.unavailable_reason || 'Not available'}`);
+      return;
+    }
+
     const modules = [...formData.modules];
     const index = modules.indexOf(moduleId);
 
@@ -278,24 +293,56 @@ const EnrollmentModal = ({ candidate, onClose }) => {
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
                   <p className="text-sm text-blue-800">
                     <AlertCircle className="w-4 h-4 inline mr-1" />
-                    1 Module: UGX {parseFloat(options.level.modular_fee_single_module).toLocaleString()} | 
-                    2 Modules: UGX {parseFloat(options.level.modular_fee_double_module).toLocaleString()}
+                    New Module: UGX {parseFloat(options.level.modular_fee_single_module).toLocaleString()} | 
+                    Retake (RT): UGX {parseFloat(options.level.modular_fee_retake || options.level.modular_fee_single_module / 2).toLocaleString()} (50% off)
                   </p>
                 </div>
                 <div className="space-y-2">
-                  {options?.modules?.map((module) => (
-                    <label key={module.id} className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.modules.includes(module.id)}
-                        onChange={() => handleModuleToggle(module.id)}
-                        className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                      />
-                      <span className="ml-3 text-sm">
-                        <span className="font-medium">{module.module_code}</span> - {module.module_name}
-                      </span>
-                    </label>
-                  ))}
+                  {options?.modules?.map((module) => {
+                    const isAvailable = module.available;
+                    const isRetake = module.is_retake;
+                    const isPassed = module.is_passed;
+                    
+                    return (
+                      <label 
+                        key={module.id} 
+                        className={`flex items-center justify-between p-3 border rounded-lg ${
+                          !isAvailable 
+                            ? 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-60' 
+                            : isRetake 
+                              ? 'border-orange-300 bg-orange-50 hover:bg-orange-100 cursor-pointer'
+                              : 'border-gray-200 hover:bg-gray-50 cursor-pointer'
+                        }`}
+                      >
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={formData.modules.includes(module.id)}
+                            onChange={() => handleModuleToggle(module.id)}
+                            disabled={!isAvailable}
+                            className={`w-4 h-4 border-gray-300 rounded focus:ring-primary-500 ${
+                              !isAvailable ? 'cursor-not-allowed' : 'text-primary-600'
+                            }`}
+                          />
+                          <span className="ml-3 text-sm">
+                            <span className="font-medium">{module.module_code}</span> - {module.module_name}
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {isPassed && (
+                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                              ✓ Passed
+                            </span>
+                          )}
+                          {isRetake && (
+                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-800">
+                              RT (50% off)
+                            </span>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             </>

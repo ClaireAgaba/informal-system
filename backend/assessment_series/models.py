@@ -71,6 +71,18 @@ class AssessmentSeries(models.Model):
         help_text='Uganda fiscal year quarter: Q1(Jul-Sep), Q2(Oct-Dec), Q3(Jan-Mar), Q4(Apr-Jun)'
     )
     
+    surcharge_50 = models.BooleanField(
+        default=False,
+        verbose_name='50% Surcharge',
+        help_text='Apply 50% surcharge to enrollment fees (e.g., 70,000 becomes 105,000)'
+    )
+    
+    surcharge_100 = models.BooleanField(
+        default=False,
+        verbose_name='100% Surcharge',
+        help_text='Apply 100% surcharge to enrollment fees (e.g., 70,000 becomes 140,000)'
+    )
+    
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -104,6 +116,13 @@ class AssessmentSeries(models.Model):
                 raise ValidationError({
                     'date_of_release': 'Results release date should be on or after the end date.'
                 })
+        
+        # Validate that only one surcharge option can be selected
+        if self.surcharge_50 and self.surcharge_100:
+            raise ValidationError({
+                'surcharge_50': 'Only one surcharge option can be selected at a time.',
+                'surcharge_100': 'Only one surcharge option can be selected at a time.'
+            })
         
         # Ensure only one series is marked as current
         if self.is_current:
@@ -180,3 +199,22 @@ class AssessmentSeries(models.Model):
             else:
                 return 'Completed - Results Pending'
         return 'Unknown'
+    
+    def get_surcharge_multiplier(self):
+        """
+        Get the surcharge multiplier for fee calculation.
+        Returns 1.5 for 50% surcharge, 2.0 for 100% surcharge, or 1.0 for no surcharge.
+        """
+        if self.surcharge_100:
+            return 2.0
+        elif self.surcharge_50:
+            return 1.5
+        return 1.0
+    
+    def get_surcharge_display(self):
+        """Get human-readable surcharge status"""
+        if self.surcharge_100:
+            return '100% Surcharge'
+        elif self.surcharge_50:
+            return '50% Surcharge'
+        return 'No Surcharge'

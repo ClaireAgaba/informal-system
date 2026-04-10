@@ -109,6 +109,10 @@ class ModularResultViewSet(viewsets.ViewSet):
         created_results = []
         created_count = 0
         updated_count = 0
+        
+        # Get all previous results for this candidate to check for retakes
+        previous_results = ModularResult.objects.filter(candidate=candidate)
+        
         for result_data in results_data:
             module_id = result_data.get('module_id')
             mark = result_data.get('mark')
@@ -118,10 +122,16 @@ class ModularResultViewSet(viewsets.ViewSet):
             try:
                 module = OccupationModule.objects.get(id=module_id)
                 
+                # Check if this module/type was previously failed (for retake status)
+                is_retake = False
+                prev_result = previous_results.filter(module=module, type=result_type).first()
+                if prev_result and not prev_result.is_passing:
+                    is_retake = True
+                
                 # Create or update result
                 defaults_data = {
                     'mark': mark,
-                    'status': 'normal',
+                    'status': 'retake' if is_retake else 'normal',
                 }
                 
                 # Only set entered_by if user is authenticated
@@ -242,6 +252,64 @@ class ModularResultViewSet(viewsets.ViewSet):
             status=status.HTTP_200_OK
         )
     
+    @action(detail=False, methods=['get'], url_path='failed-modules')
+    def failed_modules(self, request):
+        """Get failed modules for a candidate (for retake filtering)"""
+        candidate_id = request.query_params.get('candidate_id')
+        
+        if not candidate_id:
+            return Response(
+                {'error': 'candidate_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            candidate = Candidate.objects.get(id=candidate_id)
+        except Candidate.DoesNotExist:
+            return Response(
+                {'error': 'Candidate not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Get all results for this candidate
+        results = ModularResult.objects.filter(
+            candidate=candidate
+        ).select_related('module', 'assessment_series')
+        
+        # Find failed modules (not passed yet)
+        module_status = {}
+        for result in results:
+            module_id = result.module_id
+            if module_id not in module_status:
+                module_status[module_id] = {'passed': False, 'failed': False, 'result': None}
+            
+            if result.is_passing:
+                module_status[module_id]['passed'] = True
+            else:
+                if not module_status[module_id]['passed']:
+                    module_status[module_id]['failed'] = True
+                    module_status[module_id]['result'] = result
+        
+        failed_items = []
+        for module_id, status_info in module_status.items():
+            if status_info['failed'] and not status_info['passed']:
+                result = status_info['result']
+                failed_items.append({
+                    'id': module_id,
+                    'module_id': module_id,
+                    'code': result.module.module_code,
+                    'name': result.module.module_name,
+                    'result_type': result.type,
+                    'mark': float(result.mark) if result.mark else None,
+                    'grade': result.grade,
+                    'assessment_series': result.assessment_series.name,
+                })
+        
+        return Response({
+            'is_retake': len(failed_items) > 0,
+            'failed_items': failed_items,
+        })
+    
     @action(detail=False, methods=['get'], url_path='enrollment-modules')
     def enrollment_modules(self, request):
         """Get modules for candidate's enrollments in a specific series"""
@@ -277,13 +345,42 @@ class ModularResultViewSet(viewsets.ViewSet):
             enrollment__in=enrollments
         ).select_related('module')
         
+        # Get previous results to check for retakes
+        previous_results = ModularResult.objects.filter(candidate=candidate)
+        
+        # Build module status dict
+        module_status = {}
+        for result in previous_results:
+            module_id = result.module_id
+            if module_id not in module_status:
+                module_status[module_id] = {'passed': False, 'failed': False, 'prev_mark': None, 'prev_grade': None}
+            
+            if result.is_passing:
+                module_status[module_id]['passed'] = True
+            else:
+                if not module_status[module_id]['passed']:
+                    module_status[module_id]['failed'] = True
+                    module_status[module_id]['prev_mark'] = float(result.mark) if result.mark else None
+                    module_status[module_id]['prev_grade'] = result.grade
+        
         modules_data = []
         for em in enrollment_modules:
-            modules_data.append({
-                'id': em.module.id,
+            module_id = em.module.id
+            status_info = module_status.get(module_id, {})
+            is_retake = status_info.get('failed', False) and not status_info.get('passed', False)
+            
+            module_data = {
+                'id': module_id,
                 'module_code': em.module.module_code,
                 'module_name': em.module.module_name,
-            })
+                'is_retake': is_retake,
+            }
+            
+            if is_retake:
+                module_data['prev_mark'] = status_info.get('prev_mark')
+                module_data['prev_grade'] = status_info.get('prev_grade')
+            
+            modules_data.append(module_data)
         
         return Response(modules_data, status=status.HTTP_200_OK)
     
@@ -912,19 +1009,39 @@ class ModularResultViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Check if candidate qualifies for transcript (ALL results must be successful)
-        modular_results = ModularResult.objects.filter(candidate=candidate)
+        # Check if candidate qualifies for transcript
+        # For each module, use the BEST result (passed overrides failed)
+        # This handles retakes - if candidate failed then passed, they qualify
+        modular_results = ModularResult.objects.filter(candidate=candidate).select_related('module')
         if not modular_results.exists():
             return Response(
                 {'error': 'Candidate does not qualify for transcript. No results found.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        all_successful = all(r.comment == 'Success' for r in modular_results)
+        # Group results by module and get best result per module
+        module_best_results = {}
+        for result in modular_results:
+            module_id = result.module_id
+            if module_id not in module_best_results:
+                module_best_results[module_id] = result
+            else:
+                # If current result is passing and existing is not, replace
+                existing = module_best_results[module_id]
+                if result.is_passing and not existing.is_passing:
+                    module_best_results[module_id] = result
+                # If both passing, keep the one with higher mark
+                elif result.is_passing and existing.is_passing:
+                    if (result.mark or 0) > (existing.mark or 0):
+                        module_best_results[module_id] = result
+        
+        # Check if all modules have a passing result
+        all_successful = all(r.is_passing for r in module_best_results.values())
         
         if not all_successful:
+            failed_modules = [r.module.module_name for r in module_best_results.values() if not r.is_passing]
             return Response(
-                {'error': 'Candidate does not qualify for transcript. No successful results found.'},
+                {'error': f'Candidate does not qualify for transcript. Failed modules: {", ".join(failed_modules)}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -1122,13 +1239,15 @@ class ModularResultViewSet(viewsets.ViewSet):
         elements.append(Spacer(1, 0.1*cm))
 
         # Results Table - Modular (Code, Module Name, CU, Grade)
-        results = ModularResult.objects.filter(candidate=candidate).select_related('module', 'module__level', 'assessment_series')
+        # Use only the BEST result per module (passed overrides failed, higher mark wins)
+        # This is already calculated in module_best_results above
+        results = list(module_best_results.values())
         
         candidate_total_cus = 0
         level_total_cus = 0
         completion_date = None
         
-        if results.exists():
+        if results:
             results_data = [[
                 Paragraph("CODE", info_label_style),
                 Paragraph("MODULE ASSESSED", info_label_style),
@@ -1213,8 +1332,8 @@ class ModularResultViewSet(viewsets.ViewSet):
         # Duration (Contact hours from level - get from first module's level)
         duration = "-"
         level_award = "-"
-        if results.exists():
-            first_result = results.first()
+        if results:
+            first_result = results[0]
             if first_result.module and first_result.module.level:
                 level = first_result.module.level
                 duration = level.contact_hours if level.contact_hours else "-"

@@ -92,13 +92,27 @@ const EditResultsModal = ({ isOpen, onClose, candidateId, results }) => {
             {/* Results List */}
             {results && results.length > 0 ? (
               results.map((result) => (
-                <div key={result.id} className="grid grid-cols-12 gap-4 items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+                <div 
+                  key={result.id} 
+                  className={`grid grid-cols-12 gap-4 items-center p-3 border rounded-lg hover:bg-gray-50 ${
+                    result.status === 'retake' 
+                      ? 'border-orange-300 bg-orange-50' 
+                      : 'border-gray-200'
+                  }`}
+                >
                   <div className="col-span-3 text-sm text-gray-900">
                     {result.assessment_series_name}
                   </div>
                   <div className="col-span-3">
-                    <div className="text-sm font-medium text-gray-900">
-                      {result.module_name}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-gray-900">
+                        {result.module_name}
+                      </span>
+                      {result.status === 'retake' && (
+                        <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-orange-100 text-orange-800">
+                          RT
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-gray-500">
                       {result.module_code}
@@ -119,7 +133,9 @@ const EditResultsModal = ({ isOpen, onClose, candidateId, results }) => {
                       value={editedMarks[result.id] !== undefined ? editedMarks[result.id] : ''}
                       onChange={(e) => handleMarkChange(result.id, e.target.value)}
                       placeholder="0-100"
-                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      className={`w-full px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                        result.status === 'retake' ? 'border-orange-300' : 'border-gray-300'
+                      }`}
                     />
                   </div>
                 </div>

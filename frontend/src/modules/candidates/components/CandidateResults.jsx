@@ -183,25 +183,26 @@ const ModularResults = ({ results, onAddResults, onEditResults, isCenterRep, isG
           )}
           {/* Hide Add/Edit buttons for center representatives or graduated candidates */}
           {!isCenterRep && !isGraduated && (
-            hasResults ? (
+            <>
               <Button
-                variant="primary"
-                size="sm"
-                onClick={onEditResults}
-              >
-                <Edit className="w-4 h-4 mr-2" />
-                Edit Results
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
+                variant="outline"
                 size="sm"
                 onClick={onAddResults}
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Add Results
               </Button>
-            )
+              {hasResults && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={onEditResults}
+                >
+                  <Edit className="w-4 h-4 mr-2" />
+                  Edit Results
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>

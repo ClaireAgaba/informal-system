@@ -71,8 +71,10 @@ const TranscriptLogs = () => {
   // Filter states
   const [filters, setFilters] = useState({
     center: '',
+    occupation: '',
     collection_status: '',
   });
+  const [uniqueOccupations, setUniqueOccupations] = useState([]);
 
   const buildQueryParams = useCallback((page = 1, overrides = {}) => {
     const params = new URLSearchParams();
@@ -83,6 +85,7 @@ const TranscriptLogs = () => {
     if (search) params.set('search', search);
     const f = overrides.filters || filters;
     if (f.center) params.set('center', f.center);
+    if (f.occupation) params.set('occupation', f.occupation);
     if (f.collection_status) params.set('collection_status', f.collection_status);
     return params.toString();
   }, [searchQuery, filters]);
@@ -108,7 +111,9 @@ const TranscriptLogs = () => {
   const fetchFilterOptions = async () => {
     try {
       const response = await apiClient.get('/awards/filter-options/');
+      // Centers come as objects with name and number
       setUniqueCenters(response.data.centers || []);
+      setUniqueOccupations(response.data.occupations || []);
     } catch (err) {
       console.error('Error fetching filter options:', err);
     }
@@ -141,7 +146,7 @@ const TranscriptLogs = () => {
 
   // Clear filters
   const handleClearFilters = () => {
-    const empty = { center: '', collection_status: '' };
+    const empty = { center: '', occupation: '', collection_status: '' };
     setFilters(empty);
     setSearchQuery('');
     setCurrentPage(1);
@@ -277,6 +282,67 @@ const TranscriptLogs = () => {
     } catch (err) {
       console.error('Export error:', err);
       toast.error('Failed to export data');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Export with images handler (ZIP file with Excel + images folder)
+  const handleExportWithImages = async (exportType) => {
+    try {
+      setExporting(true);
+      let candidateIds = [];
+
+      if (exportType === 'selected' && !selectAllFiltered) {
+        candidateIds = selectedCandidates;
+      }
+
+      // Build request body
+      const requestBody = {};
+      if (candidateIds.length > 0) {
+        requestBody.candidate_ids = candidateIds;
+      } else {
+        // Pass current filters for server-side filtering
+        const qs = buildQueryParams(1);
+        const params = new URLSearchParams(qs);
+        // Convert to object for request body
+        for (const [key, value] of params.entries()) {
+          if (key !== 'page' && key !== 'page_size') {
+            requestBody[key] = value;
+          }
+        }
+      }
+
+      const response = await apiClient.post('/awards/export-with-images/', requestBody, {
+        responseType: 'blob',
+      });
+
+      // Create download link
+      const blob = new Blob([response.data], { type: 'application/zip' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Get filename from Content-Disposition header or use default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'Transcript_Logs_Export.zip';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?([^";\n]+)"?/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1];
+        }
+      }
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Export with images completed successfully');
+    } catch (err) {
+      console.error('Export with images error:', err);
+      toast.error(err.response?.data?.error || 'Failed to export with images');
     } finally {
       setExporting(false);
     }
@@ -661,6 +727,14 @@ const TranscriptLogs = () => {
             <Download className="w-4 h-4 mr-2" />
             Export All ({totalCount})
           </button>
+          <button
+            onClick={() => handleExportWithImages('all')}
+            disabled={exporting}
+            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm disabled:opacity-50"
+          >
+            <Paperclip className="w-4 h-4 mr-2" />
+            {exporting ? 'Exporting...' : 'Export + Images'}
+          </button>
           <div className="text-sm text-gray-500">
             Total: <span className="font-semibold text-gray-900">{totalCount}</span> printed
           </div>
@@ -694,7 +768,7 @@ const TranscriptLogs = () => {
 
           {/* Filter Panel */}
           {showFilters && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Center</label>
                 <select
@@ -702,9 +776,25 @@ const TranscriptLogs = () => {
                   onChange={(e) => handleFilterChange({ ...filters, center: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">All</option>
+                  <option value="">All Centers</option>
                   {uniqueCenters.map((center) => (
-                    <option key={center} value={center}>{center}</option>
+                    <option key={center.name} value={center.name}>
+                      {center.name} ({center.number})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Occupation</label>
+                <select
+                  value={filters.occupation}
+                  onChange={(e) => handleFilterChange({ ...filters, occupation: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Occupations</option>
+                  {uniqueOccupations.map((occ) => (
+                    <option key={occ} value={occ}>{occ}</option>
                   ))}
                 </select>
               </div>
@@ -725,7 +815,7 @@ const TranscriptLogs = () => {
               <div className="flex items-end">
                 <button
                   onClick={handleClearFilters}
-                  className="w-full px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg"
+                  className="w-full px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg border border-gray-300"
                 >
                   Clear Filters
                 </button>
@@ -784,6 +874,14 @@ const TranscriptLogs = () => {
               >
                 <Download className="w-4 h-4 mr-2" />
                 Export Selected
+              </button>
+              <button
+                onClick={() => handleExportWithImages('selected')}
+                disabled={exporting}
+                className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                <Paperclip className="w-4 h-4 mr-2" />
+                {exporting ? 'Exporting...' : 'Export + Images'}
               </button>
             </div>
           </div>

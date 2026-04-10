@@ -279,7 +279,26 @@ class CandidateCreateUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, data):
-        """Convert empty strings to None for foreign keys"""
+        """Convert empty strings to None for foreign keys and enforce image requirement for centers"""
+        # Check if passport_photo is required for center representatives
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            if request.user.user_type == 'center_representative':
+                # For new candidates (create), passport_photo is mandatory
+                if not self.instance:  # Creating new candidate
+                    passport_photo = data.get('passport_photo')
+                    if not passport_photo:
+                        raise serializers.ValidationError({
+                            'passport_photo': 'Candidate photo is required. Please upload a passport photo before submitting.'
+                        })
+                # For updates, check if photo exists on instance or in data
+                else:
+                    passport_photo = data.get('passport_photo', getattr(self.instance, 'passport_photo', None))
+                    if not passport_photo:
+                        raise serializers.ValidationError({
+                            'passport_photo': 'Candidate photo is required. Please upload a passport photo before submitting.'
+                        })
+        
         # Always sync candidate_country if it's provided directly
         # This is the primary nationality field (ISO code like 'AF', 'UG')
         candidate_country = data.get('candidate_country')

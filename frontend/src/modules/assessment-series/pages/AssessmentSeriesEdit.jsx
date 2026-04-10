@@ -43,6 +43,8 @@ const AssessmentSeriesEdit = () => {
         is_current: series.is_current,
         results_released: series.results_released,
         dont_charge: series.dont_charge,
+        surcharge_50: series.surcharge_50 || false,
+        surcharge_100: series.surcharge_100 || false,
         is_active: series.is_active,
       });
     }
@@ -75,6 +77,12 @@ const AssessmentSeriesEdit = () => {
   });
 
   const onSubmit = (formData) => {
+    // Validate surcharge - only one can be selected
+    if (formData.surcharge_50 && formData.surcharge_100) {
+      toast.error('Only one surcharge option can be selected at a time');
+      return;
+    }
+
     const cleanedData = {
       name: formData.name,
       start_date: formData.start_date,
@@ -85,6 +93,8 @@ const AssessmentSeriesEdit = () => {
       is_current: formData.is_current || false,
       results_released: formData.results_released || false,
       dont_charge: formData.dont_charge || false,
+      surcharge_50: formData.surcharge_50 || false,
+      surcharge_100: formData.surcharge_100 || false,
       is_active: formData.is_active !== false,
     };
 
@@ -233,6 +243,38 @@ const AssessmentSeriesEdit = () => {
                     className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                   />
                   <label className="ml-2 text-sm text-gray-700">Don't charge candidates</label>
+                </div>
+
+                {/* Surcharge Options */}
+                <div className="border-t pt-4 mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Surcharge (Late Enrollment Fee)
+                  </label>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Apply a surcharge to enrollment fees for candidates enrolling in this series. Only one option can be selected.
+                  </p>
+                  <div className="space-y-2">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        {...register('surcharge_50')}
+                        className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                      />
+                      <label className="ml-2 text-sm text-gray-700">
+                        50% Surcharge <span className="text-gray-500">(e.g., 70,000 → 105,000)</span>
+                      </label>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        {...register('surcharge_100')}
+                        className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                      />
+                      <label className="ml-2 text-sm text-gray-700">
+                        100% Surcharge <span className="text-gray-500">(e.g., 70,000 → 140,000)</span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex items-center">

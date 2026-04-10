@@ -12,10 +12,15 @@ const AddResultsModal = ({ isOpen, onClose, candidateId, enrollments }) => {
   const [modules, setModules] = useState([]);
 
   // Get unique assessment series from enrollments
-  const assessmentSeries = [...new Set(enrollments.map(e => ({
-    id: e.assessment_series,
-    name: e.assessment_series_name
-  })))];
+  const assessmentSeries = enrollments.reduce((acc, e) => {
+    if (!acc.find(s => s.id === e.assessment_series)) {
+      acc.push({
+        id: e.assessment_series,
+        name: e.assessment_series_name
+      });
+    }
+    return acc;
+  }, []);
 
   // Fetch modules for selected series
   useEffect(() => {
@@ -184,14 +189,33 @@ const AddResultsModal = ({ isOpen, onClose, candidateId, enrollments }) => {
               </label>
               <div className="space-y-3">
                 {modules.map((module) => (
-                  <div key={module.id} className="grid grid-cols-2 gap-4 items-center p-3 border border-gray-200 rounded-lg">
+                  <div 
+                    key={module.id} 
+                    className={`grid grid-cols-2 gap-4 items-center p-3 border rounded-lg ${
+                      module.is_retake 
+                        ? 'border-orange-300 bg-orange-50' 
+                        : 'border-gray-200'
+                    }`}
+                  >
                     <div>
-                      <div className="font-medium text-gray-900">
-                        {module.module_code} - {module.module_name}
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-900">
+                          {module.module_code} - {module.module_name}
+                        </span>
+                        {module.is_retake && (
+                          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-800">
+                            RT
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm text-gray-500">
                         {assessmentSeries.find(s => s.id === parseInt(selectedSeries))?.name}
                       </div>
+                      {module.is_retake && module.prev_mark !== null && (
+                        <div className="text-xs text-orange-600 mt-1">
+                          Previous: {module.prev_mark}% ({module.prev_grade}) - Not Successful
+                        </div>
+                      )}
                     </div>
                     <div>
                       <input
@@ -202,7 +226,9 @@ const AddResultsModal = ({ isOpen, onClose, candidateId, enrollments }) => {
                         value={moduleMarks[module.id] || ''}
                         onChange={(e) => handleMarkChange(module.id, e.target.value)}
                         placeholder="Enter mark (0-100, -1 for missing)"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                          module.is_retake ? 'border-orange-300' : 'border-gray-300'
+                        }`}
                       />
                       <p className="mt-1 text-xs text-gray-500">
                         0-100 or -1 for missing

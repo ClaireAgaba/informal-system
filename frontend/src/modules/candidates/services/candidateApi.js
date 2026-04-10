@@ -44,6 +44,21 @@ export const candidateApi = {
     return apiClient.post(`${CANDIDATES_BASE}/${id}/decline/`, { reason });
   },
 
+  // Submit declined candidate for review (center action)
+  submitForReview: (id) => {
+    return apiClient.post(`${CANDIDATES_BASE}/${id}/submit-for-review/`);
+  },
+
+  // Approve changes on editable candidate (staff action)
+  approveChanges: (id) => {
+    return apiClient.post(`${CANDIDATES_BASE}/${id}/approve-changes/`);
+  },
+
+  // Decline changes on editable candidate (staff action)
+  declineChanges: (id, data) => {
+    return apiClient.post(`${CANDIDATES_BASE}/${id}/decline-changes/`, data);
+  },
+
   // Mark payment as cleared
   clearPayment: (id, paymentData) => {
     return apiClient.post(`${CANDIDATES_BASE}/${id}/clear-payment/`, paymentData);

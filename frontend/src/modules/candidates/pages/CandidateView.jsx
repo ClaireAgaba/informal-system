@@ -168,6 +168,50 @@ const CandidateView = () => {
     },
   });
 
+  // Submit for review mutation (center submits declined candidate for staff review)
+  const submitForReviewMutation = useMutation({
+    mutationFn: () => candidateApi.submitForReview(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['candidate', id]);
+      queryClient.invalidateQueries(['candidates']);
+      toast.success('Candidate submitted for review successfully!');
+    },
+    onError: (error) => {
+      const errorMsg = error.response?.data?.error || error.message;
+      toast.error(`Failed to submit for review: ${errorMsg}`);
+    },
+  });
+
+  // Approve changes mutation (staff approves editable candidate)
+  const approveChangesMutation = useMutation({
+    mutationFn: () => candidateApi.approveChanges(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['candidate', id]);
+      queryClient.invalidateQueries(['candidates']);
+      toast.success('Changes approved! Candidate is now pending verification.');
+    },
+    onError: (error) => {
+      const errorMsg = error.response?.data?.error || error.message;
+      toast.error(`Failed to approve changes: ${errorMsg}`);
+    },
+  });
+
+  // Decline changes mutation (staff declines editable candidate back to declined)
+  const declineChangesMutation = useMutation({
+    mutationFn: (reason) => candidateApi.declineChanges(id, { reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['candidate', id]);
+      queryClient.invalidateQueries(['candidates']);
+      toast.success('Changes declined. Candidate returned to declined status.');
+      setShowDeclineModal(false);
+      setDeclineReason('');
+    },
+    onError: (error) => {
+      const errorMsg = error.response?.data?.error || error.message;
+      toast.error(`Failed to decline changes: ${errorMsg}`);
+    },
+  });
+
   const handleVerify = () => {
     const message = candidate.verification_status === 'verified'
       ? 'This candidate is already verified. Do you want to re-verify them?'
@@ -378,11 +422,13 @@ const CandidateView = () => {
       verified: 'bg-green-100 text-green-800',
       declined: 'bg-red-100 text-red-800',
       pending_verification: 'bg-yellow-100 text-yellow-800',
+      editable: 'bg-blue-100 text-blue-800',
     };
     const labels = {
       verified: 'Verified',
       declined: 'Declined',
       pending_verification: 'Pending',
+      editable: 'Editable',
     };
     return (
       <span className={`px-3 py-1 rounded-full text-sm font-medium ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
@@ -821,7 +867,7 @@ const CandidateView = () => {
                 )}
 
                 {/* Decline button - NOT available for center representatives */}
-                {currentUser?.user_type !== 'center_representative' && (
+                {currentUser?.user_type !== 'center_representative' && candidate.verification_status !== 'editable' && (
                   <Button
                     variant="danger"
                     size="md"
@@ -832,6 +878,56 @@ const CandidateView = () => {
                     <XCircle className="w-4 h-4 mr-2" />
                     {candidate.verification_status === 'declined' ? 'Update Decline Reason' : 'Decline Candidate'}
                   </Button>
+                )}
+
+                {/* Submit for Review button - only for center representatives when candidate is declined */}
+                {currentUser?.user_type === 'center_representative' && candidate.verification_status === 'declined' && (
+                  <Button
+                    variant="primary"
+                    size="md"
+                    className="w-full"
+                    onClick={() => {
+                      if (window.confirm('Submit this candidate for staff review? This indicates you have resolved the decline issues.')) {
+                        submitForReviewMutation.mutate();
+                      }
+                    }}
+                    loading={submitForReviewMutation.isPending}
+                    disabled={submitForReviewMutation.isPending}
+                  >
+                    <Send className="w-4 h-4 mr-2" />
+                    Submit for Review
+                  </Button>
+                )}
+
+                {/* Approve/Decline Changes buttons - only for staff when candidate is editable */}
+                {currentUser?.user_type !== 'center_representative' && candidate.verification_status === 'editable' && (
+                  <>
+                    <Button
+                      variant="success"
+                      size="md"
+                      className="w-full"
+                      onClick={() => {
+                        if (window.confirm('Approve the changes made by the center? Candidate will move to pending verification.')) {
+                          approveChangesMutation.mutate();
+                        }
+                      }}
+                      loading={approveChangesMutation.isPending}
+                      disabled={approveChangesMutation.isPending}
+                    >
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Approve Changes
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="md"
+                      className="w-full"
+                      onClick={() => setShowDeclineModal(true)}
+                      disabled={declineChangesMutation.isPending}
+                    >
+                      <XCircle className="w-4 h-4 mr-2" />
+                      Decline Changes
+                    </Button>
+                  </>
                 )}
 
                 {/* Clear Payment button - NOT available for center representatives */}
@@ -932,6 +1028,32 @@ const CandidateView = () => {
                         Declined on {formatDate(candidate.declined_at)}
                         {candidate.declined_by_name && ` by ${candidate.declined_by_name}`}
                       </p>
+                    )}
+                  </div>
+                </div>
+              </Card.Content>
+            </Card>
+          )}
+
+          {/* Editable Alert - Center submitted for review */}
+          {candidate.verification_status === 'editable' && (
+            <Card className="mt-4 border-blue-200 bg-blue-50">
+              <Card.Content className="py-4">
+                <div className="flex items-start space-x-3">
+                  <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-sm font-medium text-blue-900">
+                      Pending Review
+                    </h4>
+                    <p className="text-sm text-blue-700 mt-1">
+                      The center has submitted this candidate for review after addressing decline issues.
+                      {currentUser?.user_type !== 'center_representative' && ' Please review and approve or decline the changes.'}
+                    </p>
+                    {candidate.decline_reason && (
+                      <div className="mt-2 p-2 bg-white rounded border border-blue-200">
+                        <p className="text-xs text-gray-500">Original decline reason:</p>
+                        <p className="text-sm text-gray-700">{candidate.decline_reason}</p>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1582,7 +1704,11 @@ const CandidateView = () => {
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">
-                {candidate.verification_status === 'declined' ? 'Update Decline Reason' : 'Decline Candidate'}
+                {candidate.verification_status === 'editable' 
+                  ? 'Decline Changes' 
+                  : candidate.verification_status === 'declined' 
+                    ? 'Update Decline Reason' 
+                    : 'Decline Candidate'}
               </h3>
               <button
                 onClick={() => {
@@ -1596,15 +1722,17 @@ const CandidateView = () => {
             </div>
 
             <p className="text-sm text-gray-600 mb-4">
-              {candidate.verification_status === 'declined'
-                ? 'Update the decline reason. This will be visible to the candidate so they can rectify the issues.'
-                : 'Please provide a reason for declining this candidate. This will be visible to the candidate so they can rectify the issues.'
+              {candidate.verification_status === 'editable'
+                ? 'The center submitted this candidate for review. Provide a reason for declining the changes.'
+                : candidate.verification_status === 'declined'
+                  ? 'Update the decline reason. This will be visible to the candidate so they can rectify the issues.'
+                  : 'Please provide a reason for declining this candidate. This will be visible to the candidate so they can rectify the issues.'
               }
             </p>
 
-            {candidate.verification_status === 'declined' && candidate.decline_reason && (
+            {(candidate.verification_status === 'declined' || candidate.verification_status === 'editable') && candidate.decline_reason && (
               <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <p className="text-xs text-gray-500 mb-1">Current reason:</p>
+                <p className="text-xs text-gray-500 mb-1">Previous reason:</p>
                 <p className="text-sm text-gray-700">{candidate.decline_reason}</p>
               </div>
             )}
@@ -1612,7 +1740,7 @@ const CandidateView = () => {
             <textarea
               value={declineReason}
               onChange={(e) => setDeclineReason(e.target.value)}
-              placeholder={candidate.verification_status === 'declined' ? 'Enter new decline reason...' : 'Enter decline reason...'}
+              placeholder={candidate.verification_status === 'editable' ? 'Enter reason for declining changes...' : candidate.verification_status === 'declined' ? 'Enter new decline reason...' : 'Enter decline reason...'}
               rows="4"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
             />
@@ -1625,18 +1753,32 @@ const CandidateView = () => {
                   setShowDeclineModal(false);
                   setDeclineReason('');
                 }}
-                disabled={declineMutation.isPending}
+                disabled={declineMutation.isPending || declineChangesMutation.isPending}
               >
                 Cancel
               </Button>
               <Button
                 variant="danger"
                 size="md"
-                onClick={handleDecline}
-                loading={declineMutation.isPending}
-                disabled={declineMutation.isPending || !declineReason.trim()}
+                onClick={() => {
+                  if (!declineReason.trim()) {
+                    toast.error('Please provide a reason');
+                    return;
+                  }
+                  if (candidate.verification_status === 'editable') {
+                    declineChangesMutation.mutate(declineReason);
+                  } else {
+                    declineMutation.mutate(declineReason);
+                  }
+                }}
+                loading={declineMutation.isPending || declineChangesMutation.isPending}
+                disabled={declineMutation.isPending || declineChangesMutation.isPending || !declineReason.trim()}
               >
-                {candidate.verification_status === 'declined' ? 'Update Reason' : 'Decline Candidate'}
+                {candidate.verification_status === 'editable' 
+                  ? 'Decline Changes' 
+                  : candidate.verification_status === 'declined' 
+                    ? 'Update Reason' 
+                    : 'Decline Candidate'}
               </Button>
             </div>
           </div>

@@ -306,6 +306,10 @@ const AssessmentSeriesView = () => {
                 value={
                   series.dont_charge ? (
                     <span className="text-purple-600 font-medium">No Charges</span>
+                  ) : series.surcharge_100 ? (
+                    <span className="text-red-600 font-medium">100% Surcharge</span>
+                  ) : series.surcharge_50 ? (
+                    <span className="text-orange-600 font-medium">50% Surcharge</span>
                   ) : (
                     <span className="text-green-600 font-medium">Standard Billing</span>
                   )

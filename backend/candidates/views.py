@@ -246,6 +246,112 @@ class CandidateViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(candidate)
         return Response(serializer.data)
     
+    @action(detail=True, methods=['post'], url_path='submit-for-review')
+    def submit_for_review(self, request, pk=None):
+        """
+        Center submits a declined candidate for review after fixing issues.
+        Changes status from 'declined' to 'editable'.
+        Only center representatives can use this endpoint.
+        """
+        candidate = self.get_object()
+        
+        # Only allow if user is a center representative
+        if not (request.user.is_authenticated and request.user.user_type == 'center_representative'):
+            return Response(
+                {'error': 'Only center representatives can submit candidates for review'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Only allow if candidate is currently declined
+        if candidate.verification_status != 'declined':
+            return Response(
+                {'error': 'Only declined candidates can be submitted for review'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        candidate.verification_status = 'editable'
+        candidate.save()
+        
+        self._log_activity(candidate, 'submitted_for_review', 'Candidate submitted for review after decline')
+        
+        serializer = self.get_serializer(candidate)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'], url_path='approve-changes')
+    def approve_changes(self, request, pk=None):
+        """
+        Staff approves changes made by center on an editable candidate.
+        Changes status from 'editable' to 'pending_verification'.
+        Only staff can use this endpoint.
+        """
+        candidate = self.get_object()
+        
+        # Only allow if user is staff
+        if not (request.user.is_authenticated and request.user.user_type == 'staff'):
+            return Response(
+                {'error': 'Only staff can approve candidate changes'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Only allow if candidate is currently editable
+        if candidate.verification_status != 'editable':
+            return Response(
+                {'error': 'Only editable candidates can have changes approved'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        staff = None
+        if hasattr(request.user, 'staff'):
+            staff = request.user.staff
+        
+        candidate.verification_status = 'pending_verification'
+        candidate.decline_reason = ''  # Clear the decline reason
+        candidate.save()
+        
+        self._log_activity(candidate, 'changes_approved', 'Candidate changes approved, awaiting verification')
+        
+        serializer = self.get_serializer(candidate)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'], url_path='decline-changes')
+    def decline_changes(self, request, pk=None):
+        """
+        Staff declines changes made by center on an editable candidate.
+        Changes status from 'editable' back to 'declined'.
+        Only staff can use this endpoint.
+        """
+        candidate = self.get_object()
+        
+        # Only allow if user is staff
+        if not (request.user.is_authenticated and request.user.user_type == 'staff'):
+            return Response(
+                {'error': 'Only staff can decline candidate changes'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Only allow if candidate is currently editable
+        if candidate.verification_status != 'editable':
+            return Response(
+                {'error': 'Only editable candidates can have changes declined'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        staff = None
+        if hasattr(request.user, 'staff'):
+            staff = request.user.staff
+        
+        reason = request.data.get('reason', '')
+        candidate.verification_status = 'declined'
+        candidate.verified_by = staff
+        candidate.decline_reason = reason
+        candidate.verification_date = timezone.now()
+        candidate.save()
+        
+        self._log_activity(candidate, 'changes_declined', 'Candidate changes declined', details={'reason': reason})
+        
+        serializer = self.get_serializer(candidate)
+        return Response(serializer.data)
+
     @action(detail=True, methods=['post'])
     def clear_payment(self, request, pk=None):
         """Mark payment as cleared for a candidate"""
@@ -304,6 +410,7 @@ class CandidateViewSet(viewsets.ModelViewSet):
                 'verified': queryset.filter(verification_status='verified').count(),
                 'pending': queryset.filter(verification_status='pending_verification').count(),
                 'declined': queryset.filter(verification_status='declined').count(),
+                'editable': queryset.filter(verification_status='editable').count(),
             },
             'by_gender': {
                 'male': queryset.filter(gender='male').count(),
@@ -482,9 +589,35 @@ class CandidateViewSet(viewsets.ModelViewSet):
         modules = validated_data.get('modules', [])
         papers = validated_data.get('papers', [])
         
+        reg_category = candidate.registration_category
+        
+        # For modular candidates, validate that they're not enrolling in passed or already enrolled modules
+        if reg_category == 'modular' and modules:
+            # Check for passed modules
+            passed_modules = []
+            for module_id in modules:
+                results = ModularResult.objects.filter(
+                    candidate=candidate,
+                    module_id=module_id
+                )
+                if any(r.is_passing for r in results):
+                    module = OccupationModule.objects.get(id=module_id)
+                    passed_modules.append(module.module_name)
+            
+            if passed_modules:
+                return Response(
+                    {'error': f'Cannot enroll in already passed modules: {", ".join(passed_modules)}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # No need to check enrollments - only results matter
+            # Passed modules are already blocked above
+        
         # Calculate billing (check if series has don't charge enabled)
         total_amount = Decimal('0.00')
-        reg_category = candidate.registration_category
+        
+        # Get surcharge multiplier from assessment series (1.0, 1.5, or 2.0)
+        surcharge_multiplier = Decimal(str(assessment_series.get_surcharge_multiplier()))
         
         # Check if assessment series has "don't charge" enabled
         is_retaker = False
@@ -505,13 +638,46 @@ class CandidateViewSet(viewsets.ModelViewSet):
                 total_amount = occupation_level.formal_fee / 2
             else:
                 total_amount = occupation_level.formal_fee
+            
+            # Apply surcharge to formal fees
+            total_amount = total_amount * surcharge_multiplier
         
         elif reg_category == 'modular':
-            # Modular: use modular fee based on number of modules
-            if len(modules) == 1:
-                total_amount = occupation_level.modular_fee_single_module
-            elif len(modules) == 2:
-                total_amount = occupation_level.modular_fee_double_module
+            # Modular: calculate fee based on modules, with retake discount
+            # First, check which modules are retakes (candidate failed them before)
+            retake_module_ids = set()
+            new_module_ids = set()
+            
+            for module_id in modules:
+                # Check if candidate has failed results for this module
+                failed_results = ModularResult.objects.filter(
+                    candidate=candidate,
+                    module_id=module_id
+                )
+                # Check if any result exists and if the latest is a fail
+                has_passed = any(r.is_passing for r in failed_results)
+                has_failed = any(not r.is_passing for r in failed_results)
+                
+                if has_failed and not has_passed:
+                    retake_module_ids.add(module_id)
+                else:
+                    new_module_ids.add(module_id)
+            
+            # Calculate fees: retakes = 50% of single module fee, new = full fee
+            single_module_fee = occupation_level.modular_fee_single_module
+            retake_fee = single_module_fee / 2
+            
+            # Calculate total based on retakes and new modules
+            retake_count = len(retake_module_ids)
+            new_count = len(new_module_ids)
+            
+            total_amount = (retake_fee * retake_count) + (single_module_fee * new_count)
+            
+            # Track retake status for logging
+            is_retaker = retake_count > 0
+            
+            # Apply surcharge to modular fees
+            total_amount = total_amount * surcharge_multiplier
         
         elif reg_category == 'workers_pas':
             # Workers PAS: fee per paper (75k per paper)
@@ -520,6 +686,9 @@ class CandidateViewSet(viewsets.ModelViewSet):
             if any_level:
                 per_paper_fee = any_level.workers_pas_per_module_fee  # Using this as per-paper fee
                 total_amount = per_paper_fee * len(papers)
+            
+            # Apply surcharge to workers PAS fees
+            total_amount = total_amount * surcharge_multiplier
         
         # Create enrollment with transaction
         try:
@@ -749,20 +918,39 @@ class CandidateViewSet(viewsets.ModelViewSet):
                     # Calculate billing (check if series has don't charge enabled)
                     total_amount = Decimal('0.00')
                     
+                    # Get surcharge multiplier from assessment series (1.0, 1.5, or 2.0)
+                    surcharge_multiplier = Decimal(str(assessment_series.get_surcharge_multiplier()))
+                    
                     if assessment_series.dont_charge:
                         total_amount = Decimal('0.00')
                     elif reg_category == 'formal':
-                        total_amount = occupation_level.formal_fee
+                        total_amount = occupation_level.formal_fee * surcharge_multiplier
                     elif reg_category == 'modular':
-                        if len(modules) == 1:
-                            total_amount = occupation_level.modular_fee_single_module
-                        elif len(modules) == 2:
-                            total_amount = occupation_level.modular_fee_double_module
+                        # Calculate fee with retake discount for failed modules
+                        single_module_fee = occupation_level.modular_fee_single_module
+                        retake_fee = single_module_fee / 2
+                        
+                        module_total = Decimal('0.00')
+                        for module in modules:
+                            # Check if this candidate has failed this module
+                            failed_results = ModularResult.objects.filter(
+                                candidate=candidate,
+                                module=module
+                            )
+                            has_passed = any(r.is_passing for r in failed_results)
+                            has_failed = any(not r.is_passing for r in failed_results)
+                            
+                            if has_failed and not has_passed:
+                                module_total += retake_fee
+                            else:
+                                module_total += single_module_fee
+                        
+                        total_amount = module_total * surcharge_multiplier
                     elif reg_category == 'workers_pas':
                         any_level = candidate.occupation.levels.first()
                         if any_level:
                             per_paper_fee = any_level.workers_pas_per_module_fee
-                            total_amount = per_paper_fee * len(papers)
+                            total_amount = per_paper_fee * len(papers) * surcharge_multiplier
                     
                     # Create enrollment
                     enrollment = CandidateEnrollment.objects.create(
@@ -916,19 +1104,75 @@ class CandidateViewSet(viewsets.ModelViewSet):
             response_data['levels'] = levels_data
         
         elif reg_category == 'modular':
-            # Modular: show level 1 with its modules
+            # Modular: show level 1 with its modules, filtering out passed ones
             level_1 = occupation.levels.filter(level_name__icontains='level 1', is_active=True).first()
             if level_1:
-                modules = level_1.modules.filter(is_active=True).values(
-                    'id', 'module_code', 'module_name'
-                )
+                all_modules = level_1.modules.filter(is_active=True)
+                
+                # Get all modular results for this candidate
+                modular_results = ModularResult.objects.filter(
+                    candidate=candidate,
+                    module__in=all_modules
+                ).select_related('module', 'assessment_series')
+                
+                # Build a dict of module status: {module_id: {'passed': bool, 'failed': bool, 'enrolled': bool}}
+                module_status = {}
+                for module in all_modules:
+                    module_status[module.id] = {
+                        'passed': False,
+                        'failed': False,
+                        'has_results': False,
+                    }
+                
+                # Check results for each module
+                for result in modular_results:
+                    module_id = result.module_id
+                    module_status[module_id]['has_results'] = True
+                    if result.is_passing:
+                        module_status[module_id]['passed'] = True
+                    else:
+                        # Only mark as failed if not already passed (in case of retake success)
+                        if not module_status[module_id]['passed']:
+                            module_status[module_id]['failed'] = True
+                
+                # Build modules list with availability info
+                # Simple logic: check results only
+                # - Passed = disabled
+                # - Failed = retake (50% off)
+                # - No results = new enrollment
+                modules_data = []
+                for module in all_modules:
+                    status = module_status[module.id]
+                    is_passed = status['passed']
+                    is_failed = status['failed'] and not status['passed']
+                    
+                    module_data = {
+                        'id': module.id,
+                        'module_code': module.module_code,
+                        'module_name': module.module_name,
+                        'is_passed': is_passed,
+                        'is_failed': is_failed,
+                        'is_retake': is_failed,  # Failed = retake
+                        'available': not is_passed,  # Only passed modules are disabled
+                    }
+                    
+                    # Add reason if not available
+                    if is_passed:
+                        module_data['unavailable_reason'] = 'Already passed'
+                    
+                    modules_data.append(module_data)
+                
+                # Calculate retake fee (50% of single module fee)
+                retake_fee = level_1.modular_fee_single_module / 2
+                
                 response_data['level'] = {
                     'id': level_1.id,
                     'level_name': level_1.level_name,
                     'modular_fee_single_module': str(level_1.modular_fee_single_module),
                     'modular_fee_double_module': str(level_1.modular_fee_double_module),
+                    'modular_fee_retake': str(retake_fee),
                 }
-                response_data['modules'] = list(modules)
+                response_data['modules'] = modules_data
                 response_data['module_limit'] = {'min': 1, 'max': 2}
         
         elif reg_category == 'workers_pas':
