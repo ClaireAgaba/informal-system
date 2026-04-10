@@ -1386,6 +1386,13 @@ class CandidateViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Validate passport photo is required for submission
+        if not candidate.passport_photo:
+            return Response(
+                {'passport_photo': 'Candidate photo is required. Please upload a passport photo before submitting.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         # Validate required fields
         if not candidate.assessment_center:
             return Response(
