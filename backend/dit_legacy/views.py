@@ -1,7 +1,8 @@
 from django.db import connections
 from django.db.utils import OperationalError, ProgrammingError
 from django.http import HttpResponse
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 
@@ -12,6 +13,7 @@ def _dictfetchall(cursor):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def search(request):
     """
     Search legacy DIT candidates by registration number or name.
@@ -136,6 +138,7 @@ def search(request):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def person_detail(request, person_id: str):
     """
     Get detailed information for a legacy DIT candidate by student_id.
@@ -198,6 +201,7 @@ def person_detail(request, person_id: str):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def person_photo(request, person_id: str):
     """
     Get passport photo for a legacy DIT candidate.
@@ -224,6 +228,7 @@ def person_photo(request, person_id: str):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def person_results(request, person_id: str):
     """
     Get all registration/assessment history for a legacy DIT candidate.
@@ -278,6 +283,7 @@ def person_results(request, person_id: str):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def get_districts(request):
     """
     Get all districts from the legacy database.
@@ -299,6 +305,7 @@ def get_districts(request):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def get_institutions(request):
     """
     Get all training providers/institutions from the legacy database.
@@ -348,6 +355,7 @@ def get_institutions(request):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def get_courses(request):
     """
     Get all courses/occupations from the legacy database.
@@ -369,6 +377,7 @@ def get_courses(request):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def get_levels(request):
     """
     Get all assessment levels from the legacy database.
@@ -390,6 +399,7 @@ def get_levels(request):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def stats(request):
     """
     Get statistics from the legacy database.
