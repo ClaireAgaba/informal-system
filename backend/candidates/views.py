@@ -613,6 +613,62 @@ class CandidateViewSet(viewsets.ModelViewSet):
             # No need to check enrollments - only results matter
             # Passed modules are already blocked above
         
+        # For workers_pas candidates, validate paper selection
+        if reg_category == 'workers_pas' and papers:
+            from results.models import WorkersPasResult
+            
+            # Check for passed papers and categorize retakes vs new
+            passed_papers = []
+            retake_paper_ids = set()
+            new_paper_ids = set()
+            
+            for paper_id in papers:
+                results = WorkersPasResult.objects.filter(
+                    candidate=candidate,
+                    paper_id=paper_id
+                )
+                has_passed = any(r.is_passing for r in results)
+                has_failed = any(not r.is_passing for r in results)
+                
+                if has_passed:
+                    paper = OccupationPaper.objects.get(id=paper_id)
+                    passed_papers.append(paper.paper_name)
+                elif has_failed:
+                    retake_paper_ids.add(paper_id)
+                else:
+                    new_paper_ids.add(paper_id)
+            
+            if passed_papers:
+                return Response(
+                    {'error': f'Cannot enroll in already passed papers: {", ".join(passed_papers)}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate paper count
+            total_papers = len(papers)
+            is_retake_only = len(retake_paper_ids) > 0 and len(new_paper_ids) == 0
+            
+            if is_retake_only:
+                # Retake only: min 1 paper allowed
+                if total_papers < 1:
+                    return Response(
+                        {'error': 'At least 1 paper is required for retake enrollment'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            else:
+                # Mixed or new only: min 2, max 4
+                if total_papers < 2:
+                    return Response(
+                        {'error': 'At least 2 papers are required for enrollment (unless retaking only)'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            if total_papers > 4:
+                return Response(
+                    {'error': 'Maximum 4 papers allowed per enrollment'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
         # Calculate billing (check if series has don't charge enabled)
         total_amount = Decimal('0.00')
         
@@ -915,6 +971,57 @@ class CandidateViewSet(viewsets.ModelViewSet):
                         })
                         continue
                     
+                    # For workers_pas, validate paper selection per candidate
+                    if reg_category == 'workers_pas' and papers:
+                        from results.models import WorkersPasResult
+                        
+                        passed_papers = []
+                        retake_paper_ids = set()
+                        new_paper_ids = set()
+                        
+                        for paper in papers:
+                            results = WorkersPasResult.objects.filter(
+                                candidate=candidate,
+                                paper=paper
+                            )
+                            has_passed = any(r.is_passing for r in results)
+                            has_failed = any(not r.is_passing for r in results)
+                            
+                            if has_passed:
+                                passed_papers.append(paper.paper_name)
+                            elif has_failed:
+                                retake_paper_ids.add(paper.id)
+                            else:
+                                new_paper_ids.add(paper.id)
+                        
+                        if passed_papers:
+                            failed_enrollments.append({
+                                'candidate_id': candidate.id,
+                                'name': candidate.full_name,
+                                'reason': f'Already passed: {", ".join(passed_papers)}'
+                            })
+                            continue
+                        
+                        # Validate paper count
+                        total_papers = len(papers)
+                        is_retake_only = len(retake_paper_ids) > 0 and len(new_paper_ids) == 0
+                        
+                        if not is_retake_only and total_papers < 2:
+                            failed_enrollments.append({
+                                'candidate_id': candidate.id,
+                                'name': candidate.full_name,
+                                'reason': 'At least 2 papers required (unless retaking only)'
+                            })
+                            continue
+                        
+                        if total_papers > 4:
+                            failed_enrollments.append({
+                                'candidate_id': candidate.id,
+                                'name': candidate.full_name,
+                                'reason': 'Maximum 4 papers allowed'
+                            })
+                            continue
+                    
                     # Calculate billing (check if series has don't charge enabled)
                     total_amount = Decimal('0.00')
                     
@@ -1177,19 +1284,71 @@ class CandidateViewSet(viewsets.ModelViewSet):
         
         elif reg_category == 'workers_pas':
             # Workers PAS: show all levels with their modules and nested papers
+            # Include pass/fail status for retake handling
+            from results.models import WorkersPasResult
+            
+            # Get all papers across all levels/modules for this occupation
+            all_papers = OccupationPaper.objects.filter(
+                module__level__occupation=occupation,
+                is_active=True
+            )
+            
+            # Get all results for this candidate
+            workers_pas_results = WorkersPasResult.objects.filter(
+                candidate=candidate,
+                paper__in=all_papers
+            ).select_related('paper')
+            
+            # Build paper status dict: {paper_id: {'passed': bool, 'failed': bool}}
+            paper_status = {}
+            for paper in all_papers:
+                paper_status[paper.id] = {'passed': False, 'failed': False, 'prev_mark': None, 'prev_grade': None}
+            
+            for result in workers_pas_results:
+                paper_id = result.paper_id
+                if result.is_passing:
+                    paper_status[paper_id]['passed'] = True
+                else:
+                    if not paper_status[paper_id]['passed']:
+                        paper_status[paper_id]['failed'] = True
+                        paper_status[paper_id]['prev_mark'] = float(result.mark) if result.mark else None
+                        paper_status[paper_id]['prev_grade'] = result.grade
+            
             levels_data = []
             for level in occupation.levels.filter(is_active=True):
                 modules_data = []
                 for module in level.modules.filter(is_active=True):
-                    # Get papers that belong to this module
-                    papers = module.papers.filter(is_active=True).values(
-                        'id', 'paper_code', 'paper_name', 'paper_type'
-                    )
+                    # Get papers with status info
+                    papers_data = []
+                    for paper in module.papers.filter(is_active=True):
+                        status = paper_status.get(paper.id, {})
+                        is_passed = status.get('passed', False)
+                        is_failed = status.get('failed', False) and not is_passed
+                        
+                        paper_data = {
+                            'id': paper.id,
+                            'paper_code': paper.paper_code,
+                            'paper_name': paper.paper_name,
+                            'paper_type': paper.paper_type,
+                            'is_passed': is_passed,
+                            'is_failed': is_failed,
+                            'is_retake': is_failed,
+                            'available': not is_passed,
+                        }
+                        
+                        if is_passed:
+                            paper_data['unavailable_reason'] = 'Already passed'
+                        if is_failed:
+                            paper_data['prev_mark'] = status.get('prev_mark')
+                            paper_data['prev_grade'] = status.get('prev_grade')
+                        
+                        papers_data.append(paper_data)
+                    
                     modules_data.append({
                         'id': module.id,
                         'module_code': module.module_code,
                         'module_name': module.module_name,
-                        'papers': list(papers),
+                        'papers': papers_data,
                     })
                 
                 levels_data.append({
@@ -1200,6 +1359,8 @@ class CandidateViewSet(viewsets.ModelViewSet):
                     'modules': modules_data,
                 })
             response_data['levels'] = levels_data
+            # Paper limits: min 2, max 4 normally; min 1 if only retakes
+            response_data['paper_limit'] = {'min': 2, 'max': 4, 'min_retake_only': 1}
         
         return Response(response_data)
     

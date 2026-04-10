@@ -619,14 +619,16 @@ class EnrollCandidateSerializer(serializers.Serializer):
                 raise serializers.ValidationError({'modules': 'Invalid modules selected'})
         
         elif reg_category == 'workers_pas':
-            # Workers PAS: must select 2-4 papers from any level
+            # Workers PAS: must select 1-4 papers from any level
+            # Note: Min 1 for retake-only, Min 2 otherwise - validated in view
             papers = data.get('papers', [])
             
             if not papers:
                 raise serializers.ValidationError({'papers': "Worker's PAS registration requires papers"})
             
-            if len(papers) < 2:
-                raise serializers.ValidationError({'papers': 'Minimum 2 papers required'})
+            # Allow min 1 paper here - retake-only validation happens in view
+            if len(papers) < 1:
+                raise serializers.ValidationError({'papers': 'At least 1 paper required'})
             
             if len(papers) > 4:
                 raise serializers.ValidationError({'papers': 'Maximum 4 papers allowed'})

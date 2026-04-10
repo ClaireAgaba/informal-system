@@ -110,8 +110,29 @@ const EnrollmentModal = ({ candidate, onClose }) => {
     }
 
     if (regCategory === 'workers_pas') {
-      if (formData.papers.length < 2) {
-        toast.error("Worker's PAS registration requires minimum 2 papers per assessment series");
+      // Check if all selected papers are retakes
+      let retakeCount = 0;
+      let newCount = 0;
+      for (const paperId of formData.papers) {
+        let paper = null;
+        for (const level of options?.levels || []) {
+          for (const module of level.modules || []) {
+            paper = module.papers?.find(p => p.id === paperId);
+            if (paper) break;
+          }
+          if (paper) break;
+        }
+        if (paper?.is_retake) {
+          retakeCount++;
+        } else {
+          newCount++;
+        }
+      }
+      
+      const isRetakeOnly = retakeCount > 0 && newCount === 0;
+      
+      if (!isRetakeOnly && formData.papers.length < 2) {
+        toast.error("Worker's PAS registration requires minimum 2 papers (unless retaking only)");
         return;
       }
       if (formData.papers.length > 4) {
@@ -159,6 +180,21 @@ const EnrollmentModal = ({ candidate, onClose }) => {
   };
 
   const handlePaperToggle = (paperId) => {
+    // Check if paper is available (not passed)
+    let paper = null;
+    for (const level of options?.levels || []) {
+      for (const module of level.modules || []) {
+        paper = module.papers?.find(p => p.id === paperId);
+        if (paper) break;
+      }
+      if (paper) break;
+    }
+    
+    if (paper && !paper.available) {
+      toast.error(`Cannot select this paper: ${paper.unavailable_reason || 'Not available'}`);
+      return;
+    }
+
     const papers = [...formData.papers];
     const index = papers.indexOf(paperId);
 
@@ -360,9 +396,10 @@ const EnrollmentModal = ({ candidate, onClose }) => {
                 <div className="text-sm text-blue-800 space-y-1">
                   <p><strong>Worker's PAS/Informal candidates</strong> can select papers from any level and module.</p>
                   <ul className="list-disc list-inside ml-2 mt-2 space-y-1">
-                    <li><strong>Minimum:</strong> 2 papers per assessment series</li>
+                    <li><strong>Minimum:</strong> 2 papers (or 1 if retaking only)</li>
                     <li><strong>Maximum:</strong> 4 papers per assessment series</li>
-                    <li><strong>Rule:</strong> Only one paper per module</li>
+                    <li><strong>Retakes:</strong> Failed papers show <span className="px-1 py-0.5 text-xs rounded bg-orange-100 text-orange-800">RT</span> badge</li>
+                    <li><strong>Passed:</strong> Already passed papers are disabled</li>
                   </ul>
                   <p className="mt-2 text-xs">
                     Papers selected: <strong>{formData.papers.length} / 4</strong>
@@ -400,22 +437,54 @@ const EnrollmentModal = ({ candidate, onClose }) => {
                               {/* Papers in this module */}
                               {module.papers && module.papers.length > 0 ? (
                                 <div className="bg-white p-2 space-y-1">
-                                  {module.papers.map((paper) => (
-                                    <label key={paper.id} className="flex items-center p-2 rounded hover:bg-gray-50 cursor-pointer">
-                                      <input
-                                        type="checkbox"
-                                        checked={formData.papers.includes(paper.id)}
-                                        onChange={() => handlePaperToggle(paper.id)}
-                                        className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                                      />
-                                      <span className="ml-3 text-sm text-gray-700">
-                                        <span className="font-medium">{paper.paper_code}</span> - {paper.paper_name}
-                                        <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800">
-                                          {paper.paper_type_display || paper.paper_type}
-                                        </span>
-                                      </span>
-                                    </label>
-                                  ))}
+                                  {module.papers.map((paper) => {
+                                    const isAvailable = paper.available !== false;
+                                    const isRetake = paper.is_retake;
+                                    const isPassed = paper.is_passed;
+                                    
+                                    return (
+                                      <label 
+                                        key={paper.id} 
+                                        className={`flex items-center justify-between p-2 rounded ${
+                                          !isAvailable
+                                            ? 'bg-gray-100 cursor-not-allowed opacity-60'
+                                            : isRetake
+                                              ? 'bg-orange-50 hover:bg-orange-100 cursor-pointer border border-orange-200'
+                                              : 'hover:bg-gray-50 cursor-pointer'
+                                        }`}
+                                      >
+                                        <div className="flex items-center">
+                                          <input
+                                            type="checkbox"
+                                            checked={formData.papers.includes(paper.id)}
+                                            onChange={() => handlePaperToggle(paper.id)}
+                                            disabled={!isAvailable}
+                                            className={`w-4 h-4 border-gray-300 rounded focus:ring-primary-500 ${
+                                              !isAvailable ? 'cursor-not-allowed' : 'text-primary-600'
+                                            }`}
+                                          />
+                                          <span className="ml-3 text-sm text-gray-700">
+                                            <span className="font-medium">{paper.paper_code}</span> - {paper.paper_name}
+                                            <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800">
+                                              {paper.paper_type_display || paper.paper_type}
+                                            </span>
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                          {isPassed && (
+                                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                                              ✓ Passed
+                                            </span>
+                                          )}
+                                          {isRetake && (
+                                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-800">
+                                              RT
+                                            </span>
+                                          )}
+                                        </div>
+                                      </label>
+                                    );
+                                  })}
                                 </div>
                               ) : (
                                 <div className="p-3 text-sm text-gray-500 italic">
