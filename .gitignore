@@ -79,3 +79,8 @@ dist-ssr/
 
 # OS
 Thumbs.db
+
+# Large SQL dumps
+*.sql
+dit old data.sql
+nginx/dit legacy.sql

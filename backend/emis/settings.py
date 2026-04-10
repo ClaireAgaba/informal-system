@@ -109,12 +109,12 @@ DATABASES = {
     'dit_legacy': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': config('DIT_LEGACY_DB_NAME', default='dit_legacy'),
-        'USER': config('DIT_LEGACY_DB_USER', default='root'),
-        'PASSWORD': config('DIT_LEGACY_DB_PASSWORD', default='rootpass123'),
-        'HOST': config('DIT_LEGACY_DB_HOST', default='127.0.0.1'),
-        'PORT': config('DIT_LEGACY_DB_PORT', default='3307'),
+        'USER': config('DIT_LEGACY_DB_USER', default='dit_user'),
+        'PASSWORD': config('DIT_LEGACY_DB_PASSWORD', default='dit_legacy_pass'),
+        'HOST': config('DIT_LEGACY_DB_HOST', default='localhost'),
+        'PORT': config('DIT_LEGACY_DB_PORT', default='3306'),
         'OPTIONS': {
-            'charset': 'utf8',
+            'charset': 'utf8mb4',
             'init_command': "SET sql_mode='';",
         },
     },
