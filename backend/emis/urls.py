@@ -24,6 +24,7 @@ urlpatterns = [
     path('api/dit-migration/', include('dit_migration.urls')),
     path('api/dit-legacy/', include('dit_legacy.urls')),
     path('api/fees/', include('fees.urls')),
+    path('api/verify/', include('verification.urls')),
 ]
 
 # Serve media files in development
