@@ -6,25 +6,30 @@ import ditLegacyApi from '../api/ditLegacyApi';
 
 export default function DitLegacyIndex() {
   const [q, setQ] = useState('');
+  const [name, setName] = useState('');
   const [regno, setRegno] = useState('');
   const [gender, setGender] = useState('');
+  const [status, setStatus] = useState('');
   const [district, setDistrict] = useState('');
   const [trainingProvider, setTrainingProvider] = useState('');
   const [page, setPage] = useState(1);
   const pageSize = 50;
 
   const trimmed = q.trim();
+  const nameTrimmed = name.trim();
   const regnoTrimmed = regno.trim();
   const districtTrimmed = district.trim();
   const trainingProviderTrimmed = trainingProvider.trim();
 
   const { data, isLoading, error, isFetching } = useQuery({
-    queryKey: ['dit-legacy-search', trimmed, regnoTrimmed, gender, districtTrimmed, trainingProviderTrimmed, page],
+    queryKey: ['dit-legacy-search', trimmed, nameTrimmed, regnoTrimmed, gender, status, districtTrimmed, trainingProviderTrimmed, page],
     queryFn: () =>
       ditLegacyApi.search({
         q: trimmed,
+        name: nameTrimmed,
         regno: regnoTrimmed,
         gender,
+        status,
         district: districtTrimmed,
         training_provider: trainingProviderTrimmed,
         page,
@@ -46,14 +51,16 @@ export default function DitLegacyIndex() {
 
   const clearFilters = useCallback(() => {
     setQ('');
+    setName('');
     setRegno('');
     setGender('');
+    setStatus('');
     setDistrict('');
     setTrainingProvider('');
     setPage(1);
   }, []);
 
-  const hasActiveFilters = trimmed || regnoTrimmed || gender || districtTrimmed || trainingProviderTrimmed;
+  const hasActiveFilters = trimmed || nameTrimmed || regnoTrimmed || gender || status || districtTrimmed || trainingProviderTrimmed;
 
   return (
     <div className="p-4 lg:p-6">
@@ -112,7 +119,19 @@ export default function DitLegacyIndex() {
           </div>
 
           {/* Filter Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                Name
+              </label>
+              <input
+                value={name}
+                onChange={handleFilterChange(setName)}
+                placeholder="e.g. John"
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-colors"
+              />
+            </div>
+
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">
                 Registration Number
@@ -120,7 +139,7 @@ export default function DitLegacyIndex() {
               <input
                 value={regno}
                 onChange={handleFilterChange(setRegno)}
-                placeholder="NSIN or Exam No"
+                placeholder="e.g. UVQF/414/01/TL/03"
                 className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-colors"
               />
             </div>
@@ -137,6 +156,21 @@ export default function DitLegacyIndex() {
                 <option value="">All Genders</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                Status
+              </label>
+              <select
+                value={status}
+                onChange={handleFilterChange(setStatus)}
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-colors"
+              >
+                <option value="">All Statuses</option>
+                <option value="completed">Completed</option>
+                <option value="in_progress">In Progress</option>
               </select>
             </div>
 
@@ -196,6 +230,7 @@ export default function DitLegacyIndex() {
                     <th className="px-4 py-3.5 text-left font-semibold text-gray-700 whitespace-nowrap">Gender</th>
                     <th className="px-4 py-3.5 text-left font-semibold text-gray-700 whitespace-nowrap">Training Provider</th>
                     <th className="px-4 py-3.5 text-left font-semibold text-gray-700 whitespace-nowrap">District</th>
+                    <th className="px-4 py-3.5 text-center font-semibold text-gray-700 whitespace-nowrap">Status</th>
                     <th className="px-4 py-3.5 text-center font-semibold text-gray-700 whitespace-nowrap w-24">Action</th>
                   </tr>
                 </thead>
@@ -231,6 +266,17 @@ export default function DitLegacyIndex() {
                         </td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                           {r.district || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {r.certificate_number ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                              Completed
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                              In Progress
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <Link

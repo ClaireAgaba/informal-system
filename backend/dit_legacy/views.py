@@ -1,9 +1,76 @@
+import csv
+import json
+import os
+from collections import defaultdict
+from pathlib import Path
+
+from django.conf import settings
 from django.db import connections
 from django.db.utils import OperationalError, ProgrammingError
-from django.http import HttpResponse
+from django.http import FileResponse, HttpResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+
+# Extracted data directories
+_DATA_DIR = Path(settings.BASE_DIR) / 'scripts' / 'dit_extract_data'
+_PHOTOS_DIR = _DATA_DIR / 'photos' / 'by_student_id'
+
+# Caches for extracted data (loaded lazily)
+_extracted_results_cache = None   # student_id -> list of exam dicts
+_id_mapping_cache = None          # old_person_id -> student_id
+
+
+def _load_id_mapping():
+    """Load old_person_id → student_id mapping (reverse also available)."""
+    global _id_mapping_cache
+    if _id_mapping_cache is not None:
+        return _id_mapping_cache
+    mapping_file = _DATA_DIR / 'id_mapping.json'
+    if mapping_file.is_file():
+        with open(mapping_file) as f:
+            _id_mapping_cache = json.load(f)  # old_person_id -> student_id
+    else:
+        _id_mapping_cache = {}
+    return _id_mapping_cache
+
+
+def _load_extracted_results():
+    """Load extracted exam results keyed by student_id."""
+    global _extracted_results_cache
+    if _extracted_results_cache is not None:
+        return _extracted_results_cache
+
+    _extracted_results_cache = defaultdict(list)
+    mapping = _load_id_mapping()
+    # Build reverse: old_person_id → student_id
+    reverse = {str(old_pid): str(sid) for old_pid, sid in mapping.items()}
+
+    for csv_name in ('results_test.csv', 'results.csv'):
+        csv_path = _DATA_DIR / csv_name
+        if csv_path.is_file():
+            with open(csv_path, newline='') as f:
+                for row in csv.DictReader(f):
+                    old_pid = row.get('person_id', '')
+                    student_id = reverse.get(old_pid)
+                    if student_id:
+                        _extracted_results_cache[student_id].append({
+                            'instance': row.get('instance', ''),
+                            'exam_number': row.get('exam_number', ''),
+                            'module_codes': row.get('module_codes', ''),
+                            'certificate_number': row.get('certificate_number', ''),
+                            'sponsored_by': row.get('sponsored_by', ''),
+                            'language': row.get('language', ''),
+                            'exam_date': row.get('exam_date', ''),
+                            'paper': row.get('paper', ''),
+                            'exam_mark': row.get('exam_mark', ''),
+                            'exam_results': row.get('exam_results', ''),
+                            'exam_grade': row.get('exam_grade', ''),
+                            'exam_comment': row.get('exam_comment', ''),
+                        })
+            break  # Use the first file found
+
+    return _extracted_results_cache
 
 
 def _dictfetchall(cursor):
@@ -24,8 +91,10 @@ def search(request):
     district or training_provider filters are not active.
     """
     q = (request.query_params.get('q') or '').strip()
+    name = (request.query_params.get('name') or '').strip()
     regno = (request.query_params.get('regno') or '').strip()
     gender = (request.query_params.get('gender') or '').strip()
+    status = (request.query_params.get('status') or '').strip()
     district = (request.query_params.get('district') or '').strip()
     training_provider = (request.query_params.get('training_provider') or '').strip()
 
@@ -63,6 +132,17 @@ def search(request):
         )
         student_params.extend([q_like] * 5)
 
+    if name:
+        name_like = f"%{name.lower()}%"
+        student_where.append(
+            "("
+            "LOWER(COALESCE(s.firstname, '')) LIKE %s "
+            "OR LOWER(COALESCE(s.othername, '')) LIKE %s "
+            "OR LOWER(COALESCE(s.surname, '')) LIKE %s"
+            ")"
+        )
+        student_params.extend([name_like] * 3)
+
     if regno:
         regno_like = f"%{regno.lower()}%"
         student_where.append(
@@ -77,6 +157,11 @@ def search(request):
     if gender:
         student_where.append("LOWER(COALESCE(s.gender, '')) = %s")
         student_params.append(gender.lower())
+
+    if status == 'completed':
+        student_where.append("s.certificate_no IS NOT NULL AND s.certificate_no != ''")
+    elif status == 'in_progress':
+        student_where.append("(s.certificate_no IS NULL OR s.certificate_no = '')")
 
     # Extra WHERE conditions that need JOINs
     join_params = []
@@ -287,27 +372,14 @@ def person_detail(request, person_id: str):
 @permission_classes([AllowAny])
 def person_photo(request, person_id: str):
     """
-    Get passport photo for a legacy DIT candidate.
-    Photos are stored in the students.passport field as file paths.
+    Serve the passport photo image for a legacy DIT candidate.
+    Looks for {student_id}.jpg in the extracted photos directory.
     """
-    sql = """
-        SELECT passport
-        FROM students
-        WHERE student_id = %s
-        LIMIT 1
-    """
+    photo_path = _PHOTOS_DIR / f'{person_id}.jpg'
+    if photo_path.is_file():
+        return FileResponse(open(photo_path, 'rb'), content_type='image/jpeg')
 
-    try:
-        with connections['dit_legacy'].cursor() as cursor:
-            cursor.execute(sql, [person_id])
-            row = cursor.fetchone()
-    except (ProgrammingError, OperationalError) as e:
-        return Response({'detail': str(e)}, status=500)
-
-    if not row or not row[0] or row[0] == 'none':
-        return Response({'detail': 'No photo found for this candidate'}, status=404)
-
-    return Response({'detail': 'Photo path found', 'path': row[0]})
+    return Response({'detail': 'No photo found for this candidate'}, status=404)
 
 
 @api_view(['GET'])
@@ -360,9 +432,217 @@ def person_results(request, person_id: str):
             cursor.execute(sql, [person_id, limit])
             rows = _dictfetchall(cursor)
     except (ProgrammingError, OperationalError) as e:
-        return Response({'person_id': person_id, 'error': str(e), 'results': [], 'count': 0}, status=500)
+        return Response({'person_id': person_id, 'error': str(e), 'results': [], 'exam_results': [], 'count': 0}, status=500)
 
-    return Response({'person_id': person_id, 'results': rows, 'count': len(rows)})
+    # Include extracted exam-level results (paper, mark, grade)
+    extracted = _load_extracted_results()
+    exam_results = extracted.get(str(person_id), [])
+
+    return Response({
+        'person_id': person_id,
+        'results': rows,
+        'exam_results': exam_results,
+        'count': len(rows),
+    })
+
+
+# ── Editable field → legacy DB column mapping ──
+_EDITABLE_FIELDS = {
+    # Biodata
+    'first_name': 'firstname',
+    'other_name': 'othername',
+    'surname': 'surname',
+    'gender': 'gender',
+    'birth_date': 'dob',
+    'national_id': 'nin',
+    'telephone': 'telephone',
+    'email': 'email',
+    # Location
+    'subcounty': 'subcountry',
+    'village': 'village',
+    'home_address': 'home_address',
+    # Special needs
+    'disability_option': 'disadility_option',
+    'disability_name': 'disability_name',
+}
+
+# Human-readable labels for audit log
+_FIELD_LABELS = {
+    'first_name': 'First Name',
+    'other_name': 'Other Name',
+    'surname': 'Surname',
+    'gender': 'Gender',
+    'birth_date': 'Birth Date',
+    'national_id': 'National ID',
+    'telephone': 'Telephone',
+    'email': 'Email',
+    'district': 'District',
+    'subcounty': 'Sub County',
+    'village': 'Village',
+    'home_address': 'Home Address',
+    'disability_option': 'Has Disability',
+    'disability_name': 'Disability',
+    'passport_photo': 'Passport Photo',
+}
+
+
+@api_view(['PATCH'])
+@permission_classes([AllowAny])
+def update_person(request, person_id: str):
+    """
+    Update editable fields on a legacy DIT candidate record.
+    Writes changes to the legacy DB and creates audit log entries.
+    """
+    from .models import DitLegacyAuditLog
+
+    data = request.data
+    if not data:
+        return Response({'detail': 'No data provided'}, status=400)
+
+    # --- Handle photo upload separately ---
+    photo_file = request.FILES.get('passport_photo')
+
+    # --- Fetch current values for audit comparison ---
+    current_cols = list(set(_EDITABLE_FIELDS.values()))
+    current_cols.append('district_id')
+    select_cols = ', '.join(f's.{c}' for c in current_cols)
+
+    try:
+        with connections['dit_legacy'].cursor() as cursor:
+            cursor.execute(
+                f"SELECT {select_cols} FROM students s WHERE s.student_id = %s",
+                [person_id],
+            )
+            row = cursor.fetchone()
+            if not row:
+                return Response({'detail': 'Not found'}, status=404)
+            col_names = [col[0] for col in cursor.description]
+            current = dict(zip(col_names, row))
+    except (ProgrammingError, OperationalError) as e:
+        return Response({'detail': str(e)}, status=500)
+
+    # Reverse lookup: db column → current value
+    db_col_to_current = current
+
+    # --- Build SET clause for the update ---
+    set_parts = []
+    set_params = []
+    audit_entries = []
+
+    changed_by = request.user if request.user.is_authenticated else None
+    changed_by_name = ''
+    if changed_by:
+        changed_by_name = changed_by.get_full_name() or changed_by.username
+
+    for field_name, db_col in _EDITABLE_FIELDS.items():
+        if field_name not in data:
+            continue
+        new_val = str(data[field_name]).strip() if data[field_name] is not None else ''
+        old_val = str(db_col_to_current.get(db_col) or '')
+
+        if new_val != old_val:
+            set_parts.append(f"{db_col} = %s")
+            set_params.append(new_val if new_val else None)
+            audit_entries.append(DitLegacyAuditLog(
+                person_id=person_id,
+                field_name=_FIELD_LABELS.get(field_name, field_name),
+                old_value=old_val,
+                new_value=new_val,
+                changed_by=changed_by,
+                changed_by_name=changed_by_name,
+            ))
+
+    # Handle district by name → district_id
+    if 'district' in data:
+        new_district = str(data['district']).strip()
+        try:
+            with connections['dit_legacy'].cursor() as cursor:
+                # Get current district name
+                cursor.execute(
+                    "SELECT d.district_name FROM districts d WHERE d.district_id = %s",
+                    [current.get('district_id') or 0],
+                )
+                old_row = cursor.fetchone()
+                old_district = old_row[0] if old_row else ''
+
+                if new_district.lower() != (old_district or '').lower():
+                    # Look up new district_id
+                    cursor.execute(
+                        "SELECT district_id FROM districts WHERE LOWER(district_name) = %s LIMIT 1",
+                        [new_district.lower()],
+                    )
+                    dist_row = cursor.fetchone()
+                    if dist_row:
+                        set_parts.append("district_id = %s")
+                        set_params.append(dist_row[0])
+                        audit_entries.append(DitLegacyAuditLog(
+                            person_id=person_id,
+                            field_name='District',
+                            old_value=old_district or '',
+                            new_value=new_district,
+                            changed_by=changed_by,
+                            changed_by_name=changed_by_name,
+                        ))
+        except (ProgrammingError, OperationalError):
+            pass  # Skip district update if lookup fails
+
+    # Handle photo upload
+    if photo_file:
+        photo_path = _PHOTOS_DIR / f'{person_id}.jpg'
+        _PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
+        had_photo = photo_path.is_file()
+        with open(photo_path, 'wb') as f:
+            for chunk in photo_file.chunks():
+                f.write(chunk)
+        audit_entries.append(DitLegacyAuditLog(
+            person_id=person_id,
+            field_name='Passport Photo',
+            old_value='(existing photo)' if had_photo else '(no photo)',
+            new_value='(new photo uploaded)',
+            changed_by=changed_by,
+            changed_by_name=changed_by_name,
+        ))
+
+    if not set_parts and not audit_entries:
+        return Response({'detail': 'No changes detected'}, status=200)
+
+    # --- Execute the UPDATE ---
+    if set_parts:
+        try:
+            with connections['dit_legacy'].cursor() as cursor:
+                sql = f"UPDATE students SET {', '.join(set_parts)} WHERE student_id = %s"
+                cursor.execute(sql, set_params + [person_id])
+        except (ProgrammingError, OperationalError) as e:
+            return Response({'detail': str(e)}, status=500)
+
+    # --- Save audit log entries ---
+    if audit_entries:
+        DitLegacyAuditLog.objects.bulk_create(audit_entries)
+
+    return Response({
+        'detail': 'Updated successfully',
+        'changes': len(audit_entries),
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def person_audit_logs(request, person_id: str):
+    """
+    Get audit logs for a legacy DIT candidate.
+    """
+    from .models import DitLegacyAuditLog
+
+    logs = DitLegacyAuditLog.objects.filter(person_id=person_id).values(
+        'id', 'field_name', 'old_value', 'new_value',
+        'changed_by_name', 'changed_at',
+    )
+
+    return Response({
+        'person_id': person_id,
+        'logs': list(logs),
+        'count': len(logs),
+    })
 
 
 @api_view(['GET'])
