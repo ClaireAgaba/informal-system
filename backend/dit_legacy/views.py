@@ -19,13 +19,16 @@ def search(request):
     Search legacy DIT candidates by registration number or name.
     Supports filters: q (search term), regno, gender, district, training_provider
     Supports pagination: page, page_size
+    
+    Optimised: avoids expensive JOINs in the count/data queries when
+    district or training_provider filters are not active.
     """
     q = (request.query_params.get('q') or '').strip()
     regno = (request.query_params.get('regno') or '').strip()
     gender = (request.query_params.get('gender') or '').strip()
     district = (request.query_params.get('district') or '').strip()
     training_provider = (request.query_params.get('training_provider') or '').strip()
-    
+
     # Pagination
     try:
         page = max(1, int(request.query_params.get('page', 1)))
@@ -35,15 +38,21 @@ def search(request):
         page_size = max(1, min(int(request.query_params.get('page_size', 50)), 100))
     except ValueError:
         page_size = 50
-    
+
     offset = (page - 1) * page_size
 
-    params = []
-    where = ["1=1"]
+    # Determine if we need the expensive JOINs
+    needs_district_join = bool(district)
+    needs_institution_join = bool(training_provider)
+    needs_joins = needs_district_join or needs_institution_join
+
+    # ── Build WHERE clause on the students table only ──
+    student_params = []
+    student_where = ["1=1"]
 
     if q:
         q_like = f"%{q.lower()}%"
-        where.append(
+        student_where.append(
             "("
             "LOWER(COALESCE(s.nsin, '')) LIKE %s "
             "OR LOWER(COALESCE(s.exam_no, '')) LIKE %s "
@@ -52,74 +61,148 @@ def search(request):
             "OR LOWER(COALESCE(s.surname, '')) LIKE %s"
             ")"
         )
-        params.extend([q_like, q_like, q_like, q_like, q_like])
+        student_params.extend([q_like] * 5)
 
     if regno:
         regno_like = f"%{regno.lower()}%"
-        where.append(
+        student_where.append(
             "("
             "LOWER(COALESCE(s.nsin, '')) LIKE %s "
             "OR LOWER(COALESCE(s.exam_no, '')) LIKE %s "
             "OR LOWER(COALESCE(s.certificate_no, '')) LIKE %s"
             ")"
         )
-        params.extend([regno_like, regno_like, regno_like])
+        student_params.extend([regno_like] * 3)
 
     if gender:
-        where.append("LOWER(COALESCE(s.gender, '')) = %s")
-        params.append(gender.lower())
+        student_where.append("LOWER(COALESCE(s.gender, '')) = %s")
+        student_params.append(gender.lower())
+
+    # Extra WHERE conditions that need JOINs
+    join_params = []
+    join_where = []
 
     if district:
-        where.append("LOWER(COALESCE(d.district_name, '')) LIKE %s")
-        params.append(f"%{district.lower()}%")
+        join_where.append("LOWER(COALESCE(d.district_name, '')) LIKE %s")
+        join_params.append(f"%{district.lower()}%")
 
     if training_provider:
-        where.append("LOWER(COALESCE(i.institution_name, '')) LIKE %s")
-        params.append(f"%{training_provider.lower()}%")
-
-    where_clause = ' AND '.join(where)
-
-    # Count query
-    count_sql = f"""
-        SELECT COUNT(DISTINCT s.student_id)
-        FROM students s
-        LEFT JOIN districts d ON d.district_id = s.district_id
-        LEFT JOIN students_registration sr ON sr.student_id = s.student_id
-        LEFT JOIN registrations r ON r.registration_id = sr.registration_id
-        LEFT JOIN institutions i ON i.institution_id = r.institution_id
-        WHERE {where_clause}
-    """
-
-    # Data query
-    sql = f"""
-        SELECT DISTINCT
-            s.student_id AS person_id,
-            s.firstname AS first_name,
-            s.othername AS other_name,
-            s.surname AS surname,
-            s.gender,
-            s.dob AS birth_date,
-            COALESCE(s.nsin, s.exam_no) AS registration_number,
-            s.certificate_no AS certificate_number,
-            i.institution_name AS training_provider,
-            d.district_name AS district
-        FROM students s
-        LEFT JOIN districts d ON d.district_id = s.district_id
-        LEFT JOIN students_registration sr ON sr.student_id = s.student_id
-        LEFT JOIN registrations r ON r.registration_id = sr.registration_id
-        LEFT JOIN institutions i ON i.institution_id = r.institution_id
-        WHERE {where_clause}
-        ORDER BY s.student_id DESC
-        LIMIT %s OFFSET %s
-    """
+        join_where.append("LOWER(COALESCE(i.institution_name, '')) LIKE %s")
+        join_params.append(f"%{training_provider.lower()}%")
 
     try:
         with connections['dit_legacy'].cursor() as cursor:
-            cursor.execute(count_sql, params)
+
+            # ── COUNT ──
+            if not needs_joins and not student_params:
+                # No filters at all → fast table count
+                cursor.execute("SELECT COUNT(*) FROM students")
+            elif not needs_joins:
+                # Filters only on the students table → no JOINs needed
+                cursor.execute(
+                    f"SELECT COUNT(*) FROM students s WHERE {' AND '.join(student_where)}",
+                    student_params,
+                )
+            else:
+                # Need JOINs for district / training_provider
+                joins = ""
+                if needs_district_join:
+                    joins += " LEFT JOIN districts d ON d.district_id = s.district_id"
+                if needs_institution_join:
+                    joins += (
+                        " LEFT JOIN students_registration sr ON sr.student_id = s.student_id"
+                        " LEFT JOIN registrations r ON r.registration_id = sr.registration_id"
+                        " LEFT JOIN institutions i ON i.institution_id = r.institution_id"
+                    )
+                all_where = student_where + join_where
+                all_params = student_params + join_params
+                cursor.execute(
+                    f"SELECT COUNT(DISTINCT s.student_id) FROM students s{joins} WHERE {' AND '.join(all_where)}",
+                    all_params,
+                )
+
             total_count = cursor.fetchone()[0]
-            
-            cursor.execute(sql, [*params, page_size, offset])
+
+            # ── DATA (always fetch district & training_provider for display) ──
+            # Use a sub-query to paginate on student_id first (fast),
+            # then JOIN for display columns.
+            inner_where = student_where
+            inner_params = list(student_params)
+            inner_joins = ""
+
+            if needs_district_join:
+                inner_joins += " LEFT JOIN districts d ON d.district_id = s.district_id"
+            if needs_institution_join:
+                inner_joins += (
+                    " LEFT JOIN students_registration sr ON sr.student_id = s.student_id"
+                    " LEFT JOIN registrations r ON r.registration_id = sr.registration_id"
+                    " LEFT JOIN institutions i ON i.institution_id = r.institution_id"
+                )
+                inner_where = inner_where + join_where
+                inner_params = inner_params + join_params
+
+            if needs_joins:
+                # When filtering by joined tables, we must include them in the inner query
+                data_sql = f"""
+                    SELECT
+                        s2.student_id AS person_id,
+                        s2.firstname AS first_name,
+                        s2.othername AS other_name,
+                        s2.surname AS surname,
+                        s2.gender,
+                        s2.dob AS birth_date,
+                        COALESCE(s2.nsin, s2.exam_no) AS registration_number,
+                        s2.certificate_no AS certificate_number,
+                        i2.institution_name AS training_provider,
+                        d2.district_name AS district
+                    FROM (
+                        SELECT DISTINCT s.student_id
+                        FROM students s{inner_joins}
+                        WHERE {' AND '.join(inner_where)}
+                        ORDER BY s.student_id DESC
+                        LIMIT %s OFFSET %s
+                    ) ids
+                    JOIN students s2 ON s2.student_id = ids.student_id
+                    LEFT JOIN districts d2 ON d2.district_id = s2.district_id
+                    LEFT JOIN students_registration sr2 ON sr2.student_id = s2.student_id
+                    LEFT JOIN registrations r2 ON r2.registration_id = sr2.registration_id
+                    LEFT JOIN institutions i2 ON i2.institution_id = r2.institution_id
+                    ORDER BY s2.student_id DESC
+                """
+                data_params = inner_params + [page_size, offset]
+            else:
+                # No district/training_provider filter → paginate students first, then JOIN
+                data_sql = f"""
+                    SELECT
+                        s2.student_id AS person_id,
+                        s2.firstname AS first_name,
+                        s2.othername AS other_name,
+                        s2.surname AS surname,
+                        s2.gender,
+                        s2.dob AS birth_date,
+                        COALESCE(s2.nsin, s2.exam_no) AS registration_number,
+                        s2.certificate_no AS certificate_number,
+                        i.institution_name AS training_provider,
+                        d.district_name AS district
+                    FROM (
+                        SELECT s.student_id
+                        FROM students s
+                        WHERE {' AND '.join(student_where)}
+                        ORDER BY s.student_id DESC
+                        LIMIT %s OFFSET %s
+                    ) ids
+                    JOIN students s2 ON s2.student_id = ids.student_id
+                    LEFT JOIN districts d ON d.district_id = s2.district_id
+                    LEFT JOIN students_registration sr ON sr.student_id = s2.student_id
+                    LEFT JOIN registrations r ON r.registration_id = sr.registration_id
+                    LEFT JOIN institutions i ON i.institution_id = r.institution_id
+                    ORDER BY s2.student_id DESC
+                """
+                data_params = student_params + [page_size, offset]
+
+            cursor.execute(data_sql, data_params)
             rows = _dictfetchall(cursor)
+
     except (ProgrammingError, OperationalError) as e:
         return Response({'error': str(e), 'results': [], 'count': 0, 'total_count': 0}, status=500)
 
