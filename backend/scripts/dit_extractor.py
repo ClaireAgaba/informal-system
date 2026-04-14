@@ -649,13 +649,25 @@ def main():
 
     if args.phase in ("collect_ids", "all"):
         collect_person_ids(session, progress)
+        progress = load_progress()  # reload after phase
 
     if args.phase in ("extract_data", "all"):
+        if args.phase == "all" and not progress.get("collect_ids_done"):
+            log.warning("Phase 1 not complete. Stopping.")
+            return
         extract_all_data(session, progress)
+        progress = load_progress()
 
     if args.phase in ("download_photos", "all"):
+        if args.phase == "all" and not progress.get("extract_data_done"):
+            log.warning("Phase 2 not complete. Stopping before photos.")
+            return
         download_all_photos(session, progress)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        log.exception("Fatal error — script crashed")
+        raise
