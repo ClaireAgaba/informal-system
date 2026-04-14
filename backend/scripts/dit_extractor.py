@@ -464,6 +464,7 @@ def extract_all_data(session, progress):
 
     except KeyboardInterrupt:
         log.info("Interrupted. Progress saved.")
+        return
     finally:
         bio_f.close()
         res_f.close()
@@ -544,6 +545,7 @@ def download_all_photos(session, progress):
 
     except KeyboardInterrupt:
         log.info("Interrupted. Progress saved.")
+        return
     finally:
         save_progress(progress)
 
