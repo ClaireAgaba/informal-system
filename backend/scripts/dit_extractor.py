@@ -23,6 +23,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from threading import Lock
 from urllib.parse import unquote
 
 import requests
@@ -43,9 +44,10 @@ BIODATA_FILE = DATA_DIR / "biodata.csv"
 RESULTS_FILE = DATA_DIR / "results.csv"
 
 # Rate limiting
-REQUEST_DELAY = 0.15  # seconds between requests
+REQUEST_DELAY = 0.05  # seconds between requests (per thread)
 MAX_RETRIES = 3
 TIMEOUT = 30
+WORKERS = 10  # concurrent extraction threads
 
 # Logging
 logging.basicConfig(
@@ -384,7 +386,7 @@ def extract_person_data(session, person_id):
 
 
 def extract_all_data(session, progress):
-    """Extract biodata for all collected person IDs."""
+    """Extract biodata for all collected person IDs using concurrent workers."""
     log.info("=== Phase 2: Extracting biodata ===")
 
     if progress.get("extract_data_done"):
@@ -405,6 +407,8 @@ def extract_all_data(session, progress):
     log.info(f"Total unique person IDs: {len(person_ids)}")
 
     start_index = progress.get("extract_data_index", 0)
+    remaining = person_ids[start_index:]
+    log.info(f"Resuming from index {start_index}, {len(remaining)} remaining, {WORKERS} workers")
 
     # Open CSV files
     bio_exists = BIODATA_FILE.exists() and start_index > 0
@@ -414,6 +418,7 @@ def extract_all_data(session, progress):
     res_f = open(RESULTS_FILE, "a", newline="")
     bio_writer = csv.writer(bio_f)
     res_writer = csv.writer(res_f)
+    write_lock = Lock()
 
     bio_fields = [
         "person_id", "photo_id", "photo_filename", "surname", "firstname", "othername",
@@ -432,47 +437,67 @@ def extract_all_data(session, progress):
     if not results_exists:
         res_writer.writerow(res_fields)
 
+    # Each worker gets its own session to avoid cookie conflicts
+    sessions = [create_session() for _ in range(WORKERS)]
+    completed = start_index
+    interrupted = False
+
+    def _extract_one(args):
+        """Worker function: extract a single person using a dedicated session."""
+        worker_idx, pid = args
+        s = sessions[worker_idx % len(sessions)]
+        return pid, extract_person_data(s, pid)
+
     try:
-        for i, pid in enumerate(person_ids[start_index:], start=start_index):
-            data = extract_person_data(session, pid)
-            if data is None:
-                log.warning(f"Failed to extract person {pid}")
-                continue
+        # Process in batches for progress tracking
+        BATCH = 200
+        for batch_start in range(0, len(remaining), BATCH):
+            batch = remaining[batch_start:batch_start + BATCH]
+            # Assign workers round-robin
+            tasks = [(i % WORKERS, pid) for i, pid in enumerate(batch)]
 
-            # Write biodata
-            bio_row = [data.get(f, "") for f in bio_fields]
-            bio_writer.writerow(bio_row)
+            with ThreadPoolExecutor(max_workers=WORKERS) as executor:
+                futures = {executor.submit(_extract_one, t): t for t in tasks}
+                for future in as_completed(futures):
+                    pid, data = future.result()
+                    if data is None:
+                        continue
 
-            # Write results
-            for result in data.get("results", []):
-                res_row = [pid] + [result.get(f, "") for f in res_fields[1:]]
-                res_writer.writerow(res_row)
+                    with write_lock:
+                        bio_row = [data.get(f, "") for f in bio_fields]
+                        bio_writer.writerow(bio_row)
+                        for result in data.get("results", []):
+                            res_row = [pid] + [result.get(f, "") for f in res_fields[1:]]
+                            res_writer.writerow(res_row)
 
-            progress["extract_data_index"] = i + 1
-            if (i + 1) % 100 == 0:
-                save_progress(progress)
-                bio_f.flush()
-                res_f.flush()
-                log.info(f"Extracted {i + 1}/{len(person_ids)} candidates")
+            completed = start_index + batch_start + len(batch)
+            progress["extract_data_index"] = completed
+            save_progress(progress)
+            bio_f.flush()
+            res_f.flush()
+            log.info(f"Extracted {completed}/{len(person_ids)} candidates")
 
-            # Re-login periodically to avoid session expiry
-            if (i + 1) % 2000 == 0:
-                try:
-                    session = create_session()
-                except Exception:
-                    log.warning("Re-login failed, continuing with current session")
+            # Re-login all sessions periodically
+            if (batch_start + len(batch)) % 2000 < BATCH:
+                for idx in range(len(sessions)):
+                    try:
+                        sessions[idx] = create_session()
+                    except Exception:
+                        log.warning(f"Re-login failed for session {idx}")
 
     except KeyboardInterrupt:
         log.info("Interrupted. Progress saved.")
-        return
+        interrupted = True
     finally:
         bio_f.close()
         res_f.close()
+        progress["extract_data_index"] = completed
         save_progress(progress)
 
-    progress["extract_data_done"] = True
-    save_progress(progress)
-    log.info("Phase 2 complete")
+    if not interrupted:
+        progress["extract_data_done"] = True
+        save_progress(progress)
+        log.info("Phase 2 complete")
 
 
 # ──────────────────────────────────────────────────
@@ -498,7 +523,7 @@ def download_photo(session, person_id, photo_id):
 
 
 def download_all_photos(session, progress):
-    """Download photos for all candidates with photo_ids."""
+    """Download photos for all candidates with photo_ids using concurrent workers."""
     log.info("=== Phase 3: Downloading photos ===")
 
     if progress.get("download_photos_done"):
@@ -520,38 +545,58 @@ def download_all_photos(session, progress):
     log.info(f"Total candidates with photos: {len(photo_map)}")
 
     start_index = progress.get("download_photos_index", 0)
+    remaining = photo_map[start_index:]
+    log.info(f"Resuming from index {start_index}, {len(remaining)} remaining, {WORKERS} workers")
     downloaded = 0
     failed = 0
+    completed = start_index
+    interrupted = False
+
+    sessions = [create_session() for _ in range(WORKERS)]
+
+    def _download_one(args):
+        worker_idx, pid, photo_id = args
+        s = sessions[worker_idx % len(sessions)]
+        return download_photo(s, pid, photo_id)
 
     try:
-        for i, (pid, photo_id) in enumerate(photo_map[start_index:], start=start_index):
-            success = download_photo(session, pid, photo_id)
-            if success:
-                downloaded += 1
-            else:
-                failed += 1
+        BATCH = 200
+        for batch_start in range(0, len(remaining), BATCH):
+            batch = remaining[batch_start:batch_start + BATCH]
+            tasks = [(i % WORKERS, pid, photo_id) for i, (pid, photo_id) in enumerate(batch)]
 
-            progress["download_photos_index"] = i + 1
-            if (i + 1) % 100 == 0:
-                save_progress(progress)
-                log.info(f"Photos: {i + 1}/{len(photo_map)} (downloaded={downloaded}, failed={failed})")
+            with ThreadPoolExecutor(max_workers=WORKERS) as executor:
+                futures = list(executor.map(_download_one, tasks))
+                for success in futures:
+                    if success:
+                        downloaded += 1
+                    else:
+                        failed += 1
 
-            # Re-login periodically
-            if (i + 1) % 2000 == 0:
-                try:
-                    session = create_session()
-                except Exception:
-                    log.warning("Re-login failed")
+            completed = start_index + batch_start + len(batch)
+            progress["download_photos_index"] = completed
+            save_progress(progress)
+            log.info(f"Photos: {completed}/{len(photo_map)} (downloaded={downloaded}, failed={failed})")
+
+            # Re-login all sessions periodically
+            if (batch_start + len(batch)) % 2000 < BATCH:
+                for idx in range(len(sessions)):
+                    try:
+                        sessions[idx] = create_session()
+                    except Exception:
+                        log.warning(f"Re-login failed for session {idx}")
 
     except KeyboardInterrupt:
         log.info("Interrupted. Progress saved.")
-        return
+        interrupted = True
     finally:
+        progress["download_photos_index"] = completed
         save_progress(progress)
 
-    progress["download_photos_done"] = True
-    save_progress(progress)
-    log.info(f"Phase 3 complete: {downloaded} downloaded, {failed} failed")
+    if not interrupted:
+        progress["download_photos_done"] = True
+        save_progress(progress)
+        log.info(f"Phase 3 complete: {downloaded} downloaded, {failed} failed")
 
 
 # ──────────────────────────────────────────────────
