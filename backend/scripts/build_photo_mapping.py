@@ -55,23 +55,18 @@ def parse_old_dob(s):
     return ''
 
 
-def build_mapping():
-    # Collect set of person_ids that actually have a photo file
-    photo_pids = set()
-    if PHOTOS_DIR.is_dir():
-        for f in PHOTOS_DIR.iterdir():
-            if f.suffix == '.jpg' and f.stat().st_size > 0:
-                photo_pids.add(f.stem)
-    print(f"Photo files on disk: {len(photo_pids)}")
+def norm_reg(s):
+    """Normalize a registration number: strip, lowercase, remove all whitespace."""
+    return re.sub(r'\s+', '', (s or '').strip().lower())
 
-    # Step 1: Load biodata.csv
+
+def build_mapping():
+    # Step 1: Load biodata.csv indexes (ALL records, not just those with photos)
     print("Loading biodata.csv...")
-    # Index: (surname, firstname, dob_iso) → old_person_id  (best match)
-    # Index: (surname, firstname, othername) → old_person_id (name-only match)
-    # Index: (surname, firstname) → [old_person_ids]          (weak match)
-    by_name_dob = {}
-    by_name3 = {}
-    by_name2 = {}
+    by_reg = {}        # normalized reg_number → old_person_id (best)
+    by_name_dob = {}   # (surname, firstname, dob_iso) → old_person_id
+    by_name3 = {}      # (surname, firstname, othername) → old_person_id
+    by_name2 = {}      # (surname, firstname) → [old_person_ids]
 
     with open(BIODATA_FILE) as f:
         reader = csv.DictReader(f)
@@ -79,45 +74,48 @@ def build_mapping():
             pid = row.get('person_id', '').strip()
             if not pid:
                 continue
-            # Only map records that have a photo
-            if pid not in photo_pids:
-                continue
             surname = norm(row.get('surname', ''))
             firstname = norm(row.get('firstname', ''))
             othername = norm(row.get('othername', ''))
             dob_raw = (row.get('date_of_birth', '') or '').strip()
             dob_iso = parse_old_dob(dob_raw)
+            reg = norm_reg(row.get('id_number', ''))
+
+            # Registration number index (strongest match)
+            if reg:
+                if reg not in by_reg:
+                    by_reg[reg] = pid
 
             if not surname and not firstname:
                 continue
 
-            # Best key: name + DOB
+            # Name + DOB
             if dob_iso:
                 key = (surname, firstname, dob_iso)
                 if key not in by_name_dob:
                     by_name_dob[key] = pid
 
-            # Medium key: full name triple
+            # Name triple
             if othername:
                 key3 = (surname, firstname, othername)
                 if key3 not in by_name3:
                     by_name3[key3] = pid
 
-            # Weak key: surname + firstname (allow duplicates → store list)
+            # Name pair (allow duplicates)
             key2 = (surname, firstname)
             by_name2.setdefault(key2, []).append(pid)
 
-    total_with_photos = sum(1 for v in by_name2.values() for _ in v)
-    print(f"  Old records with photos: {total_with_photos}")
+    print(f"  Unique reg numbers: {len(by_reg)}")
     print(f"  Unique (surname,firstname,dob) keys: {len(by_name_dob)}")
     print(f"  Unique (surname,firstname,othername) keys: {len(by_name3)}")
     print(f"  Unique (surname,firstname) keys: {len(by_name2)}")
 
     # Step 2: Query MySQL students table and match
     print("Querying MySQL students table...")
-    mapping = {}
+    mapping = {}   # student_id → old_person_id
     batch_size = 10000
     offset = 0
+    matched_reg = 0
     matched_dob = 0
     matched_name3 = 0
     matched_name2 = 0
@@ -134,22 +132,29 @@ def build_mapping():
                        COALESCE(surname, ''),
                        COALESCE(firstname, ''),
                        COALESCE(othername, ''),
-                       COALESCE(dob, '')
+                       COALESCE(dob, ''),
+                       COALESCE(nsin, '')
                 FROM students
                 ORDER BY student_id
                 LIMIT %s OFFSET %s
             """, [batch_size, offset])
 
-            for student_id, surname, firstname, othername, dob in cursor.fetchall():
+            for student_id, surname, firstname, othername, dob, nsin in cursor.fetchall():
                 total += 1
                 sid = str(student_id)
+                nsin_clean = norm_reg(nsin)
                 surname = norm(surname)
                 firstname = norm(firstname)
                 othername = norm(othername)
                 dob_str = str(dob).strip() if dob else ''
-                # MySQL stores as date object → str gives "1991-01-22"
                 if dob_str in ('', 'None', '0000-00-00'):
                     dob_str = ''
+
+                # Priority 0: NSIN / registration number
+                if nsin_clean and nsin_clean in by_reg:
+                    mapping[sid] = by_reg[nsin_clean]
+                    matched_reg += 1
+                    continue
 
                 # Priority 1: surname + firstname + DOB
                 if dob_str:
@@ -167,7 +172,7 @@ def build_mapping():
                         matched_name3 += 1
                         continue
 
-                # Priority 3: surname + firstname (only if unique in old system)
+                # Priority 3: surname + firstname (only if unique)
                 key2 = (surname, firstname)
                 candidates = by_name2.get(key2, [])
                 if len(candidates) == 1:
@@ -176,11 +181,12 @@ def build_mapping():
 
             offset += batch_size
             if offset % 50000 == 0:
-                total_matched = matched_dob + matched_name3 + matched_name2
+                total_matched = matched_reg + matched_dob + matched_name3 + matched_name2
                 print(f"  Processed {offset}/{total_students} ({total_matched} matched)")
 
-    total_matched = matched_dob + matched_name3 + matched_name2
+    total_matched = matched_reg + matched_dob + matched_name3 + matched_name2
     print(f"\nDone! Matched {total_matched}/{total} students ({total_matched*100//max(total,1)}%)")
+    print(f"  By NSIN/reg number: {matched_reg}")
     print(f"  By name+DOB: {matched_dob}")
     print(f"  By name+othername: {matched_name3}")
     print(f"  By name only (unique): {matched_name2}")

@@ -19,7 +19,8 @@ _PHOTOS_DIR = _DATA_DIR / 'photos'
 # Caches for extracted data (loaded lazily)
 _extracted_results_cache = None   # student_id -> list of exam dicts
 _id_mapping_cache = None          # old_person_id -> student_id
-_photo_mapping_cache = None       # student_id -> old_person_id (for photo files)
+_photo_mapping_cache = None       # student_id -> old_person_id (for all records)
+_photo_pids_cache = None          # set of old_person_ids that have photo files
 
 
 def _load_photo_mapping():
@@ -34,6 +35,19 @@ def _load_photo_mapping():
     else:
         _photo_mapping_cache = {}
     return _photo_mapping_cache
+
+
+def _load_photo_pids():
+    """Return set of old_person_ids that actually have a photo file on disk."""
+    global _photo_pids_cache
+    if _photo_pids_cache is not None:
+        return _photo_pids_cache
+    _photo_pids_cache = set()
+    if _PHOTOS_DIR.is_dir():
+        for f in _PHOTOS_DIR.iterdir():
+            if f.suffix == '.jpg' and f.stat().st_size > 0:
+                _photo_pids_cache.add(f.stem)
+    return _photo_pids_cache
 
 
 def _load_id_mapping():
@@ -311,8 +325,10 @@ def search(request):
 
     # Annotate with photo availability
     photo_map = _load_photo_mapping()
+    photo_pids = _load_photo_pids()
     for row in rows:
-        row['has_photo'] = str(row.get('person_id', '')) in photo_map
+        old_pid = photo_map.get(str(row.get('person_id', '')))
+        row['has_photo'] = old_pid is not None and old_pid in photo_pids
 
     return Response({
         'results': rows,
