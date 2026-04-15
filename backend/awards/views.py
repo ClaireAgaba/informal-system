@@ -184,6 +184,13 @@ class AwardsViewSet(viewsets.ViewSet):
         if occupation:
             qs = qs.filter(occupation__occ_name=occupation)
 
+        level = request.query_params.get('level', '')
+        if level:
+            qs = qs.filter(
+                Q(enrollments__occupation_level__level_name=level) |
+                Q(formal_results__level__level_name=level)
+            ).distinct()
+
         printed = request.query_params.get('printed', '')
         if printed == 'yes':
             qs = qs.filter(transcript_serial_number__isnull=False).exclude(transcript_serial_number='')
@@ -338,7 +345,21 @@ class AwardsViewSet(viewsets.ViewSet):
             .values_list('occupation__occ_name', flat=True)
             .distinct().order_by('occupation__occ_name')
         )
-        return Response({'centers': centers, 'occupations': occupations})
+
+        # Return levels for a specific occupation (if requested)
+        levels = []
+        occupation_name = request.query_params.get('occupation', '')
+        if occupation_name:
+            from occupations.models import OccupationLevel
+            levels = list(
+                OccupationLevel.objects.filter(
+                    occupation__occ_name=occupation_name,
+                    is_active=True
+                ).values_list('level_name', flat=True)
+                .distinct().order_by('level_name')
+            )
+
+        return Response({'centers': centers, 'occupations': occupations, 'levels': levels})
 
     @action(detail=False, methods=['post'], url_path='update-collection-status')
     def update_collection_status(self, request):

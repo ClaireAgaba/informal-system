@@ -28,6 +28,7 @@ const AwardsList = () => {
   const [showValidationError, setShowValidationError] = useState(false);
   const [uniqueCenters, setUniqueCenters] = useState([]);
   const [uniqueOccupations, setUniqueOccupations] = useState([]);
+  const [uniqueLevels, setUniqueLevels] = useState([]);
   const [centerSearch, setCenterSearch] = useState('');
   const [showCenterDropdown, setShowCenterDropdown] = useState(false);
   const centerDropdownRef = useRef(null);
@@ -55,6 +56,7 @@ const AwardsList = () => {
           center: '',
           printed: '',
           occupation: '',
+          level: '',
         };
       }
     }
@@ -65,6 +67,7 @@ const AwardsList = () => {
       center: '',
       printed: '',
       occupation: '',
+      level: '',
     };
   });
 
@@ -80,6 +83,7 @@ const AwardsList = () => {
     if (f.intake) params.set('intake', f.intake);
     if (f.center) params.set('center', f.center);
     if (f.occupation) params.set('occupation', f.occupation);
+    if (f.level) params.set('level', f.level);
     if (f.printed) params.set('printed', f.printed);
     return params.toString();
   }, [searchQuery, filters]);
@@ -103,11 +107,19 @@ const AwardsList = () => {
     }
   }, [buildQueryParams]);
 
-  const fetchFilterOptions = async () => {
+  const fetchFilterOptions = async (occupation = '') => {
     try {
-      const response = await apiClient.get('/awards/filter-options/');
+      const url = occupation
+        ? `/awards/filter-options/?occupation=${encodeURIComponent(occupation)}`
+        : '/awards/filter-options/';
+      const response = await apiClient.get(url);
       setUniqueCenters(response.data.centers || []);
       setUniqueOccupations(response.data.occupations || []);
+      if (occupation) {
+        setUniqueLevels(response.data.levels || []);
+      } else {
+        setUniqueLevels([]);
+      }
     } catch (err) {
       console.error('Error fetching filter options:', err);
     }
@@ -124,6 +136,7 @@ const AwardsList = () => {
       center: '',
       printed: '',
       occupation: '',
+      level: '',
     };
     if (savedFilters) {
       try {
@@ -131,7 +144,7 @@ const AwardsList = () => {
       } catch {}
     }
     fetchAwards(1, { search: initialSearch, filters: initialFilters });
-    fetchFilterOptions();
+    fetchFilterOptions(initialFilters.occupation || '');
     fetchReprintReasons();
   }, []);
 
@@ -183,10 +196,12 @@ const AwardsList = () => {
       center: '',
       printed: '',
       occupation: '',
+      level: '',
     };
     setFilters(empty);
     setSearchQuery('');
     setCenterSearch('');
+    setUniqueLevels([]);
     localStorage.removeItem('awards_filters');
     localStorage.removeItem('awards_search');
     setCurrentPage(1);
@@ -767,7 +782,16 @@ const AwardsList = () => {
                 </label>
                 <select
                   value={filters.occupation}
-                  onChange={(e) => handleFilterChange({ ...filters, occupation: e.target.value })}
+                  onChange={(e) => {
+                    const newOcc = e.target.value;
+                    const newFilters = { ...filters, occupation: newOcc, level: '' };
+                    handleFilterChange(newFilters);
+                    if (newOcc) {
+                      fetchFilterOptions(newOcc);
+                    } else {
+                      setUniqueLevels([]);
+                    }
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">All</option>
@@ -776,6 +800,24 @@ const AwardsList = () => {
                   ))}
                 </select>
               </div>
+
+              {filters.occupation && uniqueLevels.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Level
+                  </label>
+                  <select
+                    value={filters.level}
+                    onChange={(e) => handleFilterChange({ ...filters, level: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All Levels</option>
+                    {uniqueLevels.map((lvl) => (
+                      <option key={lvl} value={lvl}>{lvl}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
