@@ -148,7 +148,8 @@ def search(request):
     # Determine if we need the expensive JOINs
     needs_district_join = bool(district)
     needs_institution_join = bool(training_provider)
-    needs_joins = needs_district_join or needs_institution_join
+    needs_status_join = bool(status)
+    needs_joins = needs_district_join or needs_institution_join or needs_status_join
 
     # ── Build WHERE clause on the students table only ──
     student_params = []
@@ -194,9 +195,9 @@ def search(request):
         student_params.append(gender.lower())
 
     if status == 'completed':
-        student_where.append("s.certificate_no IS NOT NULL AND s.certificate_no != ''")
+        student_where.append("swr.student_id IS NOT NULL")
     elif status == 'in_progress':
-        student_where.append("(s.certificate_no IS NULL OR s.certificate_no = '')")
+        student_where.append("swr.student_id IS NULL")
 
     # Extra WHERE conditions that need JOINs
     join_params = []
@@ -224,8 +225,10 @@ def search(request):
                     student_params,
                 )
             else:
-                # Need JOINs for district / training_provider
+                # Need JOINs for district / training_provider / status
                 joins = ""
+                if needs_status_join:
+                    joins += " LEFT JOIN students_with_results swr ON swr.student_id = s.student_id"
                 if needs_district_join:
                     joins += " LEFT JOIN districts d ON d.district_id = s.district_id"
                 if needs_institution_join:
@@ -250,6 +253,8 @@ def search(request):
             inner_params = list(student_params)
             inner_joins = ""
 
+            if needs_status_join:
+                inner_joins += " LEFT JOIN students_with_results swr ON swr.student_id = s.student_id"
             if needs_district_join:
                 inner_joins += " LEFT JOIN districts d ON d.district_id = s.district_id"
             if needs_institution_join:
@@ -274,7 +279,8 @@ def search(request):
                         COALESCE(s2.nsin, s2.exam_no) AS registration_number,
                         s2.certificate_no AS certificate_number,
                         i2.institution_name AS training_provider,
-                        d2.district_name AS district
+                        d2.district_name AS district,
+                        IF(swr2.student_id IS NOT NULL, 1, 0) AS has_results
                     FROM (
                         SELECT DISTINCT s.student_id
                         FROM students s{inner_joins}
@@ -287,6 +293,7 @@ def search(request):
                     LEFT JOIN students_registration sr2 ON sr2.student_id = s2.student_id
                     LEFT JOIN registrations r2 ON r2.registration_id = sr2.registration_id
                     LEFT JOIN institutions i2 ON i2.institution_id = r2.institution_id
+                    LEFT JOIN students_with_results swr2 ON swr2.student_id = s2.student_id
                     ORDER BY s2.student_id DESC
                 """
                 data_params = inner_params + [page_size, offset]
@@ -303,7 +310,8 @@ def search(request):
                         COALESCE(s2.nsin, s2.exam_no) AS registration_number,
                         s2.certificate_no AS certificate_number,
                         i.institution_name AS training_provider,
-                        d.district_name AS district
+                        d.district_name AS district,
+                        IF(swr.student_id IS NOT NULL, 1, 0) AS has_results
                     FROM (
                         SELECT s.student_id
                         FROM students s
@@ -316,6 +324,7 @@ def search(request):
                     LEFT JOIN students_registration sr ON sr.student_id = s2.student_id
                     LEFT JOIN registrations r ON r.registration_id = sr.registration_id
                     LEFT JOIN institutions i ON i.institution_id = r.institution_id
+                    LEFT JOIN students_with_results swr ON swr.student_id = s2.student_id
                     ORDER BY s2.student_id DESC
                 """
                 data_params = student_params + [page_size, offset]

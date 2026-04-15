@@ -283,7 +283,7 @@ export default function DitLegacyIndex() {
                           {r.district || '—'}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          {r.certificate_number ? (
+                          {r.has_results ? (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
                               Completed
                             </span>
