@@ -31,6 +31,8 @@ const SignaturePad = ({
   const canvasRef = useRef(null);
   const padRef = useRef(null);
   const containerRef = useRef(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   // Hardware pad state
   const [hwMode, setHwMode] = useState(false);
@@ -70,8 +72,8 @@ const SignaturePad = ({
     }
 
     pad.addEventListener('endStroke', () => {
-      if (onChange) {
-        onChange(pad.toDataURL('image/png'));
+      if (onChangeRef.current) {
+        onChangeRef.current(pad.toDataURL('image/png'));
       }
     });
 
@@ -104,7 +106,7 @@ const SignaturePad = ({
   const handleClear = () => {
     if (padRef.current && !disabled) {
       padRef.current.clear();
-      if (onChange) onChange('');
+      if (onChangeRef.current) onChangeRef.current('');
     }
     setHwStatus('idle');
     setHwError('');
@@ -179,7 +181,7 @@ const SignaturePad = ({
       // After confirm, convert the canvas content to base64 PNG
       if (canvas) {
         const base64 = canvas.toDataURL('image/png');
-        if (onChange) onChange(base64);
+        if (onChangeRef.current) onChangeRef.current(base64);
       }
 
       setHwStatus('idle');

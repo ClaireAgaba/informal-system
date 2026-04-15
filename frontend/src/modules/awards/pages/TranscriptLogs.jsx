@@ -1408,7 +1408,7 @@ const TranscriptLogs = () => {
                         label="Signature"
                         height={130}
                         value={collectForm.signature_data}
-                        onChange={(data) => setCollectForm({ ...collectForm, signature_data: data })}
+                        onChange={(data) => setCollectForm(prev => ({ ...prev, signature_data: data }))}
                         showHardwareToggle={true}
                       />
                     </div>
