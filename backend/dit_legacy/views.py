@@ -72,9 +72,11 @@ def _load_extracted_results():
 
     _extracted_results_cache = defaultdict(list)
     # photo_mapping.json: {student_id: old_person_id}
-    # We need the reverse: old_person_id → student_id
+    # Build reverse: old_person_id → list of student_ids (many-to-one)
     photo_map = _load_photo_mapping()
-    reverse = {str(old_pid): str(sid) for sid, old_pid in photo_map.items()}
+    reverse = defaultdict(list)
+    for sid, old_pid in photo_map.items():
+        reverse[str(old_pid)].append(str(sid))
 
     for csv_name in ('results_test.csv', 'results.csv'):
         csv_path = _DATA_DIR / csv_name
@@ -82,22 +84,25 @@ def _load_extracted_results():
             with open(csv_path, newline='') as f:
                 for row in csv.DictReader(f):
                     old_pid = row.get('person_id', '')
-                    student_id = reverse.get(old_pid)
-                    if student_id:
-                        _extracted_results_cache[student_id].append({
-                            'instance': row.get('instance', ''),
-                            'exam_number': row.get('exam_number', ''),
-                            'module_codes': row.get('module_codes', ''),
-                            'certificate_number': row.get('certificate_number', ''),
-                            'sponsored_by': row.get('sponsored_by', ''),
-                            'language': row.get('language', ''),
-                            'exam_date': row.get('exam_date', ''),
-                            'paper': row.get('paper', ''),
-                            'exam_mark': row.get('exam_mark', ''),
-                            'exam_results': row.get('exam_results', ''),
-                            'exam_grade': row.get('exam_grade', ''),
-                            'exam_comment': row.get('exam_comment', ''),
-                        })
+                    student_ids = reverse.get(old_pid, [])
+                    if not student_ids:
+                        continue
+                    result = {
+                        'instance': row.get('instance', ''),
+                        'exam_number': row.get('exam_number', ''),
+                        'module_codes': row.get('module_codes', ''),
+                        'certificate_number': row.get('certificate_number', ''),
+                        'sponsored_by': row.get('sponsored_by', ''),
+                        'language': row.get('language', ''),
+                        'exam_date': row.get('exam_date', ''),
+                        'paper': row.get('paper', ''),
+                        'exam_mark': row.get('exam_mark', ''),
+                        'exam_results': row.get('exam_results', ''),
+                        'exam_grade': row.get('exam_grade', ''),
+                        'exam_comment': row.get('exam_comment', ''),
+                    }
+                    for student_id in student_ids:
+                        _extracted_results_cache[student_id].append(result)
             break  # Use the first file found
 
     return _extracted_results_cache
