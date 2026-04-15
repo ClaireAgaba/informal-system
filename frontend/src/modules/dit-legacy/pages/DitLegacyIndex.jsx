@@ -248,7 +248,7 @@ export default function DitLegacyIndex() {
                         <td className="px-4 py-3 text-center">
                           {r.has_photo ? (
                             <img
-                              src={`/api/dit-legacy/photo/${r.person_id}/`}
+                              src={`/api/dit-legacy/person/${r.person_id}/photo/`}
                               alt=""
                               className="h-8 w-8 rounded-full object-cover ring-2 ring-green-200 mx-auto"
                               loading="lazy"
