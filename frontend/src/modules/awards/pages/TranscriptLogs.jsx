@@ -50,9 +50,9 @@ const TranscriptLogs = () => {
     collector_phone: '',
     email: '',
     collection_date: new Date().toISOString().slice(0, 10),
-    signature_data: '',
     supporting_document: null,
   });
+  const [signatureData, setSignatureData] = useState('');
   const [collecting, setCollecting] = useState(false);
   const [collectErrors, setCollectErrors] = useState({});
   const [receiptData, setReceiptData] = useState(null);
@@ -497,9 +497,9 @@ const TranscriptLogs = () => {
       collector_phone: '',
       email: '',
       collection_date: new Date().toISOString().slice(0, 10),
-      signature_data: '',
       supporting_document: null,
     });
+    setSignatureData('');
     setCollectErrors({});
     setReceiptData(null);
     setCollectFieldsLocked(false);
@@ -560,8 +560,8 @@ const TranscriptLogs = () => {
       formData.append('collector_phone', collectForm.collector_phone);
       formData.append('email', collectForm.email);
       formData.append('collection_date', collectForm.collection_date);
-      if (collectForm.signature_data) {
-        formData.append('signature_data', collectForm.signature_data);
+      if (signatureData) {
+        formData.append('signature_data', signatureData);
       }
       if (collectForm.supporting_document) {
         formData.append('supporting_document', collectForm.supporting_document);
@@ -689,8 +689,8 @@ const TranscriptLogs = () => {
         </table>
         <div class="footer">
           <div class="sig-box">
-            ${collectForm.signature_data
-              ? `<img src="${collectForm.signature_data}" style="max-width:250px;max-height:80px;display:block;margin:0 auto 5px;" /><div style="border-top:1px solid #333;padding-top:5px;font-size:12px;color:#666;">Collector Signature</div>`
+            ${signatureData
+              ? `<img src="${signatureData}" style="max-width:250px;max-height:80px;display:block;margin:0 auto 5px;" /><div style="border-top:1px solid #333;padding-top:5px;font-size:12px;color:#666;">Collector Signature</div>`
               : `<div class="line">Collector Signature</div>`
             }
           </div>
@@ -1407,8 +1407,8 @@ const TranscriptLogs = () => {
                       <SignaturePad
                         label="Signature"
                         height={130}
-                        value={collectForm.signature_data}
-                        onChange={(data) => setCollectForm(prev => ({ ...prev, signature_data: data }))}
+                        value={signatureData}
+                        onChange={setSignatureData}
                         showHardwareToggle={true}
                       />
                     </div>
