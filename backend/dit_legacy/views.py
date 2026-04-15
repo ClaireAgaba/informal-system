@@ -14,11 +14,25 @@ from rest_framework.response import Response
 
 # Extracted data directories
 _DATA_DIR = Path(settings.BASE_DIR) / 'scripts' / 'dit_extract_data'
-_PHOTOS_DIR = _DATA_DIR / 'photos' / 'by_student_id'
+_PHOTOS_DIR = _DATA_DIR / 'photos'
 
 # Caches for extracted data (loaded lazily)
 _extracted_results_cache = None   # student_id -> list of exam dicts
 _id_mapping_cache = None          # old_person_id -> student_id
+_photo_ids_cache = None           # set of person_ids that have photos
+
+
+def _load_photo_ids():
+    """Return a set of person_id strings that have a photo on disk."""
+    global _photo_ids_cache
+    if _photo_ids_cache is not None:
+        return _photo_ids_cache
+    _photo_ids_cache = set()
+    if _PHOTOS_DIR.is_dir():
+        for f in _PHOTOS_DIR.iterdir():
+            if f.suffix == '.jpg' and f.stat().st_size > 0:
+                _photo_ids_cache.add(f.stem)
+    return _photo_ids_cache
 
 
 def _load_id_mapping():
@@ -292,6 +306,11 @@ def search(request):
         return Response({'error': str(e), 'results': [], 'count': 0, 'total_count': 0}, status=500)
 
     total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+
+    # Annotate with photo availability
+    photo_ids = _load_photo_ids()
+    for row in rows:
+        row['has_photo'] = str(row.get('person_id', '')) in photo_ids
 
     return Response({
         'results': rows,

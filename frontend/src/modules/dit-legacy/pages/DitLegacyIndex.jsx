@@ -1,7 +1,7 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Database, Search, ChevronLeft, ChevronRight, Filter, X, Users } from 'lucide-react';
+import { Database, Search, ChevronLeft, ChevronRight, Filter, X, Users, ImageOff } from 'lucide-react';
 import ditLegacyApi from '../api/ditLegacyApi';
 
 export default function DitLegacyIndex() {
@@ -225,6 +225,7 @@ export default function DitLegacyIndex() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
+                    <th className="px-4 py-3.5 text-center font-semibold text-gray-700 whitespace-nowrap w-16">Photo</th>
                     <th className="px-4 py-3.5 text-left font-semibold text-gray-700 whitespace-nowrap">Name</th>
                     <th className="px-4 py-3.5 text-left font-semibold text-gray-700 whitespace-nowrap">Reg. Number</th>
                     <th className="px-4 py-3.5 text-left font-semibold text-gray-700 whitespace-nowrap">Gender</th>
@@ -244,6 +245,20 @@ export default function DitLegacyIndex() {
                         key={r.person_id}
                         className={`hover:bg-cyan-50/50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
                       >
+                        <td className="px-4 py-3 text-center">
+                          {r.has_photo ? (
+                            <img
+                              src={`/api/dit-legacy/photo/${r.person_id}/`}
+                              alt=""
+                              className="h-8 w-8 rounded-full object-cover ring-2 ring-green-200 mx-auto"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center mx-auto ring-2 ring-gray-200">
+                              <ImageOff className="h-3.5 w-3.5 text-gray-400" />
+                            </div>
+                          )}
+                        </td>
                         <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
                           {fullName || '—'}
                         </td>
