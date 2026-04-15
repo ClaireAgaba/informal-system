@@ -33,6 +33,7 @@ from django.db import connections
 
 DATA_DIR = Path(__file__).resolve().parent / 'dit_extract_data'
 BIODATA_FILE = DATA_DIR / 'biodata.csv'
+RESULTS_FILE = DATA_DIR / 'results.csv'
 PHOTOS_DIR = DATA_DIR / 'photos'
 OUTPUT_FILE = DATA_DIR / 'photo_mapping.json'
 
@@ -110,12 +111,25 @@ def build_mapping():
     print(f"  Unique (surname,firstname,othername) keys: {len(by_name3)}")
     print(f"  Unique (surname,firstname) keys: {len(by_name2)}")
 
+    # Step 1b: Build certificate_number → old_person_id index from results.csv
+    print("Loading results.csv for certificate number index...")
+    by_cert = {}  # normalized cert_number → old_person_id
+    if RESULTS_FILE.is_file():
+        with open(RESULTS_FILE) as f:
+            for row in csv.DictReader(f):
+                cert = norm_reg(row.get('certificate_number', ''))
+                pid = row.get('person_id', '').strip()
+                if cert and pid and cert not in by_cert:
+                    by_cert[cert] = pid
+    print(f"  Unique certificate numbers: {len(by_cert)}")
+
     # Step 2: Query MySQL students table and match
     print("Querying MySQL students table...")
     mapping = {}   # student_id → old_person_id
     batch_size = 10000
     offset = 0
     matched_reg = 0
+    matched_cert = 0
     matched_dob = 0
     matched_name3 = 0
     matched_name2 = 0
@@ -133,13 +147,14 @@ def build_mapping():
                        COALESCE(firstname, ''),
                        COALESCE(othername, ''),
                        COALESCE(dob, ''),
-                       COALESCE(nsin, '')
+                       COALESCE(nsin, ''),
+                       COALESCE(certificate_no, '')
                 FROM students
                 ORDER BY student_id
                 LIMIT %s OFFSET %s
             """, [batch_size, offset])
 
-            for student_id, surname, firstname, othername, dob, nsin in cursor.fetchall():
+            for student_id, surname, firstname, othername, dob, nsin, cert_no in cursor.fetchall():
                 total += 1
                 sid = str(student_id)
                 nsin_clean = norm_reg(nsin)
@@ -150,10 +165,18 @@ def build_mapping():
                 if dob_str in ('', 'None', '0000-00-00'):
                     dob_str = ''
 
+                cert_clean = norm_reg(cert_no)
+
                 # Priority 0: NSIN / registration number
                 if nsin_clean and nsin_clean in by_reg:
                     mapping[sid] = by_reg[nsin_clean]
                     matched_reg += 1
+                    continue
+
+                # Priority 0.5: Certificate number (from results.csv)
+                if cert_clean and cert_clean in by_cert:
+                    mapping[sid] = by_cert[cert_clean]
+                    matched_cert += 1
                     continue
 
                 # Priority 1: surname + firstname + DOB
@@ -181,12 +204,13 @@ def build_mapping():
 
             offset += batch_size
             if offset % 50000 == 0:
-                total_matched = matched_reg + matched_dob + matched_name3 + matched_name2
+                total_matched = matched_reg + matched_cert + matched_dob + matched_name3 + matched_name2
                 print(f"  Processed {offset}/{total_students} ({total_matched} matched)")
 
-    total_matched = matched_reg + matched_dob + matched_name3 + matched_name2
+    total_matched = matched_reg + matched_cert + matched_dob + matched_name3 + matched_name2
     print(f"\nDone! Matched {total_matched}/{total} students ({total_matched*100//max(total,1)}%)")
     print(f"  By NSIN/reg number: {matched_reg}")
+    print(f"  By certificate number: {matched_cert}")
     print(f"  By name+DOB: {matched_dob}")
     print(f"  By name+othername: {matched_name3}")
     print(f"  By name only (unique): {matched_name2}")
