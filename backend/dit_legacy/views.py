@@ -19,20 +19,21 @@ _PHOTOS_DIR = _DATA_DIR / 'photos'
 # Caches for extracted data (loaded lazily)
 _extracted_results_cache = None   # student_id -> list of exam dicts
 _id_mapping_cache = None          # old_person_id -> student_id
-_photo_ids_cache = None           # set of person_ids that have photos
+_photo_mapping_cache = None       # student_id -> old_person_id (for photo files)
 
 
-def _load_photo_ids():
-    """Return a set of person_id strings that have a photo on disk."""
-    global _photo_ids_cache
-    if _photo_ids_cache is not None:
-        return _photo_ids_cache
-    _photo_ids_cache = set()
-    if _PHOTOS_DIR.is_dir():
-        for f in _PHOTOS_DIR.iterdir():
-            if f.suffix == '.jpg' and f.stat().st_size > 0:
-                _photo_ids_cache.add(f.stem)
-    return _photo_ids_cache
+def _load_photo_mapping():
+    """Load student_id → old_person_id mapping from photo_mapping.json."""
+    global _photo_mapping_cache
+    if _photo_mapping_cache is not None:
+        return _photo_mapping_cache
+    mapping_file = _DATA_DIR / 'photo_mapping.json'
+    if mapping_file.is_file():
+        with open(mapping_file) as f:
+            _photo_mapping_cache = json.load(f)  # {"student_id": "old_person_id"}
+    else:
+        _photo_mapping_cache = {}
+    return _photo_mapping_cache
 
 
 def _load_id_mapping():
@@ -308,9 +309,9 @@ def search(request):
     total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
 
     # Annotate with photo availability
-    photo_ids = _load_photo_ids()
+    photo_map = _load_photo_mapping()
     for row in rows:
-        row['has_photo'] = str(row.get('person_id', '')) in photo_ids
+        row['has_photo'] = str(row.get('person_id', '')) in photo_map
 
     return Response({
         'results': rows,
@@ -392,8 +393,16 @@ def person_detail(request, person_id: str):
 def person_photo(request, person_id: str):
     """
     Serve the passport photo image for a legacy DIT candidate.
-    Looks for {student_id}.jpg in the extracted photos directory.
+    Uses photo_mapping.json to translate student_id → old_person_id filename.
     """
+    photo_map = _load_photo_mapping()
+    old_pid = photo_map.get(str(person_id))
+    if old_pid:
+        photo_path = _PHOTOS_DIR / f'{old_pid}.jpg'
+        if photo_path.is_file():
+            return FileResponse(open(photo_path, 'rb'), content_type='image/jpeg')
+
+    # Fallback: try direct student_id match
     photo_path = _PHOTOS_DIR / f'{person_id}.jpg'
     if photo_path.is_file():
         return FileResponse(open(photo_path, 'rb'), content_type='image/jpeg')
