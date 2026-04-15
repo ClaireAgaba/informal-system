@@ -57,9 +57,10 @@ def _load_extracted_results():
         return _extracted_results_cache
 
     _extracted_results_cache = defaultdict(list)
-    mapping = _load_id_mapping()
-    # Build reverse: old_person_id → student_id
-    reverse = {str(old_pid): str(sid) for old_pid, sid in mapping.items()}
+    # photo_mapping.json: {student_id: old_person_id}
+    # We need the reverse: old_person_id → student_id
+    photo_map = _load_photo_mapping()
+    reverse = {str(old_pid): str(sid) for sid, old_pid in photo_map.items()}
 
     for csv_name in ('results_test.csv', 'results.csv'):
         csv_path = _DATA_DIR / csv_name
