@@ -423,6 +423,10 @@ const TranscriptLogs = () => {
 
   // Check if all selected candidates are from the same center
   const getSelectedCenter = () => {
+    if (selectAllFiltered) {
+      // When all filtered are selected, use the center filter value
+      return filters.center || null;
+    }
     const selected = getSelectedAwards();
     if (selected.length === 0) return null;
     const centers = [...new Set(selected.map((a) => a.center_name))];
@@ -430,11 +434,20 @@ const TranscriptLogs = () => {
   };
 
   // Check if any selected candidate is already collected
-  const hasAlreadyCollected = () => getSelectedAwards().some((a) => a.transcript_collected);
+  const hasAlreadyCollected = () => {
+    if (selectAllFiltered) {
+      // When all filtered with collection_status='not_taken', none are collected
+      return filters.collection_status === 'taken';
+    }
+    return getSelectedAwards().some((a) => a.transcript_collected);
+  };
 
-  // Can collect: same center, none already collected, not select-all-filtered (need concrete IDs)
+  // Can collect: same center, none already collected
   const canCollect = () => {
-    if (selectAllFiltered) return false;
+    if (selectAllFiltered) {
+      // Need a center filter and not collecting already-taken ones
+      return !!filters.center && filters.collection_status !== 'taken';
+    }
     if (selectedCandidates.length === 0) return false;
     if (hasAlreadyCollected()) return false;
     return getSelectedCenter() !== null;
@@ -450,6 +463,33 @@ const TranscriptLogs = () => {
       toast.error('Some selected candidates have already had their transcripts collected');
       return;
     }
+
+    // If selectAllFiltered, fetch ALL matching candidate IDs first
+    if (selectAllFiltered) {
+      try {
+        setLoading(true);
+        const qs = buildQueryParams(1);
+        // Use page_size=0 to get all candidates
+        const allQs = qs.replace(/page_size=\d+/, 'page_size=0');
+        const response = await apiClient.get(`/awards/?${allQs}`);
+        const allIds = (response.data.results || []).map((a) => a.id);
+        if (allIds.length === 0) {
+          toast.error('No candidates found');
+          setLoading(false);
+          return;
+        }
+        setSelectedCandidates(allIds);
+        setSelectAllFiltered(false);
+      } catch (err) {
+        console.error('Error fetching all candidate IDs:', err);
+        toast.error('Failed to load all candidates');
+        setLoading(false);
+        return;
+      } finally {
+        setLoading(false);
+      }
+    }
+
     setCollectForm({
       designation: '',
       nin: '',
@@ -853,21 +893,19 @@ const TranscriptLogs = () => {
               </button>
             </div>
             <div className="flex items-center space-x-2">
-              {!selectAllFiltered && selectedCandidates.length > 0 && (
-                <button
-                  onClick={handleOpenCollectModal}
-                  disabled={!canCollect()}
-                  className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={!canCollect() ? (
-                    hasAlreadyCollected() ? 'Some candidates already collected' :
-                    !getSelectedCenter() ? 'Selected candidates must be from the same center' :
-                    'Cannot collect'
-                  ) : 'Collect Transcripts'}
-                >
-                  <ClipboardList className="w-4 h-4 mr-2" />
-                  Collect Transcripts
-                </button>
-              )}
+              <button
+                onClick={handleOpenCollectModal}
+                disabled={!canCollect()}
+                className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={!canCollect() ? (
+                  hasAlreadyCollected() ? 'Some candidates already collected' :
+                  !getSelectedCenter() ? 'Selected candidates must be from the same center — use the Center filter' :
+                  'Cannot collect'
+                ) : `Collect Transcripts${selectAllFiltered ? ` (${totalCount})` : ''}`}
+              >
+                <ClipboardList className="w-4 h-4 mr-2" />
+                Collect Transcripts{selectAllFiltered ? ` (${totalCount})` : ''}
+              </button>
               <button
                 onClick={() => handleExportExcel('selected')}
                 className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
@@ -886,12 +924,14 @@ const TranscriptLogs = () => {
             </div>
           </div>
           {/* Same-center warning */}
-          {!selectAllFiltered && selectedCandidates.length > 1 && !getSelectedCenter() && (
+          {!getSelectedCenter() && (selectedCandidates.length > 1 || selectAllFiltered) && (
             <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-1.5">
-              Selected candidates are from different centers. To collect transcripts, all must be from the same center.
+              {selectAllFiltered && !filters.center
+                ? 'Please filter by a specific center to collect transcripts for all candidates.'
+                : 'Selected candidates are from different centers. To collect transcripts, all must be from the same center.'}
             </div>
           )}
-          {!selectAllFiltered && selectedCandidates.length > 0 && hasAlreadyCollected() && (
+          {hasAlreadyCollected() && (
             <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-1.5">
               Some selected candidates have already had their transcripts collected. Remove them from selection to collect.
             </div>
