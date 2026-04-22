@@ -533,7 +533,7 @@ class ModularResultViewSet(viewsets.ViewSet):
         ]
         
         # Create info table
-        info_table = Table(info_data, colWidths=[1*inch, 1.6*inch, 1*inch, 1.9*inch])
+        info_table = Table(info_data, colWidths=[1.1*inch, 2.3*inch, 1.0*inch, 1.1*inch])
         info_table.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
             ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
@@ -551,7 +551,7 @@ class ModularResultViewSet(viewsets.ViewSet):
         # Combine photo and info table
         if candidate_photo:
             combined_data = [[candidate_photo, info_table]]
-            combined_table = Table(combined_data, colWidths=[1.3*inch, 6.5*inch])
+            combined_table = Table(combined_data, colWidths=[1.3*inch, 5.5*inch])
             combined_table.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('ALIGN', (0, 0), (0, -1), 'LEFT'),
@@ -1173,7 +1173,7 @@ class ModularResultViewSet(viewsets.ViewSet):
                     # Photo with reg no below in smaller font
                     photo_caption_style = ParagraphStyle('PhotoCaption', parent=styles['Normal'], fontSize=6, fontName='Times-Roman', alignment=TA_LEFT)
                     photo_data = [[candidate_photo], [Paragraph(candidate.registration_number or "", photo_caption_style)]]
-                    photo_cell = Table(photo_data, colWidths=[3.2*cm])
+                    photo_cell = Table(photo_data, colWidths=[4.2*cm])
                     photo_cell.setStyle(TableStyle([
                         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
@@ -1215,7 +1215,7 @@ class ModularResultViewSet(viewsets.ViewSet):
         # Create photo+QR row: photo on left, QR on right
         if photo_cell:
             # Table with photo left, empty space middle, QR right
-            photo_qr_row = Table([[photo_cell, '', qr_code_image]], colWidths=[3.5*cm, 11*cm, 2.5*cm])
+            photo_qr_row = Table([[photo_cell, '', qr_code_image]], colWidths=[4.5*cm, 10*cm, 2.5*cm])
             photo_qr_row.setStyle(TableStyle([
                 ('ALIGN', (0, 0), (0, 0), 'LEFT'),
                 ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
@@ -2164,7 +2164,7 @@ class FormalResultViewSet(viewsets.ViewSet):
                     # Photo with reg no below in smaller font
                     photo_caption_style = ParagraphStyle('PhotoCaption', parent=styles['Normal'], fontSize=6, fontName='Times-Roman', alignment=TA_LEFT)
                     photo_data = [[candidate_photo], [Paragraph(candidate.registration_number or "", photo_caption_style)]]
-                    photo_cell = Table(photo_data, colWidths=[3.2*cm])
+                    photo_cell = Table(photo_data, colWidths=[4.2*cm])
                     photo_cell.setStyle(TableStyle([
                         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
@@ -2206,7 +2206,7 @@ class FormalResultViewSet(viewsets.ViewSet):
         # Create photo+QR row: photo on left, QR on right
         if photo_cell:
             # Table with photo left, empty space middle, QR right
-            photo_qr_row = Table([[photo_cell, '', qr_code_image]], colWidths=[3.5*cm, 11*cm, 2.5*cm])
+            photo_qr_row = Table([[photo_cell, '', qr_code_image]], colWidths=[4.5*cm, 10*cm, 2.5*cm])
             photo_qr_row.setStyle(TableStyle([
                 ('ALIGN', (0, 0), (0, 0), 'LEFT'),
                 ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
@@ -2902,7 +2902,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
             ["OCCUPATION:", candidate.occupation.occ_name if candidate.occupation else "", "", ""],
         ]
         
-        info_table = Table(info_data, colWidths=[1.15*inch, 2.35*inch, 1.0*inch, 1.2*inch])
+        info_table = Table(info_data, colWidths=[1.1*inch, 2.3*inch, 1.0*inch, 1.1*inch])
         info_table.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
             ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
@@ -2920,7 +2920,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         # Combine photo and info table
         if candidate_photo:
             combined_data = [[candidate_photo, info_table]]
-            combined_table = Table(combined_data, colWidths=[1.3*inch, 5.7*inch])
+            combined_table = Table(combined_data, colWidths=[1.3*inch, 5.5*inch])
             combined_table.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('ALIGN', (0, 0), (0, -1), 'LEFT'),
