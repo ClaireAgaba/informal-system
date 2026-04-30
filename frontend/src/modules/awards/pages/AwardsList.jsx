@@ -29,6 +29,7 @@ const AwardsList = () => {
   const [uniqueCenters, setUniqueCenters] = useState([]);
   const [uniqueOccupations, setUniqueOccupations] = useState([]);
   const [uniqueLevels, setUniqueLevels] = useState([]);
+  const [uniqueCompletionSeries, setUniqueCompletionSeries] = useState([]);
   const [centerSearch, setCenterSearch] = useState('');
   const [showCenterDropdown, setShowCenterDropdown] = useState(false);
   const centerDropdownRef = useRef(null);
@@ -57,6 +58,7 @@ const AwardsList = () => {
           printed: '',
           occupation: '',
           level: '',
+          completion_series: '',
         };
       }
     }
@@ -68,6 +70,7 @@ const AwardsList = () => {
       printed: '',
       occupation: '',
       level: '',
+      completion_series: '',
     };
   });
 
@@ -85,6 +88,7 @@ const AwardsList = () => {
     if (f.occupation) params.set('occupation', f.occupation);
     if (f.level) params.set('level', f.level);
     if (f.printed) params.set('printed', f.printed);
+    if (f.completion_series) params.set('completion_series', f.completion_series);
     return params.toString();
   }, [searchQuery, filters]);
 
@@ -120,6 +124,7 @@ const AwardsList = () => {
       } else {
         setUniqueLevels([]);
       }
+      setUniqueCompletionSeries(response.data.completion_series || []);
     } catch (err) {
       console.error('Error fetching filter options:', err);
     }
@@ -137,6 +142,7 @@ const AwardsList = () => {
       printed: '',
       occupation: '',
       level: '',
+      completion_series: '',
     };
     if (savedFilters) {
       try {
@@ -197,6 +203,7 @@ const AwardsList = () => {
       printed: '',
       occupation: '',
       level: '',
+      completion_series: '',
     };
     setFilters(empty);
     setSearchQuery('');
@@ -314,7 +321,7 @@ const AwardsList = () => {
         'Entry Year': award.entry_year || '',
         'Assessment Intake': award.assessment_intake || '',
         'Award': award.award || '',
-        'Completion Date': award.completion_date || '',
+        'Completion Series': award.completion_date || '',
         'Printed': award.printed ? 'Yes' : 'No',
         'TR SNo': award.tr_sno || '',
       }));
@@ -337,6 +344,31 @@ const AwardsList = () => {
     } catch (err) {
       console.error('Export error:', err);
       toast.error('Failed to export data');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportPrintStatus = async () => {
+    try {
+      setExporting(true);
+      const qs = buildQueryParams(1);
+      const response = await apiClient.get(`/awards/export-print-status-report/?${qs}`, {
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Print_Status_Report_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success('Print Status Report exported successfully');
+    } catch (err) {
+      console.error('Export error:', err);
+      toast.error('Failed to export Print Status Report');
     } finally {
       setExporting(false);
     }
@@ -642,10 +674,19 @@ const AwardsList = () => {
           </button>
           <button
             onClick={() => handleExportExcel('all')}
-            className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm"
+            disabled={exporting}
+            className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download className="w-4 h-4 mr-2" />
             Export All ({totalCount})
+          </button>
+          <button
+            onClick={handleExportPrintStatus}
+            disabled={exporting}
+            className="flex items-center px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Print Status Report
           </button>
           <div className="text-sm text-gray-500">
             Total: <span className="font-semibold text-gray-900">{totalCount}</span> candidates
@@ -834,6 +875,22 @@ const AwardsList = () => {
                 </select>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Completion Series
+                </label>
+                <select
+                  value={filters.completion_series}
+                  onChange={(e) => handleFilterChange({ ...filters, completion_series: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All</option>
+                  {uniqueCompletionSeries.map((series) => (
+                    <option key={series} value={series}>{series}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="flex items-end">
                 <button
                   onClick={handleClearFilters}
@@ -955,7 +1012,7 @@ const AwardsList = () => {
                   Award
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Completion Date
+                  Completion Series
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Printed
