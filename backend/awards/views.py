@@ -2,13 +2,14 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
-from django.db.models import Q, Exists, OuterRef
+from django.db.models import Q, Exists, OuterRef, Subquery, Count, F, Case, When, IntegerField, Sum
 from django.http import HttpResponse
 from django.core.paginator import Paginator, EmptyPage
-from candidates.models import Candidate
+from candidates.models import Candidate, CandidateEnrollment
 from results.models import ModularResult, FormalResult
 from configurations.models import ReprintReason
 from awards.models import TranscriptCollection
+from assessment_series.models import AssessmentSeries
 from awards.serializers import TranscriptCollectionListSerializer, TranscriptCollectionDetailSerializer
 from occupations.models import OccupationModule, OccupationPaper
 from io import BytesIO
@@ -150,6 +151,7 @@ class AwardsViewSet(viewsets.ViewSet):
         ).prefetch_related(
             Prefetch('modular_results', queryset=ModularResult.objects.select_related('assessment_series')),
             Prefetch('formal_results', queryset=FormalResult.objects.select_related('level', 'assessment_series', 'paper')),
+            Prefetch('enrollments', queryset=CandidateEnrollment.objects.select_related('assessment_series').order_by('-assessment_series__start_date')),
         )
 
     def _apply_filters(self, qs, request):
@@ -203,6 +205,16 @@ class AwardsViewSet(viewsets.ViewSet):
         elif collection_status == 'not_taken':
             qs = qs.filter(transcript_collected=False)
 
+        completion_series = request.query_params.get('completion_series', '')
+        if completion_series:
+            # Filter candidates whose latest enrollment belongs to the selected assessment series
+            latest_enrollment = CandidateEnrollment.objects.filter(
+                candidate=OuterRef('pk')
+            ).order_by('-assessment_series__start_date').values('assessment_series__name')[:1]
+            qs = qs.annotate(
+                latest_series_name=Subquery(latest_enrollment)
+            ).filter(latest_series_name=completion_series)
+
         return qs
 
     def _serialize_candidate(self, candidate):
@@ -210,12 +222,16 @@ class AwardsViewSet(viewsets.ViewSet):
         award = ""
         completion_year = ""
         
+        # Get completion series from latest enrollment
+        latest_enrollment = None
+        enrollments = list(candidate.enrollments.all())
+        if enrollments:
+            latest_enrollment = enrollments[0]
+            completion_year = latest_enrollment.assessment_series.completion_year or latest_enrollment.assessment_series.name or ""
+        
         if candidate.registration_category == 'modular':
             if candidate.occupation:
                 award = candidate.occupation.award_modular or ""
-            modular_results_list = list(candidate.modular_results.all())
-            if modular_results_list and modular_results_list[0].assessment_series:
-                completion_year = modular_results_list[0].assessment_series.completion_year or modular_results_list[0].assessment_series.name or ""
         else:
             qualifies, _ = formal_candidate_qualifies(candidate)
             if not qualifies:
@@ -245,18 +261,8 @@ class AwardsViewSet(viewsets.ViewSet):
                         if result.is_passing and not existing.is_passing:
                             best_results[key] = result
                 
-                # Get the most recent series from best results (completion date)
-                latest_series = None
-                for result in best_results.values():
-                    if result.assessment_series:
-                        if latest_series is None or (result.assessment_series.start_date and 
-                            (latest_series.start_date is None or result.assessment_series.start_date > latest_series.start_date)):
-                            latest_series = result.assessment_series
-                
                 if first_result.level:
                     award = first_result.level.award or ""
-                if latest_series:
-                    completion_year = latest_series.completion_year or latest_series.name or ""
 
         return {
             'id': candidate.id,
@@ -359,7 +365,89 @@ class AwardsViewSet(viewsets.ViewSet):
                 .distinct().order_by('level_name')
             )
 
-        return Response({'centers': centers, 'occupations': occupations, 'levels': levels})
+        # Return completion series
+        completion_series = list(
+            AssessmentSeries.objects.filter(is_active=True)
+            .values_list('name', flat=True)
+            .order_by('-start_date')
+        )
+
+        return Response({'centers': centers, 'occupations': occupations, 'levels': levels, 'completion_series': completion_series})
+
+    @action(detail=False, methods=['get'], url_path='export-print-status-report')
+    def export_print_status_report(self, request):
+        """Export aggregated print status report grouped by center and series."""
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill
+        from django.http import HttpResponse
+        
+        candidates_qs = self._get_base_queryset()
+        # Apply filters so users can filter by intake, year, etc.
+        candidates_qs = self._apply_filters(candidates_qs, request)
+        
+        latest_enrollment = CandidateEnrollment.objects.filter(
+            candidate=OuterRef('pk')
+        ).order_by('-assessment_series__start_date')
+        
+        qs = candidates_qs.annotate(
+            latest_series_name=Subquery(latest_enrollment.values('assessment_series__name')[:1]),
+            center_name=F('assessment_center__center_name'),
+            is_printed=Case(
+                When(Q(transcript_serial_number__isnull=False) & ~Q(transcript_serial_number=''), then=1),
+                default=0,
+                output_field=IntegerField()
+            ),
+            is_not_printed=Case(
+                When(Q(transcript_serial_number__isnull=True) | Q(transcript_serial_number=''), then=1),
+                default=0,
+                output_field=IntegerField()
+            )
+        )
+        
+        grouped = qs.values('center_name', 'latest_series_name').annotate(
+            printed_count=Sum('is_printed'),
+            not_printed_count=Sum('is_not_printed'),
+            total_count=Count('id')
+        ).order_by('center_name', 'latest_series_name')
+        
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Print Status Report"
+        
+        headers = ['Exam Centre', 'Completion Series', 'Total Candidates', 'Printed', 'Not Printed']
+        ws.append(headers)
+        
+        header_fill = PatternFill(start_color='1F497D', end_color='1F497D', fill_type='solid')
+        header_font = Font(color='FFFFFF', bold=True)
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            
+        for row in grouped:
+            ws.append([
+                row['center_name'] or 'N/A',
+                row['latest_series_name'] or 'N/A',
+                row['total_count'],
+                row['printed_count'],
+                row['not_printed_count']
+            ])
+            
+        for col in ws.columns:
+            max_length = 0
+            col_letter = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            ws.column_dimensions[col_letter].width = max_length + 2
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="Print_Status_Report.xlsx"'
+        wb.save(response)
+        
+        return response
 
     @action(detail=False, methods=['post'], url_path='update-collection-status')
     def update_collection_status(self, request):
