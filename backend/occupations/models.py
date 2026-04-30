@@ -39,6 +39,13 @@ class Occupation(models.Model):
     occ_code = models.CharField(max_length=50, unique=True, verbose_name='Occupation Code')
     occ_name = models.CharField(max_length=200, verbose_name='Occupation Name')
     occ_category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, verbose_name='Occupation Category')
+    wp_code = models.CharField(
+        max_length=10,
+        blank=True,
+        null=True,
+        verbose_name="Worker's PAS Code",
+        help_text="Short code used in Worker's PAS booklet numbering, e.g. BLD for Builder. Required when category is Worker's PAS."
+    )
     award_modular = models.CharField(
         max_length=200, 
         blank=True, 
@@ -170,7 +177,21 @@ class OccupationLevel(models.Model):
         verbose_name='Contact Hours',
         help_text="Total contact hours for this level"
     )
-    
+
+    # Worker's PAS booklet content (only relevant when occupation is workers_pas)
+    level_description = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Level Description (Worker's PAS)",
+        help_text="Description for this level shown on page 4 of the Worker's PAS booklet."
+    )
+    competence_description = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Competence Description (Worker's PAS)",
+        help_text="Description of competencies for this level shown on page 6 of the Worker's PAS booklet (the section intro)."
+    )
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -218,7 +239,21 @@ class OccupationModule(models.Model):
         verbose_name='Credit Units (CU)',
         help_text="Number of credit units for this module"
     )
-    
+
+    # Worker's PAS booklet content (test area detail page)
+    wp_description = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Test Area Description (Worker's PAS)",
+        help_text="Intro paragraph shown on the test area detail page in the Worker's PAS booklet, e.g. 'The Worker has acquired adequate knowledge and skills to construct Foundations/Substructures e.g.;'"
+    )
+    wp_competence_items = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Competence Items (Worker's PAS)",
+        help_text="Bullet list of skill items for the test area page. Enter one item per line."
+    )
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

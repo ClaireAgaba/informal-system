@@ -10,7 +10,8 @@ import {
   Banknote,
   FileSpreadsheet,
   MessageSquare,
-  BarChart3
+  BarChart3,
+  BookOpen
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
@@ -38,6 +39,7 @@ const allNavigation = [
   { name: 'Marksheets', href: '/marksheets', icon: FileSpreadsheet, roles: ['staff', 'support_staff'] },
   { name: 'Complaints', href: '/complaints', icon: MessageSquare, roles: ['all'] },
   { name: 'Statistics', href: '/statistics', icon: BarChart3, roles: ['staff', 'support_staff'] },
+  { name: "Worker's PAS", href: '/workers-pas', icon: BookOpen, roles: ['staff', 'support_staff'] },
   { name: 'Users', href: '/users', icon: Users, roles: ['staff', 'support_staff'] },
 ];
 

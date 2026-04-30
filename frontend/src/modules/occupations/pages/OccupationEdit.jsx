@@ -49,6 +49,7 @@ const OccupationEdit = () => {
         occ_code: occupation.occ_code,
         occ_name: occupation.occ_name,
         occ_category: occupation.occ_category,
+        wp_code: occupation.wp_code || '',
         award_modular: occupation.award_modular || '',
         sector: occupation.sector || '',
         has_modular: occupation.has_modular,
@@ -90,6 +91,9 @@ const OccupationEdit = () => {
       occ_code: formData.occ_code,
       occ_name: formData.occ_name,
       occ_category: formData.occ_category,
+      wp_code: formData.occ_category === 'workers_pas'
+        ? (formData.wp_code || '').trim().toUpperCase() || null
+        : null,
       award_modular: formData.has_modular ? (formData.award_modular || null) : null,
       sector: formData.sector ? parseInt(formData.sector) : null,
       has_modular: formData.has_modular || false,
@@ -198,6 +202,26 @@ const OccupationEdit = () => {
                     <p className="mt-1 text-sm text-red-600">{errors.occ_category.message}</p>
                   )}
                 </div>
+
+                {/* WP Code - Only when category is Worker's PAS */}
+                {watchCategory === 'workers_pas' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Worker's PAS Code <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      {...register('wp_code', { required: "Worker's PAS code is required for WP occupations" })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg uppercase focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      placeholder="e.g., BLD"
+                      maxLength={10}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Short code used in Worker's PAS booklet numbering, e.g. BLD for Builder → WP/BLD/00000001</p>
+                    {errors.wp_code && (
+                      <p className="mt-1 text-sm text-red-600">{errors.wp_code.message}</p>
+                    )}
+                  </div>
+                )}
 
                 {/* Award Modular - Only when has_modular is checked */}
                 {watchCategory === 'formal' && watchHasModular && (

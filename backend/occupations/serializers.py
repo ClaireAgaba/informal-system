@@ -30,7 +30,9 @@ class OccupationLevelCreateSerializer(serializers.ModelSerializer):
         fields = ['occupation', 'level_name', 'structure_type', 'formal_fee', 
                   'workers_pas_base_fee', 'workers_pas_per_module_fee', 
                   'modular_fee_single_module', 'modular_fee_double_module', 
-                  'award', 'contact_hours', 'is_active']
+                  'award', 'contact_hours',
+                  'level_description', 'competence_description',
+                  'is_active']
     
     def validate(self, data):
         """Validate level name is unique for the occupation"""
@@ -63,7 +65,7 @@ class OccupationCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Occupation
-        fields = ['occ_code', 'occ_name', 'occ_category', 'award_modular', 'sector', 'has_modular', 'is_active']
+        fields = ['occ_code', 'occ_name', 'occ_category', 'wp_code', 'award_modular', 'sector', 'has_modular', 'is_active']
     
     def validate_occ_code(self, value):
         """Ensure occupation code is unique"""
@@ -72,11 +74,17 @@ class OccupationCreateSerializer(serializers.ModelSerializer):
         return value
     
     def validate(self, data):
-        """Validate has_modular is only set for formal occupations"""
+        """Validate has_modular is only set for formal occupations and wp_code on WP"""
         if data.get('has_modular') and data.get('occ_category') != 'formal':
             raise serializers.ValidationError({
                 'has_modular': "Modular registration is only available for Formal occupations."
             })
+        if data.get('occ_category') == 'workers_pas' and not data.get('wp_code'):
+            raise serializers.ValidationError({
+                'wp_code': "Worker's PAS Code is required for Worker's PAS occupations (e.g. BLD)."
+            })
+        if data.get('wp_code'):
+            data['wp_code'] = data['wp_code'].upper()
         return data
 
 
@@ -89,7 +97,7 @@ class OccupationListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Occupation
         fields = ['id', 'occ_code', 'occ_name', 'occ_category', 'occ_category_display', 
-                  'award_modular', 'sector', 'sector_name', 'has_modular', 'levels_count', 'is_active']
+                  'wp_code', 'award_modular', 'sector', 'sector_name', 'has_modular', 'levels_count', 'is_active']
 
 
 class OccupationModuleSerializer(serializers.ModelSerializer):
@@ -129,7 +137,8 @@ class OccupationModuleCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = OccupationModule
-        fields = ['module_code', 'module_name', 'occupation', 'level', 'credit_units', 'is_active']
+        fields = ['module_code', 'module_name', 'occupation', 'level', 'credit_units',
+                  'wp_description', 'wp_competence_items', 'is_active']
     
     def validate_module_code(self, value):
         """Ensure module code is unique"""

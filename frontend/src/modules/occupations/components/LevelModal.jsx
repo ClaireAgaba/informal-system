@@ -18,6 +18,8 @@ const LevelModal = ({ isOpen, onClose, onSubmit, level, isLoading }) => {
         modular_fee_double_module: level.modular_fee_double_module,
         award: level.award || '',
         contact_hours: level.contact_hours || '',
+        level_description: level.level_description || '',
+        competence_description: level.competence_description || '',
       });
     } else {
       reset({
@@ -30,6 +32,8 @@ const LevelModal = ({ isOpen, onClose, onSubmit, level, isLoading }) => {
         modular_fee_double_module: '0.00',
         award: '',
         contact_hours: '',
+        level_description: '',
+        competence_description: '',
       });
     }
   }, [level, reset]);
@@ -37,7 +41,19 @@ const LevelModal = ({ isOpen, onClose, onSubmit, level, isLoading }) => {
   if (!isOpen) return null;
 
   const handleFormSubmit = (data) => {
-    onSubmit(data);
+    // Normalize optional fields so empty strings don't fail backend validation.
+    // award and contact_hours are optional (N/A for Worker's PAS levels).
+    const cleaned = {
+      ...data,
+      award: data.award?.trim() ? data.award.trim() : null,
+      contact_hours:
+        data.contact_hours === '' || data.contact_hours === null || data.contact_hours === undefined
+          ? null
+          : parseInt(data.contact_hours, 10) || null,
+      level_description: data.level_description?.trim() ? data.level_description.trim() : '',
+      competence_description: data.competence_description?.trim() ? data.competence_description.trim() : '',
+    };
+    onSubmit(cleaned);
   };
 
   return (
@@ -201,16 +217,16 @@ const LevelModal = ({ isOpen, onClose, onSubmit, level, isLoading }) => {
 
           {/* Award & Duration */}
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-purple-900 mb-3">Award & Duration</h3>
+            <h3 className="text-sm font-semibold text-purple-900 mb-3">Award & Duration <span className="text-xs font-normal text-purple-700">(optional)</span></h3>
             <p className="text-xs text-purple-700 mb-4">
-              Award title and contact hours for this level (used on transcripts)
+              Award title and contact hours for this level (used on transcripts). Leave blank for Worker's PAS — N/A.
             </p>
 
             <div className="space-y-4">
               {/* Award */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Award:
+                  Award: <span className="text-xs font-normal text-gray-500">(optional)</span>
                 </label>
                 <input
                   type="text"
@@ -226,7 +242,7 @@ const LevelModal = ({ isOpen, onClose, onSubmit, level, isLoading }) => {
               {/* Contact Hours */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Contact Hours:
+                  Contact Hours: <span className="text-xs font-normal text-gray-500">(optional)</span>
                 </label>
                 <input
                   type="number"
@@ -236,6 +252,46 @@ const LevelModal = ({ isOpen, onClose, onSubmit, level, isLoading }) => {
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Total contact hours for this level
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Worker's PAS Booklet Content */}
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-amber-900 mb-3">Worker's PAS Booklet Content</h3>
+            <p className="text-xs text-amber-700 mb-4">
+              Used only when generating Worker's PAS booklets. Leave blank for Formal occupations.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Level Description
+                </label>
+                <textarea
+                  rows={4}
+                  {...register('level_description')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Description of this competence level (appears on page 4 of the booklet)"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Shown on the booklet's "Levels of Competence" page.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Competence (Section Intro)
+                </label>
+                <textarea
+                  rows={3}
+                  {...register('competence_description')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Short italic description shown on the sections list (page 6)"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Shown next to "Section X / Competence Level X" on the sections list.
                 </p>
               </div>
             </div>

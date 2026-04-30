@@ -51,7 +51,8 @@ class OccupationAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('occ_code', 'occ_name', 'occ_category', 'sector')
+            'fields': ('occ_code', 'occ_name', 'occ_category', 'wp_code', 'sector'),
+            'description': "wp_code is required for Worker's PAS occupations and is used in the booklet number (e.g. BLD for Builder)."
         }),
         ('Modular Award', {
             'fields': ('award_modular',),
@@ -104,6 +105,11 @@ class OccupationLevelAdmin(admin.ModelAdmin):
             'fields': ('award', 'contact_hours'),
             'description': 'Award title and contact hours for this level (used on transcripts)'
         }),
+        ("Worker's PAS Booklet Content", {
+            'fields': ('level_description', 'competence_description'),
+            'description': "Used only for Worker's PAS booklets. level_description appears on page 4; competence_description appears on page 6 (the section intro).",
+            'classes': ('collapse',)
+        }),
         ('Status & Timestamps', {
             'fields': ('is_active', 'created_at', 'updated_at'),
             'classes': ('collapse',)
@@ -143,6 +149,11 @@ class OccupationModuleAdmin(admin.ModelAdmin):
         ('Occupation & Level', {
             'fields': ('occupation', 'level'),
             'description': 'Select occupation first, then select the level for this module'
+        }),
+        ("Worker's PAS Booklet Content", {
+            'fields': ('wp_description', 'wp_competence_items'),
+            'description': "Used only for Worker's PAS booklets. wp_description is the intro paragraph on the test area page; wp_competence_items lists the bullet points (one per line).",
+            'classes': ('collapse',)
         }),
         ('Status & Timestamps', {
             'fields': ('is_active', 'created_at', 'updated_at'),

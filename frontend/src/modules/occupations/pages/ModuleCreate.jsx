@@ -171,6 +171,33 @@ const ModuleCreate = () => {
                     <option value="false">Inactive</option>
                   </select>
                 </div>
+
+                {/* Worker's PAS Booklet Content */}
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-amber-900">Worker's PAS Booklet Content</h4>
+                    <p className="text-xs text-amber-700">Optional. Used when this module appears as a Test Area inside a Worker's PAS booklet.</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea
+                      rows={3}
+                      {...register('wp_description')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      placeholder="e.g., The Worker has acquired adequate knowledge and skills to construct foundations/substructures e.g.;"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Competence Items (one per line)</label>
+                    <textarea
+                      rows={5}
+                      {...register('wp_competence_items')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-xs"
+                      placeholder={'Interpreting drawings\nSetting profiles\nDetermining levels\nStrip foundation'}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Each non-empty line becomes a bullet point on the test area page.</p>
+                  </div>
+                </div>
               </Card.Content>
             </Card>
           </div>

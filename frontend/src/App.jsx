@@ -56,6 +56,8 @@ import AwardsList from '@modules/awards/pages/AwardsList';
 import TranscriptLogs from '@modules/awards/pages/TranscriptLogs';
 import CollectionReceipts from '@modules/awards/pages/CollectionReceipts';
 import CollectionReceiptDetail from '@modules/awards/pages/CollectionReceiptDetail';
+import WorkersPasIndex from '@modules/workers-pas/pages/WorkersPasIndex';
+import WorkersPasGenerate from '@modules/workers-pas/pages/WorkersPasGenerate';
 
 function App() {
   return (
@@ -149,6 +151,10 @@ function App() {
         <Route path="awards/transcript-logs" element={<TranscriptLogs />} />
         <Route path="awards/collection-receipts" element={<CollectionReceipts />} />
         <Route path="awards/collection-receipts/:id" element={<CollectionReceiptDetail />} />
+
+        {/* Worker's PAS routes */}
+        <Route path="workers-pas" element={<WorkersPasIndex />} />
+        <Route path="workers-pas/generate" element={<WorkersPasGenerate />} />
 
         <Route path="*" element={<div className="p-6"><h1 className="text-2xl">404 - Page Not Found</h1></div>} />
       </Route>

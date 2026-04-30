@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'dit_migration.apps.DitMigrationConfig',
     'fees.apps.FeesConfig',
     'dit_legacy.apps.DitLegacyConfig',
+    'workers_pas.apps.WorkersPasConfig',
 ]
 
 MIDDLEWARE = [
