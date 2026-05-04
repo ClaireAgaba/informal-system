@@ -72,6 +72,18 @@ def _styles():
             'body_italic_center', fontName='Helvetica-Oblique', fontSize=9.5,
             alignment=TA_CENTER, leading=12,
         ),
+        'body_justify': ParagraphStyle(
+            'body_justify', fontName='Helvetica', fontSize=9.5,
+            alignment=TA_JUSTIFY, leading=13,
+        ),
+        'h1_center': ParagraphStyle(
+            'h1_center', fontName='Helvetica-Bold', fontSize=12,
+            alignment=TA_CENTER, leading=15,
+        ),
+        'h2_center': ParagraphStyle(
+            'h2_center', fontName='Helvetica-Bold', fontSize=11,
+            alignment=TA_CENTER, leading=14,
+        ),
         'small': ParagraphStyle(
             'small', fontName='Helvetica', fontSize=8,
             alignment=TA_LEFT, leading=11,
@@ -98,6 +110,27 @@ def _draw_paragraph(c, html, style, x, y, width, height):
 def _draw_page_number(c, num):
     s = _styles()['page_number']
     _draw_paragraph(c, str(num), s, 0, 8 * mm, PAGE_W, 12)
+
+
+def _draw_page_header(c, occupation_name):
+    """Top-of-page header: occupation name + horizontal line.
+
+    Drawn on every interior page (not on the front cover, not on trailing
+    blank). Content should start below ``HEADER_BOTTOM_Y`` to avoid overlap.
+    """
+    s = _styles()
+    label_y = PAGE_H - 10 * mm
+    _draw_paragraph(
+        c, f"<b>{occupation_name}</b>", s['body'],
+        MARGIN_X, label_y, PAGE_W - 2 * MARGIN_X, 12,
+    )
+    c.setStrokeColor(BLACK)
+    c.setLineWidth(0.5)
+    c.line(MARGIN_X, label_y - 2, PAGE_W - MARGIN_X, label_y - 2)
+
+
+# Y below which body content should start so it does not overlap the header.
+HEADER_BOTTOM_Y = PAGE_H - 18 * mm
 
 
 def _hardcoded_intro_text(occupation_name):
@@ -259,9 +292,10 @@ def _draw_cover(c, ctx):
 
 def _draw_page2_intro(c, ctx):
     s = _styles()
+    _draw_page_header(c, ctx['occupation_name'])
     # Bordered box
-    box_x, box_y = 18 * mm, 35 * mm
-    box_w, box_h = PAGE_W - 36 * mm, PAGE_H - 70 * mm
+    box_x, box_y = 18 * mm, 30 * mm
+    box_w, box_h = PAGE_W - 36 * mm, HEADER_BOTTOM_Y - box_y
     c.setStrokeColor(BLACK)
     c.setLineWidth(0.5)
     c.rect(box_x, box_y, box_w, box_h, fill=0, stroke=1)
@@ -289,22 +323,24 @@ def _draw_page2_intro(c, ctx):
 
 def _draw_page3_biodata(c, ctx):
     s = _styles()
+    _draw_page_header(c, ctx['occupation_name'])
 
     # Top section: "Worker's PAS issued to:"
-    y = PAGE_H - 30 * mm
+    y = HEADER_BOTTOM_Y - 6 * mm
     _draw_paragraph(
         c, "<b>Worker&rsquo;s PAS issued to:</b>", s['body'],
-        MARGIN_X, y, 70 * mm, 12,
+        MARGIN_X, y, 90 * mm, 12,
     )
     y -= 8 * mm
 
-    # Name (printed on a line)
+    # Name prefix (Mr. / Mrs. / Ms.) then the candidate name on a line.
+    # The end-user will cross out the salutation that does not apply.
     _draw_paragraph(
-        c, f"<b>{ctx['candidate_name']}</b>", s['body'],
-        MARGIN_X, y, 80 * mm, 14,
+        c, f"<b>Mr. / Mrs. / Ms.:</b> &nbsp;{ctx['candidate_name']}", s['body'],
+        MARGIN_X, y, 100 * mm, 14,
     )
     c.setLineWidth(0.5)
-    c.line(MARGIN_X, y - 1, MARGIN_X + 80 * mm, y - 1)
+    c.line(MARGIN_X, y - 1, MARGIN_X + 100 * mm, y - 1)
     y -= 8 * mm
 
     _draw_paragraph(
@@ -314,10 +350,7 @@ def _draw_page3_biodata(c, ctx):
     y -= 10 * mm
 
     fields = [
-        ('REG No.', ctx.get('reg_no', '')),
         ('GENDER', ctx.get('gender', '')),
-        ('CENTRE NAME', ctx.get('centre_name', '')),
-        ('OCCUPATION', ctx.get('occupation_name', '')),
         ('NATIONALITY', ctx.get('nationality', '')),
         ('PRINT DATE', ctx.get('print_date', '')),
     ]
@@ -354,10 +387,9 @@ def _draw_page3_biodata(c, ctx):
     )
     y -= 26 * mm
 
-    # Signatures
-    sig_w = 55 * mm
-    es_x = MARGIN_X
-    cp_x = PAGE_W - MARGIN_X - sig_w
+    # Executive Secretary signature (centred; Board Chairperson removed).
+    sig_w = 70 * mm
+    es_x = (PAGE_W - sig_w) / 2
     sig_y = y
 
     if ctx.get('es_signature_path'):
@@ -367,24 +399,12 @@ def _draw_page3_biodata(c, ctx):
                         preserveAspectRatio=True)
         except Exception:
             pass
-    if ctx.get('cp_signature_path'):
-        try:
-            c.drawImage(ctx['cp_signature_path'], cp_x, sig_y,
-                        width=sig_w, height=14 * mm, mask='auto',
-                        preserveAspectRatio=True)
-        except Exception:
-            pass
 
     line_y = sig_y - 1
     c.line(es_x, line_y, es_x + sig_w, line_y)
-    c.line(cp_x, line_y, cp_x + sig_w, line_y)
     _draw_paragraph(
-        c, "<b>Executive Secretary</b>", s['body'],
+        c, "<b>Executive Secretary</b>", s['body_center'],
         es_x, line_y - 6 * mm, sig_w, 12,
-    )
-    _draw_paragraph(
-        c, "<b>Board Chairperson</b>", s['body'],
-        cp_x, line_y - 6 * mm, sig_w, 12,
     )
 
     _draw_paragraph(
@@ -393,40 +413,155 @@ def _draw_page3_biodata(c, ctx):
         s['small'],
         MARGIN_X, line_y - 18 * mm, PAGE_W - 2 * MARGIN_X, 12 * mm,
     )
-
-    _draw_page_number(c, 3)
+    # Page number intentionally omitted on the biodata page.
 
 
 def _draw_page4_levels(c, ctx):
-    """Level descriptions - one paragraph per level."""
+    """Levels of competence page.
+
+    Layout:
+      <centred heading, 3 lines>
+      <centred "Information" sub-heading>
+      <justified intro paragraph>
+
+      (a)   Level 1:
+            <justified description paragraph>
+
+      (b)   Level 2:
+            <justified description paragraph>
+
+    The left column holds the ordered-list marker ("(a)", "(b)", ...) and
+    the right column holds the bold label followed by a wrapping description.
+    """
     s = _styles()
-    y_top = PAGE_H - 25 * mm
-    avail_h = y_top - 25 * mm
+    _draw_page_header(c, ctx['occupation_name'])
 
-    # Build the HTML
-    parts = ["<b>LEVELS OF COMPETENCE</b><br/><br/>"]
-    for lvl in ctx['levels']:
-        parts.append(f"<b>{lvl['level_name']}</b><br/>")
-        parts.append((lvl.get('level_description') or '').replace('\n', '<br/>'))
-        parts.append("<br/><br/>")
-    html = ''.join(parts)
+    letters = 'abcdefghijklmnopqrstuvwxyz'
+    content_w = PAGE_W - 2 * MARGIN_X
 
-    _draw_paragraph(c, html, s['body'],
-                    MARGIN_X, 20 * mm, PAGE_W - 2 * MARGIN_X, avail_h)
+    # Centred heading (three lines)
+    heading_h = 22 * mm
+    heading_y = HEADER_BOTTOM_Y - heading_h
+    _draw_paragraph(
+        c,
+        "LEVELS OF COMPETENCE ASSESSED AND CERTIFIED<br/>"
+        "BY THE UGANDA VOCATIONAL AND TECHNICAL<br/>"
+        "ASSESSMENT BOARD (UVTAB)",
+        s['h1_center'], MARGIN_X, heading_y, content_w, heading_h,
+    )
+
+    # "Information" sub-heading
+    sub_y = heading_y - 8 * mm
+    _draw_paragraph(
+        c, "Information", s['h2_center'],
+        MARGIN_X, sub_y, content_w, 14,
+    )
+
+    # Intro paragraph (left-aligned; image shows ragged right)
+    intro = (
+        "The holder of this Worker&rsquo;s PAS has practiced the skills, "
+        "as far as they have been certified, on the following levels:"
+    )
+    intro_p = Paragraph(intro, s['body'])
+    _, intro_h = intro_p.wrap(content_w, 40 * mm)
+    intro_top = sub_y - 4 * mm
+    intro_p.drawOn(c, MARGIN_X, intro_top - intro_h)
+
+    # Ordered-list items
+    marker_col_w = 12 * mm
+    body_col_x = MARGIN_X + marker_col_w + 3 * mm
+    body_col_w = PAGE_W - MARGIN_X - body_col_x
+
+    y_cursor = intro_top - intro_h - 8 * mm
+    for idx, lvl in enumerate(ctx['levels']):
+        label = f"({letters[idx] if idx < len(letters) else str(idx + 1)})"
+        desc = (lvl.get('level_description') or '').replace('\n', '<br/>')
+
+        # Right-column paragraph: bold label + wrapping description.
+        html = (
+            f"<b>{lvl['level_name']}:</b> &nbsp;{desc}"
+        )
+        item_p = Paragraph(html, s['body_justify'])
+        _, item_h = item_p.wrap(body_col_w, 200 * mm)
+
+        # Draw marker at the top of the right-column paragraph.
+        _draw_paragraph(
+            c, label, s['body'],
+            MARGIN_X, y_cursor - 12, marker_col_w, 14,
+        )
+        item_p.drawOn(c, body_col_x, y_cursor - item_h)
+
+        y_cursor -= item_h + 6 * mm
+
     _draw_page_number(c, 4)
 
 
-def _draw_page5_certified(c):
+def _draw_page5_certified(c, ctx):
+    """Certified training on the job.
+
+    Tight flowing layout:
+      - Bold heading "Certified training on the job"
+      - Justified intro paragraph
+      - Three sub-blocks ("For the assessor" / "For the worker" /
+        "For employers"), each with a bold-italic title and a justified
+        body, slightly indented from the page margin.
+    """
     s = _styles()
-    _draw_paragraph(
-        c, CERTIFIED_TRAINING_TEXT, s['body'],
-        MARGIN_X, 20 * mm, PAGE_W - 2 * MARGIN_X, PAGE_H - 40 * mm,
+    _draw_page_header(c, ctx['occupation_name'])
+
+    content_w = PAGE_W - 2 * MARGIN_X
+    indent = 5 * mm
+    block_w = content_w - indent
+
+    y = HEADER_BOTTOM_Y - 8 * mm
+
+    def _flow(html, style, width, x):
+        """Draw a paragraph starting at current ``y`` and advance ``y``."""
+        nonlocal y
+        p = Paragraph(html, style)
+        _, h = p.wrap(width, PAGE_H)
+        p.drawOn(c, x, y - h)
+        y -= h
+
+    # Main heading
+    _flow("<b>Certified training on the job</b>", s['body'], content_w, MARGIN_X)
+    y -= 2 * mm
+
+    # Intro paragraph (justified)
+    _flow(
+        "This Worker&rsquo;s PAS was designed as a reference document for "
+        "assessors, employees and employers. It certifies specific "
+        "qualifications obtained during the holder&rsquo;s period of practice.",
+        s['body_justify'], content_w, MARGIN_X,
     )
+    y -= 4 * mm
+
+    blocks = [
+        ("For the assessor",
+         "This booklet is a guideline of available skills within the scope "
+         "of the occupation, which the assessor will be able to validate "
+         "and certify."),
+        ("For the worker",
+         "This booklet describes the skills and knowledge which the holder "
+         "has had the Opportunity to acquire during his or her practical "
+         "career."),
+        ("For employers",
+         "This booklet provides a record of the skills the holder has "
+         "acquired during his or her time of training and employment, as "
+         "well as the level of proficiency achieved."),
+    ]
+    for title, body in blocks:
+        _flow(f"<b><i>{title}</i></b>", s['body'], block_w, MARGIN_X + indent)
+        y -= 1 * mm
+        _flow(body, s['body_justify'], block_w, MARGIN_X + indent)
+        y -= 4 * mm
+
     _draw_page_number(c, 5)
 
 
 def _draw_page6_sections(c, ctx):
     s = _styles()
+    _draw_page_header(c, ctx['occupation_name'])
     parts = ["This Worker&rsquo;s PAS has been structured in sections:<br/><br/>"]
     for idx, lvl in enumerate(ctx['levels'], start=1):
         page_ref = lvl.get('section_start_page', '')
@@ -440,56 +575,82 @@ def _draw_page6_sections(c, ctx):
     parts.append(ACHIEVEMENT_TAIL_TEXT)
     _draw_paragraph(
         c, ''.join(parts), s['body'],
-        MARGIN_X, 18 * mm, PAGE_W - 2 * MARGIN_X, PAGE_H - 35 * mm,
+        MARGIN_X, 18 * mm, PAGE_W - 2 * MARGIN_X,
+        HEADER_BOTTOM_Y - 18 * mm,
     )
     _draw_page_number(c, 6)
 
 
-def _draw_section_index_page(c, level_idx, level, page_num):
+def _draw_section_index_page(c, level_idx, level, page_num, occupation_name):
     s = _styles()
-    _draw_paragraph(
-        c, f"<b>Section {_ordinal(level_idx)}</b>", s['h1'],
-        MARGIN_X, PAGE_H - 30 * mm, PAGE_W - 2 * MARGIN_X, 14,
-    )
-    _draw_paragraph(
-        c, f"<b>COMPETENCE LEVEL {level_idx}</b>", s['h1'],
-        MARGIN_X, PAGE_H - 38 * mm, PAGE_W - 2 * MARGIN_X, 14,
-    )
-    _draw_paragraph(
-        c, "<i>TEST AREAS</i>", s['h2'],
-        MARGIN_X, PAGE_H - 50 * mm, PAGE_W - 2 * MARGIN_X, 14,
-    )
-    rows = []
+    _draw_page_header(c, occupation_name)
+
+    content_w = PAGE_W - 2 * MARGIN_X
+    y = HEADER_BOTTOM_Y - 8 * mm
+
+    def _flow(html, style, width=content_w, x=MARGIN_X):
+        nonlocal y
+        p = Paragraph(html, style)
+        _, h = p.wrap(width, PAGE_H)
+        p.drawOn(c, x, y - h)
+        y -= h
+
+    # Centred section title + competence level
+    _flow(f"<b>Section {_ordinal(level_idx)}</b>", s['h1_center'])
+    y -= 2 * mm
+    _flow(f"<b>COMPETENCE LEVEL {level_idx}</b>", s['h2_center'])
+    y -= 6 * mm
+
+    # TEST AREAS label (left-aligned, bold italic)
+    _flow("<b><i>TEST AREAS</i></b>", s['h2'])
+    y -= 2 * mm
+
+    # Numbered list of modules
     for i, m in enumerate(level['modules'], start=1):
-        rows.append(f"&nbsp;&nbsp;{i}.&nbsp;&nbsp;{m['module_name']}")
-    _draw_paragraph(
-        c, '<br/>'.join(rows), s['body'],
-        MARGIN_X, 20 * mm, PAGE_W - 2 * MARGIN_X, PAGE_H - 75 * mm,
-    )
+        _flow(f"&nbsp;&nbsp;{i}.&nbsp;&nbsp;{m['module_name']}", s['body'])
+        y -= 1 * mm
+
     _draw_page_number(c, page_num)
 
 
-def _draw_test_area_detail(c, area_no, module, page_num):
+def _draw_test_area_detail(c, area_no, module, page_num, occupation_name):
     s = _styles()
-    _draw_paragraph(
-        c, f"<b>Test area {area_no}: {module['module_name']}</b>", s['h1'],
-        MARGIN_X, PAGE_H - 25 * mm, PAGE_W - 2 * MARGIN_X, 14,
-    )
+    _draw_page_header(c, occupation_name)
+
+    content_w = PAGE_W - 2 * MARGIN_X
+    y = HEADER_BOTTOM_Y - 8 * mm
+
+    def _flow(html, style, width=content_w, x=MARGIN_X):
+        nonlocal y
+        p = Paragraph(html, style)
+        _, h = p.wrap(width, PAGE_H)
+        p.drawOn(c, x, y - h)
+        y -= h
+
+    # Centred heading
+    _flow(f"<b>Test area {area_no}: {module['module_name']}</b>",
+          s['h1_center'])
+    y -= 5 * mm
+
+    # Intro description (justified)
     desc = module.get('wp_description') or (
         f"The Worker has acquired adequate knowledge and skills to perform "
         f"{module['module_name']}.")
+    _flow(desc, s['body_justify'])
+    y -= 2 * mm
+
+    # Bullet list of competence items
     items = [i.strip() for i in (module.get('wp_competence_items') or '').splitlines() if i.strip()]
-    bullet_html = ''.join(f"&bull;&nbsp;{item}<br/>" for item in items)
-    _draw_paragraph(
-        c, f"{desc}<br/><br/>{bullet_html}", s['body'],
-        MARGIN_X, 20 * mm, PAGE_W - 2 * MARGIN_X, PAGE_H - 45 * mm,
-    )
+    for item in items:
+        _flow(f"&bull;&nbsp;{item}", s['body'])
+
     _draw_page_number(c, page_num)
 
 
-def _draw_achievement_stamp(c, page_num):
+def _draw_achievement_stamp(c, page_num, occupation_name):
     s = _styles()
-    y_top = PAGE_H - 35 * mm
+    _draw_page_header(c, occupation_name)
+    y_top = HEADER_BOTTOM_Y - 10 * mm
     _draw_paragraph(
         c, "<i>ACHIEVEMENT LEVEL</i>", s['h2'],
         MARGIN_X, y_top, 70 * mm, 14,
@@ -520,11 +681,12 @@ def _draw_achievement_stamp(c, page_num):
     _draw_page_number(c, page_num)
 
 
-def _draw_grading(c, page_num):
+def _draw_grading(c, page_num, occupation_name):
     s = _styles()
+    _draw_page_header(c, occupation_name)
     _draw_paragraph(
         c, "<b>Grading of Scores:</b>", s['h2'],
-        MARGIN_X, PAGE_H - 25 * mm, PAGE_W - 2 * MARGIN_X, 14,
+        MARGIN_X, HEADER_BOTTOM_Y - 8 * mm, PAGE_W - 2 * MARGIN_X, 14,
     )
     rows = ["<b>Score&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Grade</b>"]
     for score, grade in GRADING_ROWS:
@@ -544,19 +706,21 @@ def _draw_grading(c, page_num):
     _draw_page_number(c, page_num)
 
 
-def _draw_employment_history(c, page_num, rows_per_page=5, page_index=0):
+def _draw_employment_history(c, page_num, occupation_name,
+                             rows_per_page=5, page_index=0):
     s = _styles()
+    _draw_page_header(c, occupation_name)
     if page_index == 0:
         _draw_paragraph(
             c, "<b>Employment History</b>", s['h2'],
-            MARGIN_X, PAGE_H - 22 * mm, 80 * mm, 14,
+            MARGIN_X, HEADER_BOTTOM_Y - 6 * mm, 80 * mm, 14,
         )
         _draw_paragraph(
             c, "<i>STAMP</i>", s['h2'],
-            PAGE_W - MARGIN_X - 25 * mm, PAGE_H - 22 * mm, 25 * mm, 14,
+            PAGE_W - MARGIN_X - 25 * mm, HEADER_BOTTOM_Y - 6 * mm, 25 * mm, 14,
         )
 
-    y = PAGE_H - 30 * mm
+    y = HEADER_BOTTOM_Y - 14 * mm
     box_h = (y - 25 * mm) / rows_per_page
 
     for _ in range(rows_per_page):
@@ -588,10 +752,22 @@ def _draw_employment_history(c, page_num, rows_per_page=5, page_index=0):
     _draw_page_number(c, page_num)
 
 
-def _draw_back_cover(c):
+def _draw_back_cover(c, occupation_name, logo_path=None):
     s = _styles()
-    logo = None  # back of front cover (UVTAB info) - hardcoded text
-    y = PAGE_H - 30 * mm
+
+    # UVTAB logo — centred, placed well below the top so nothing overlaps
+    logo_h = 22 * mm
+    logo_y = PAGE_H - 50 * mm
+    if logo_path:
+        try:
+            c.drawImage(logo_path, (PAGE_W - logo_h) / 2, logo_y,
+                        width=logo_h, height=logo_h, mask='auto',
+                        preserveAspectRatio=True)
+        except Exception:
+            pass
+
+    # Start text well below the logo (large gap prevents overlap)
+    y = logo_y - 12 * mm
     _draw_paragraph(
         c, f"<b>{UVTAB_INFO['name']}</b>", s['body_center'],
         MARGIN_X, y, PAGE_W - 2 * MARGIN_X, 14,
@@ -603,9 +779,9 @@ def _draw_back_cover(c):
     ]
     _draw_paragraph(
         c, '<br/>'.join(info_lines), s['body_center'],
-        MARGIN_X, y - 25 * mm, PAGE_W - 2 * MARGIN_X, 25 * mm,
+        MARGIN_X, y - 22 * mm, PAGE_W - 2 * MARGIN_X, 22 * mm,
     )
-    y -= 32 * mm
+    y -= 28 * mm
 
     blocks = [
         ('Vision', UVTAB_INFO['vision']),
@@ -615,9 +791,9 @@ def _draw_back_cover(c):
     for title, body in blocks:
         _draw_paragraph(
             c, f"<b>{title}</b><br/>{body}", s['body_center'],
-            MARGIN_X, y - 16 * mm, PAGE_W - 2 * MARGIN_X, 16 * mm,
+            MARGIN_X, y - 14 * mm, PAGE_W - 2 * MARGIN_X, 14 * mm,
         )
-        y -= 20 * mm
+        y -= 18 * mm
     _draw_paragraph(
         c, "<b>Core Values</b><br/>" + '<br/>'.join(UVTAB_INFO['core_values']),
         s['body_center'],
@@ -663,9 +839,9 @@ def generate_book_pdf(book_data):
     Generate the full A5 booklet PDF for a single candidate.
 
     ``book_data`` is a dict with the following keys:
-      candidate_name, date_of_birth, gender, reg_no, centre_name, nationality,
+      candidate_name, date_of_birth, gender, nationality,
       print_date, photo_path,
-      occupation_name, occupation_wp_code, full_label,
+      occupation_name, occupation_wp_code, occupation_wp_occ_code, full_label,
       levels: [{level_name, level_description, competence_description,
                 modules: [{module_name, wp_description, wp_competence_items}, ...]}, ...],
       es_signature_path, cp_signature_path,
@@ -680,10 +856,13 @@ def generate_book_pdf(book_data):
     page_num = 6  # sections page itself
     levels = list(book_data['levels'])
     page_cursor = 7  # first content page after sections page
-    for lvl in levels:
+    for i, lvl in enumerate(levels):
         lvl['section_start_page'] = page_cursor
         # Section index page + 2 pages per module (detail + achievement/stamp)
         page_cursor += 1 + 2 * len(lvl.get('modules', []))
+        # Blank page before the next section (for booklet uniformity)
+        if i < len(levels) - 1:
+            page_cursor += 1
 
     book_data['levels_label'] = _build_levels_label(levels)
 
@@ -703,8 +882,10 @@ def generate_book_pdf(book_data):
     _draw_page4_levels(c, book_data)
     c.showPage()
 
+    occupation_name = book_data['occupation_name']
+
     # Page 5 - Certified training
-    _draw_page5_certified(c)
+    _draw_page5_certified(c, book_data)
     c.showPage()
 
     # Page 6 - Sections list
@@ -714,20 +895,27 @@ def generate_book_pdf(book_data):
     # Sections (per level)
     current_page = 7
     for level_idx, lvl in enumerate(levels, start=1):
-        _draw_section_index_page(c, level_idx, lvl, current_page)
+        # Blank page before each new section after the first (booklet uniformity)
+        if level_idx > 1:
+            c.showPage()
+            current_page += 1
+
+        _draw_section_index_page(c, level_idx, lvl, current_page,
+                                 occupation_name)
         c.showPage()
         current_page += 1
 
         for area_no, module in enumerate(lvl.get('modules', []), start=1):
-            _draw_test_area_detail(c, area_no, module, current_page)
+            _draw_test_area_detail(c, area_no, module, current_page,
+                                   occupation_name)
             c.showPage()
             current_page += 1
-            _draw_achievement_stamp(c, current_page)
+            _draw_achievement_stamp(c, current_page, occupation_name)
             c.showPage()
             current_page += 1
 
     # Grading
-    _draw_grading(c, current_page)
+    _draw_grading(c, current_page, occupation_name)
     c.showPage()
     current_page += 1
 
@@ -735,13 +923,19 @@ def generate_book_pdf(book_data):
     rows_per_page = 5
     eh_pages = max(1, book_data.get('employment_history_pages', 4))
     for i in range(eh_pages):
-        _draw_employment_history(c, current_page, rows_per_page=rows_per_page,
-                                 page_index=i)
+        _draw_employment_history(c, current_page, occupation_name,
+                                 rows_per_page=rows_per_page, page_index=i)
         c.showPage()
         current_page += 1
 
     # Back cover (UVTAB info)
-    _draw_back_cover(c)
+    _draw_back_cover(c, occupation_name, book_data.get('uvtab_logo_path'))
+    c.showPage()
+
+    # Trailing blank page (pairs with the front cover in the folded A5
+    # booklet so the stitched book has the correct outer/inner layout).
+    c.setFillColor(GREY_COVER)
+    c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
     c.showPage()
 
     c.save()

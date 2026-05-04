@@ -62,27 +62,51 @@ class OccupationSerializer(serializers.ModelSerializer):
 
 class OccupationCreateSerializer(serializers.ModelSerializer):
     """Simplified serializer for creating occupations"""
-    
+
     class Meta:
         model = Occupation
-        fields = ['occ_code', 'occ_name', 'occ_category', 'wp_code', 'award_modular', 'sector', 'has_modular', 'is_active']
-    
+        fields = ['occ_code', 'occ_name', 'occ_category', 'wp_code',
+                  'wp_occ_code', 'award_modular', 'sector', 'has_modular',
+                  'is_active']
+
     def validate_occ_code(self, value):
         """Ensure occupation code is unique"""
-        if Occupation.objects.filter(occ_code=value).exists():
+        qs = Occupation.objects.filter(occ_code=value)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
             raise serializers.ValidationError("An occupation with this code already exists.")
         return value
-    
+
+    def validate_wp_occ_code(self, value):
+        """Ensure the numeric occupation code is unique across occupations."""
+        if value is None:
+            return value
+        qs = Occupation.objects.filter(wp_occ_code=value)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError(
+                "This Worker's PAS Occupation Number is already used by another occupation."
+            )
+        return value
+
     def validate(self, data):
-        """Validate has_modular is only set for formal occupations and wp_code on WP"""
+        """Validate has_modular is only set for formal occupations and wp_code/wp_occ_code on WP"""
         if data.get('has_modular') and data.get('occ_category') != 'formal':
             raise serializers.ValidationError({
                 'has_modular': "Modular registration is only available for Formal occupations."
             })
-        if data.get('occ_category') == 'workers_pas' and not data.get('wp_code'):
-            raise serializers.ValidationError({
-                'wp_code': "Worker's PAS Code is required for Worker's PAS occupations (e.g. BLD)."
-            })
+        if data.get('occ_category') == 'workers_pas':
+            if not data.get('wp_code'):
+                raise serializers.ValidationError({
+                    'wp_code': "Worker's PAS Code is required for Worker's PAS occupations (e.g. BLD)."
+                })
+            if not data.get('wp_occ_code'):
+                raise serializers.ValidationError({
+                    'wp_occ_code': "Worker's PAS Occupation Number is required for "
+                                   "Worker's PAS occupations (e.g. 26 for Builder)."
+                })
         if data.get('wp_code'):
             data['wp_code'] = data['wp_code'].upper()
         return data
@@ -96,8 +120,9 @@ class OccupationListSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Occupation
-        fields = ['id', 'occ_code', 'occ_name', 'occ_category', 'occ_category_display', 
-                  'wp_code', 'award_modular', 'sector', 'sector_name', 'has_modular', 'levels_count', 'is_active']
+        fields = ['id', 'occ_code', 'occ_name', 'occ_category', 'occ_category_display',
+                  'wp_code', 'wp_occ_code', 'award_modular', 'sector', 'sector_name',
+                  'has_modular', 'levels_count', 'is_active']
 
 
 class OccupationModuleSerializer(serializers.ModelSerializer):

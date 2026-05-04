@@ -154,19 +154,13 @@ def _build_book_data(candidate, occupation, levels_qs, signatures, request=None)
         except Exception:
             photo_path = None
 
-    centre_name = ''
-    if getattr(candidate, 'assessment_center', None):
-        centre_name = candidate.assessment_center.center_name or \
-                      candidate.assessment_center.center_number or ''
-
     return {
         'candidate_name': candidate.full_name or '',
         'date_of_birth': candidate.date_of_birth.strftime('%d/%m/%Y') if candidate.date_of_birth else '',
         'gender': (candidate.gender or '').title(),
-        'reg_no': candidate.registration_number or '',
-        'centre_name': centre_name,
         'occupation_name': occupation.occ_name,
         'occupation_wp_code': occupation.wp_code or '',
+        'occupation_wp_occ_code': occupation.wp_occ_code or '',
         'nationality': candidate.nationality or 'Uganda',
         'print_date': date.today().strftime('%d/%m/%Y'),
         'photo_path': photo_path,
@@ -180,14 +174,29 @@ def _build_book_data(candidate, occupation, levels_qs, signatures, request=None)
 
 
 def _signature_paths():
+    """Resolve the paths of the static assets used in the Worker's PAS booklet.
+
+    Accepts a couple of historical filename variants so the caller does not
+    need to rename the files on disk.
+    """
     base = os.path.join(settings.BASE_DIR, 'static', 'images')
-    paths = {
-        'es': os.path.join(base, 'es_signature.jpg'),
-        'cp': os.path.join(base, 'chairperson_signature.jpg'),
-        'coat': os.path.join(base, 'coat_of_arms.png'),
-        'logo': os.path.join(base, 'uvtab_logo.png'),
+
+    def _first_existing(*names):
+        for n in names:
+            p = os.path.join(base, n)
+            if os.path.exists(p):
+                return p
+        return None
+
+    return {
+        'es': _first_existing('es_signature.jpg', 'es_signature.png'),
+        'cp': _first_existing('chairperson_signature.jpg',
+                               'chairperson_signature.png'),
+        'coat': _first_existing('coat_of_arms.png', 'coat_of_arms.jpg',
+                                 "uganda's embem.jpg", 'uganda_emblem.jpg'),
+        'logo': _first_existing('uvtab-logo.png', 'uvtab_logo.png',
+                                 'uvtab-logo.jpg'),
     }
-    return {k: (v if os.path.exists(v) else None) for k, v in paths.items()}
 
 
 @transaction.atomic
@@ -197,6 +206,15 @@ def _get_or_create_book(candidate, occupation, series, generated_by=None):
         candidate=candidate, occupation=occupation, assessment_series=series,
     ).first()
     if book is not None:
+        # If occupation config changed (e.g. wp_occ_code added), refresh the number
+        if occupation.wp_code and occupation.wp_occ_code:
+            expected = WorkersPasBook.format_book_number(
+                occupation.wp_code, occupation.wp_occ_code, book.sequence_number,
+            )
+            if book.book_number != expected:
+                book.book_number = expected
+                book.full_label = WorkersPasBook.format_full_label(expected)
+                book.save(update_fields=['book_number', 'full_label', 'updated_at'])
         book.reprint_count = (book.reprint_count or 0) + 1
         book.save(update_fields=['reprint_count', 'updated_at'])
         return book, False
@@ -205,9 +223,16 @@ def _get_or_create_book(candidate, occupation, series, generated_by=None):
         raise ValueError(
             f"Occupation '{occupation.occ_name}' has no Worker's PAS code (wp_code) configured."
         )
+    if not occupation.wp_occ_code:
+        raise ValueError(
+            f"Occupation '{occupation.occ_name}' has no Worker's PAS Occupation Number "
+            f"(wp_occ_code) configured."
+        )
 
-    seq = WorkersPasBook.allocate_sequence()
-    book_number = WorkersPasBook.format_book_number(occupation.wp_code, seq)
+    seq = WorkersPasBook.allocate_sequence(occupation)
+    book_number = WorkersPasBook.format_book_number(
+        occupation.wp_code, occupation.wp_occ_code, seq,
+    )
     book = WorkersPasBook.objects.create(
         candidate=candidate,
         occupation=occupation,

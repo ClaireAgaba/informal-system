@@ -46,6 +46,15 @@ class Occupation(models.Model):
         verbose_name="Worker's PAS Code",
         help_text="Short code used in Worker's PAS booklet numbering, e.g. BLD for Builder. Required when category is Worker's PAS."
     )
+    wp_occ_code = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        unique=True,
+        verbose_name="Worker's PAS Occupation Number",
+        help_text="Numeric occupation code used as the prefix of the booklet sequence, "
+                  "e.g. 26 for Builder -> WP/BLD/26000001. The 6-digit sequence restarts "
+                  "per occupation. Required for Worker's PAS occupations.",
+    )
     award_modular = models.CharField(
         max_length=200, 
         blank=True, 

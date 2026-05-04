@@ -41,7 +41,7 @@ class OccupationLevelInline(admin.TabularInline):
 
 @admin.register(Occupation)
 class OccupationAdmin(admin.ModelAdmin):
-    list_display = ['occ_code', 'occ_name', 'occ_category', 'sector', 'has_modular', 'get_levels_count', 'is_active', 'created_at']
+    list_display = ['occ_code', 'occ_name', 'occ_category', 'wp_code', 'wp_occ_code', 'sector', 'has_modular', 'get_levels_count', 'is_active', 'created_at']
     list_filter = ['occ_category', 'has_modular', 'is_active', 'sector', 'created_at']
     search_fields = ['occ_code', 'occ_name', 'sector__name']
     readonly_fields = ['created_at', 'updated_at', 'get_levels_count']
@@ -51,8 +51,8 @@ class OccupationAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('occ_code', 'occ_name', 'occ_category', 'wp_code', 'sector'),
-            'description': "wp_code is required for Worker's PAS occupations and is used in the booklet number (e.g. BLD for Builder)."
+            'fields': ('occ_code', 'occ_name', 'occ_category', 'wp_code', 'wp_occ_code', 'sector'),
+            'description': "wp_code and wp_occ_code are required for Worker's PAS occupations and are used in the booklet number (e.g. BLD / 26 -> WP/BLD/26000001)."
         }),
         ('Modular Award', {
             'fields': ('award_modular',),

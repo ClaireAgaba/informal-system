@@ -9,9 +9,10 @@ class WorkersPasBook(models.Model):
     """
     A generated Worker's PAS booklet for a candidate.
 
-    The book number follows the format: ``WP/<wp_code>/<sequence>`` where the
-    sequence is a globally-unique 8-digit zero-padded number across all
-    Worker's PAS books (independent of occupation).
+    The book number follows the format: ``WP/<wp_code>/<wp_occ_code><sequence>``
+    where ``wp_occ_code`` is the numeric occupation code (e.g. 26) and
+    ``sequence`` is a per-occupation 6-digit zero-padded number that restarts
+    at 1 for each occupation.
     """
 
     candidate = models.ForeignKey(
@@ -31,19 +32,19 @@ class WorkersPasBook(models.Model):
     )
 
     sequence_number = models.PositiveIntegerField(
-        unique=True,
         db_index=True,
-        help_text="Global zero-padded sequence number used in the book number.",
+        help_text="Per-occupation zero-padded sequence number used in the book number. "
+                  "Restarts at 1 for each occupation.",
     )
     book_number = models.CharField(
         max_length=64,
         unique=True,
         db_index=True,
-        help_text="Full formatted book number, e.g. WP/BLD/00000001.",
+        help_text="Full formatted book number, e.g. WP/BLD/26000001.",
     )
     full_label = models.CharField(
         max_length=80,
-        help_text="Display label as printed on the cover, e.g. 'UVTAB: WP/BLD/00000001'.",
+        help_text="Display label as printed on the cover, e.g. 'UVTAB: WP/BLD/26000001'.",
     )
 
     pdf_file = models.FileField(
@@ -82,6 +83,12 @@ class WorkersPasBook(models.Model):
                 fields=['candidate', 'occupation', 'assessment_series'],
                 name='uniq_wp_book_candidate_occ_series',
             ),
+            # Sequence numbers restart per occupation, so the (occupation,
+            # sequence_number) pair must be unique.
+            models.UniqueConstraint(
+                fields=['occupation', 'sequence_number'],
+                name='uniq_wp_book_occ_sequence',
+            ),
         ]
 
     def __str__(self):
@@ -89,10 +96,11 @@ class WorkersPasBook(models.Model):
 
     @classmethod
     @transaction.atomic
-    def allocate_sequence(cls):
-        """Atomically allocate the next global sequence number."""
+    def allocate_sequence(cls, occupation):
+        """Atomically allocate the next per-occupation sequence number."""
         last = (
             cls.objects.select_for_update()
+            .filter(occupation=occupation)
             .order_by('-sequence_number')
             .values_list('sequence_number', flat=True)
             .first()
@@ -100,9 +108,12 @@ class WorkersPasBook(models.Model):
         return (last or 0) + 1
 
     @staticmethod
-    def format_book_number(wp_code, sequence_number):
-        """Format the book number as WP/<wp_code>/<8-digit-sequence>."""
-        return f"WP/{wp_code}/{sequence_number:08d}"
+    def format_book_number(wp_code, wp_occ_code, sequence_number):
+        """Format the book number as ``WP/<wp_code>/<wp_occ_code><seq:06d>``.
+
+        Example: ``format_book_number('BLD', 26, 1) -> 'WP/BLD/26000001'``.
+        """
+        return f"WP/{wp_code}/{wp_occ_code}{sequence_number:06d}"
 
     @staticmethod
     def format_full_label(book_number):
