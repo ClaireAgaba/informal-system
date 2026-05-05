@@ -17,6 +17,7 @@ import {
   MessageSquare,
   BarChart3,
   Award,
+  BookOpen,
   Lock,
   Eye,
   EyeOff,
@@ -108,6 +109,13 @@ const modules = [
     path: '/awards',
     color: 'bg-amber-500',
     description: 'Successful Candidates & Awards',
+  },
+  {
+    name: "Worker's PAS",
+    icon: BookOpen,
+    path: '/workers-pas',
+    color: 'bg-emerald-600',
+    description: "Generate Worker's PAS Booklets",
   },
 ];
 
