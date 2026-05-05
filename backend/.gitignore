@@ -37,5 +37,4 @@ scripts/dit_extract_data/
 .DS_Store
 Thumbs.db
 
-#migrations
-*/migrations/*
+#migrations (keep __pycache__ ignored by the global rule above)
