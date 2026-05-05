@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Loader2, Search, Download, FileStack } from 'lucide-react';
+import { ArrowLeft, BookOpen, Loader2, Search, Download, FileStack, CheckSquare, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../../../services/apiClient';
 
@@ -71,16 +71,15 @@ const WorkersPasGenerate = () => {
   }, [candidates, search]);
 
   const allSelected = filtered.length > 0 && filtered.every((c) => selected.has(c.id));
-  const toggleAll = () => {
-    if (allSelected) {
-      const next = new Set(selected);
-      filtered.forEach((c) => next.delete(c.id));
-      setSelected(next);
-    } else {
-      const next = new Set(selected);
-      filtered.forEach((c) => next.add(c.id));
-      setSelected(next);
-    }
+  const selectAll = () => {
+    const next = new Set(selected);
+    filtered.forEach((c) => next.add(c.id));
+    setSelected(next);
+  };
+  const clearAll = () => {
+    const next = new Set(selected);
+    filtered.forEach((c) => next.delete(c.id));
+    setSelected(next);
   };
   const toggle = (id) => {
     const next = new Set(selected);
@@ -129,7 +128,10 @@ const WorkersPasGenerate = () => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'workers_pas_books.zip';
+        // Use backend filename if available, otherwise build one
+        const cd = res.headers['content-disposition'] || '';
+        const match = cd.match(/filename="?([^"]+)"?/);
+        a.download = match ? match[1] : `workers_pas_${ids.length}_candidates.zip`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -163,7 +165,7 @@ const WorkersPasGenerate = () => {
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Occupation</label>
           <select
@@ -212,6 +214,24 @@ const WorkersPasGenerate = () => {
             <span className="text-sm text-gray-500">
               {selected.size} selected of {filtered.length}
             </span>
+            <div className="flex gap-2">
+              <button
+                onClick={selectAll}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-primary-700 bg-primary-50 hover:bg-primary-100 rounded border border-primary-200"
+              >
+                <CheckSquare className="w-3.5 h-3.5" />
+                Select all {filtered.length}
+              </button>
+              {selected.size > 0 && (
+                <button
+                  onClick={clearAll}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 rounded border border-gray-200"
+                >
+                  <Square className="w-3.5 h-3.5" />
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
 
           {loadingCandidates ? (
@@ -223,7 +243,11 @@ const WorkersPasGenerate = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-left">
-                    <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={() => allSelected ? clearAll() : selectAll()}
+                    />
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reg No</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
