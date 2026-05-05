@@ -24,18 +24,22 @@ def _a5_blank():
 
 
 def impose_2up_a4(pdf_a_bytes, pdf_b_bytes=None):
-    """Duplex 2-up: A4 landscape with two A5 portraits side-by-side.
+    """Duplex 2-up on A4 portrait.
 
-    No scaling. Candidate A on the left slot (0, 0), candidate B on the
-    right slot (a5_w, 0). A4 landscape height = A5 portrait height, so
-    they fit perfectly. Cut the printed A4 landscape vertically down the
-    middle to yield two A5 booklets.
+    Layout (per physical A4 sheet):
+        Top half    = Candidate A's A5 page (scaled to fit half of A4)
+        Bottom half = Candidate B's A5 page (scaled to fit half of A4)
+        Front side  = page N of the booklet
+        Back side   = page N+1 of the booklet
+    A5 must be scaled by 1/sqrt(2) (~71%) because 2 unscaled A5 portraits
+    (2 x 210mm = 420mm) do not fit on A4 portrait (297mm tall).
+    Print duplex, flip on LONG edge. Cut horizontally after printing.
     """
     a4_w, a4_h = A4
     a5_w, a5_h = A5
-    # A4 landscape: swap width/height
-    sheet_w = a4_h  # 841.89 pt (297 mm)
-    sheet_h = a4_w  # 595.28 pt (210 mm) = A5 height
+    scale = (a4_h / 2) / a5_h  # == 1/sqrt(2), the A-series ratio
+    scaled_w = a5_w * scale
+    x_offset = (a4_w - scaled_w) / 2  # centre horizontally
 
     reader_a = PdfReader(BytesIO(pdf_a_bytes))
     reader_b = PdfReader(BytesIO(pdf_b_bytes)) if pdf_b_bytes else None
@@ -51,45 +55,43 @@ def impose_2up_a4(pdf_a_bytes, pdf_b_bytes=None):
     n_sheets = (n + 1) // 2
     writer = PdfWriter()
 
-    def _tx(x_base):
-        # Translate-only, no scaling
-        return Transformation().translate(x_base, 0)
+    def _tx(y_base):
+        return Transformation().scale(scale, scale).translate(x_offset, y_base)
 
-    def _prepare(src, x_base):
-        src.add_transformation(_tx(x_base))
+    def _prepare(src, y_base):
+        src.add_transformation(_tx(y_base))
         src.mediabox = RectangleObject(
-            (FloatObject(0), FloatObject(0), FloatObject(sheet_w), FloatObject(sheet_h))
+            (FloatObject(0), FloatObject(0), FloatObject(a4_w), FloatObject(a4_h))
         )
         src.cropbox = RectangleObject(
-            (FloatObject(0), FloatObject(0), FloatObject(sheet_w), FloatObject(sheet_h))
+            (FloatObject(0), FloatObject(0), FloatObject(a4_w), FloatObject(a4_h))
         )
         src.trimbox = RectangleObject(
-            (FloatObject(0), FloatObject(0), FloatObject(sheet_w), FloatObject(sheet_h))
+            (FloatObject(0), FloatObject(0), FloatObject(a4_w), FloatObject(a4_h))
         )
 
     for s in range(n_sheets):
+        # Side A: page 2s for both candidates (front, p2, p4...)
         a_side_a = pages_a[2 * s] if 2 * s < n else _a5_blank()
         b_side_a = pages_b[2 * s] if 2 * s < n else _a5_blank()
 
-        writer.add_blank_page(width=sheet_w, height=sheet_h)
+        writer.add_blank_page(width=a4_w, height=a4_h)
         page_a = writer.pages[-1]
-        _prepare(a_side_a, 0)       # left slot (candidate A)
+        _prepare(a_side_a, a4_h / 2)  # top half = candidate A
         page_a.merge_page(a_side_a)
-        _prepare(b_side_a, a5_w)    # right slot (candidate B)
+        _prepare(b_side_a, 0)         # bottom half = candidate B
         page_a.merge_page(b_side_a)
 
+        # Side B: page 2s+1 for both candidates (p2, p3, p5...)
         a_side_b = pages_a[2 * s + 1] if 2 * s + 1 < n else _a5_blank()
         b_side_b = pages_b[2 * s + 1] if 2 * s + 1 < n else _a5_blank()
 
-        # Side B: swap left/right so that when the printer flips the paper
-        # on the SHORT edge (standard landscape duplex), each A5 strip gets
-        # its own back page on the correct physical side.
-        writer.add_blank_page(width=sheet_w, height=sheet_h)
+        writer.add_blank_page(width=a4_w, height=a4_h)
         page_b = writer.pages[-1]
-        _prepare(b_side_b, 0)       # candidate B on PDF left → physical right after flip
-        page_b.merge_page(b_side_b)
-        _prepare(a_side_b, a5_w)    # candidate A on PDF right → physical left after flip
+        _prepare(a_side_b, a4_h / 2)  # top half = candidate A (page N+1)
         page_b.merge_page(a_side_b)
+        _prepare(b_side_b, 0)         # bottom half = candidate B (page N+1)
+        page_b.merge_page(b_side_b)
 
     out = BytesIO()
     writer.write(out)
