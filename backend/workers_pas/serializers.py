@@ -13,7 +13,8 @@ class WPOccupationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Occupation
-        fields = ['id', 'occ_code', 'occ_name', 'wp_code', 'wp_occ_code', 'levels_count']
+        fields = ['id', 'occ_code', 'occ_name', 'wp_code', 'wp_occ_code',
+                  'cover_color', 'levels_count']
 
 
 class WPAssessmentSeriesSerializer(serializers.ModelSerializer):

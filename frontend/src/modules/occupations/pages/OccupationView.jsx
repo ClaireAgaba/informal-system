@@ -235,6 +235,22 @@ const OccupationView = () => {
                 value={occupation.sector_name || 'Not assigned'}
               />
 
+              {/* Worker's PAS numbering details */}
+              {occupation.occ_category === 'workers_pas' && (
+                <>
+                  <InfoItem
+                    icon={<span className="text-gray-400 font-mono text-xs font-bold">WP</span>}
+                    label="Worker's PAS Code"
+                    value={occupation.wp_code || '—'}
+                  />
+                  <InfoItem
+                    icon={<span className="text-gray-400 font-mono text-xs font-bold">#</span>}
+                    label="Worker's PAS Occupation Number"
+                    value={occupation.wp_occ_code ?? '—'}
+                  />
+                </>
+              )}
+
               <InfoItem
                 icon={<Layers className="w-5 h-5 text-gray-400" />}
                 label="Has Modular"

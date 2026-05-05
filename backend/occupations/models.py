@@ -77,7 +77,15 @@ class Occupation(models.Model):
         verbose_name='Has Modular?',
         help_text="Tick if this occupation allows Modular registration (Level 1 only)"
     )
-    
+
+    cover_color = models.CharField(
+        max_length=7,
+        default='#7d7d7d',
+        verbose_name='Booklet Cover Colour',
+        help_text="Hex colour (e.g. #7d7d7d) used for the front and back covers "
+                  "of this occupation's Worker's PAS booklet.",
+    )
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

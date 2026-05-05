@@ -67,7 +67,18 @@ class OccupationCreateSerializer(serializers.ModelSerializer):
         model = Occupation
         fields = ['occ_code', 'occ_name', 'occ_category', 'wp_code',
                   'wp_occ_code', 'award_modular', 'sector', 'has_modular',
-                  'is_active']
+                  'cover_color', 'is_active']
+
+    def validate_cover_color(self, value):
+        """Ensure cover_color is a 7-character hex string like #RRGGBB."""
+        if value in (None, ''):
+            return '#7d7d7d'
+        import re as _re
+        if not _re.fullmatch(r'#[0-9A-Fa-f]{6}', value):
+            raise serializers.ValidationError(
+                "Must be a 7-character hex colour, e.g. #7d7d7d."
+            )
+        return value.lower()
 
     def validate_occ_code(self, value):
         """Ensure occupation code is unique"""

@@ -12,6 +12,7 @@ Public endpoints:
 """
 import io
 import os
+import re
 import zipfile
 from datetime import date
 
@@ -161,6 +162,7 @@ def _build_book_data(candidate, occupation, levels_qs, signatures, request=None)
         'occupation_name': occupation.occ_name,
         'occupation_wp_code': occupation.wp_code or '',
         'occupation_wp_occ_code': occupation.wp_occ_code or '',
+        'cover_color': getattr(occupation, 'cover_color', None) or '#7d7d7d',
         'nationality': candidate.nationality or 'Uganda',
         'print_date': date.today().strftime('%d/%m/%Y'),
         'photo_path': photo_path,
@@ -384,6 +386,13 @@ class WorkersPasBulkGenerateView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        # Friendly base name: "Builder January 2026 Series"
+        base_label = f"{occupation.occ_name} {series.name}".strip()
+        # Filesystem-safe: drop / \ : * ? " < > | and collapse spaces
+        safe_base = re.sub(r'[\\/:*?"<>|]+', '', base_label)
+        safe_base = re.sub(r'\s+', ' ', safe_base).strip()
+
+        n_cand = len(generated)
         zip_buf = io.BytesIO()
         with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
             if mode == 'a4_2up':
@@ -395,24 +404,28 @@ class WorkersPasBulkGenerateView(APIView):
                     b = generated[i + 1] if i + 1 < len(generated) else None
                     pairs.append((a, b))
                     i += 2
+                n_sheets = len(pairs)
+                width = max(2, len(str(n_sheets)))
                 for idx, (a, b) in enumerate(pairs, start=1):
                     pdf_a = a[1]
                     pdf_b = b[1] if b else None
-                    a_label = a[0].book_number.replace('/', '_')
-                    b_label = b[0].book_number.replace('/', '_') if b else 'BLANK'
                     imposed = impose_2up_a4(pdf_a, pdf_b)
-                    name = f"A4_pair_{idx:03d}_{a_label}_{b_label}.pdf"
+                    name = f"Sheet {idx:0{width}d}.pdf"
                     zf.writestr(name, imposed)
             else:
-                for book, pdf_bytes in generated:
-                    name = f"{book.book_number.replace('/', '_')}.pdf"
+                width = max(2, len(str(n_cand)))
+                for idx, (book, pdf_bytes) in enumerate(generated, start=1):
+                    cand_name = re.sub(r'[\\/:*?"<>|]+', '',
+                                        book.candidate.full_name or '').strip()
+                    name = (
+                        f"{safe_base} - {idx:0{width}d} {cand_name} "
+                        f"({book.book_number.replace('/', '-')}).pdf"
+                    )
                     zf.writestr(name, pdf_bytes)
 
         zip_buf.seek(0)
-        filename = (
-            f"workers_pas_{occupation.wp_code or occupation.occ_code}_"
-            f"{series.name.replace(' ', '_')}_{mode}.zip"
-        )
+        suffix = 'A4' if mode == 'a4_2up' else 'A5'
+        filename = f"{safe_base} - {n_cand} students ({suffix}).zip"
         resp = HttpResponse(zip_buf.getvalue(), content_type='application/zip')
         resp['Content-Disposition'] = f'attachment; filename="{filename}"'
         return resp

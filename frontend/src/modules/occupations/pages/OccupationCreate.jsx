@@ -22,9 +22,11 @@ const OccupationCreate = () => {
       occ_name: '',
       occ_category: '',
       wp_code: '',
+      wp_occ_code: '',
       award_modular: '',
       sector: '',
       has_modular: false,
+      cover_color: '#7d7d7d',
       is_active: true,
     },
   });
@@ -78,9 +80,15 @@ const OccupationCreate = () => {
       wp_code: formData.occ_category === 'workers_pas'
         ? (formData.wp_code || '').trim().toUpperCase() || null
         : null,
+      wp_occ_code: formData.occ_category === 'workers_pas'
+        ? (formData.wp_occ_code === '' || formData.wp_occ_code == null
+            ? null
+            : parseInt(formData.wp_occ_code, 10))
+        : null,
       award_modular: formData.has_modular ? (formData.award_modular || null) : null,
       sector: formData.sector ? parseInt(formData.sector) : null,
       has_modular: formData.has_modular || false,
+      cover_color: formData.cover_color || '#7d7d7d',
       is_active: formData.is_active !== false,
     };
 
@@ -183,9 +191,36 @@ const OccupationCreate = () => {
                       placeholder="e.g., BLD"
                       maxLength={10}
                     />
-                    <p className="mt-1 text-xs text-gray-500">Short code used in Worker's PAS booklet numbering, e.g. BLD for Builder → WP/BLD/00000001</p>
+                    <p className="mt-1 text-xs text-gray-500">Short code used in Worker's PAS booklet numbering, e.g. BLD for Builder → WP/BLD/26000001</p>
                     {errors.wp_code && (
                       <p className="mt-1 text-sm text-red-600">{errors.wp_code.message}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* WP Occupation Number - Only when category is Worker's PAS */}
+                {watchCategory === 'workers_pas' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Worker's PAS Occupation Number <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      {...register('wp_occ_code', {
+                        required: "Worker's PAS Occupation Number is required for WP occupations",
+                        min: { value: 1, message: 'Must be a positive number' },
+                      })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      placeholder="e.g., 26"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Numeric prefix used in the booklet sequence, e.g. 26 for Builder
+                      → WP/BLD/<strong>26</strong>000001. The 6-digit sequence restarts per occupation.
+                    </p>
+                    {errors.wp_occ_code && (
+                      <p className="mt-1 text-sm text-red-600">{errors.wp_occ_code.message}</p>
                     )}
                   </div>
                 )}
@@ -234,6 +269,22 @@ const OccupationCreate = () => {
                   <label className="ml-2 text-sm text-gray-700">
                     Has modular structure
                   </label>
+                </div>
+
+                {/* Booklet Cover Colour */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Booklet Cover Colour
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      {...register('cover_color')}
+                      defaultValue="#7d7d7d"
+                      className="h-10 w-14 p-0 border border-gray-300 rounded cursor-pointer"
+                    />
+                    <span className="text-xs text-gray-500">Pick a colour for the Worker's PAS booklet front/back covers.</span>
+                  </div>
                 </div>
 
                 {/* Is Active */}

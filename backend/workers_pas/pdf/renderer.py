@@ -21,8 +21,25 @@ MARGIN_X = 12 * mm
 MARGIN_Y = 12 * mm
 
 # Palette
-GREY_COVER = colors.HexColor('#7d7d7d')
+DEFAULT_COVER_COLOR = '#7d7d7d'
+GREY_COVER = colors.HexColor(DEFAULT_COVER_COLOR)  # legacy default
 BLACK = colors.black
+
+
+def _resolve_cover_color(book_data):
+    """Return a reportlab Color for the booklet cover.
+
+    Accepts ``book_data['cover_color']`` as a hex string ('#RRGGBB' or
+    'RRGGBB'); falls back to the default grey if missing/invalid.
+    """
+    raw = (book_data or {}).get('cover_color') or DEFAULT_COVER_COLOR
+    raw = raw.strip()
+    if not raw.startswith('#'):
+        raw = '#' + raw
+    try:
+        return colors.HexColor(raw)
+    except Exception:
+        return colors.HexColor(DEFAULT_COVER_COLOR)
 
 
 # -----------------------------------------------------------------------------
@@ -225,8 +242,8 @@ UVTAB_INFO = {
 def _draw_cover(c, ctx):
     """Page 1 - Cover."""
     s = _styles()
-    # Grey background
-    c.setFillColor(GREY_COVER)
+    # Per-occupation coloured background
+    c.setFillColor(_resolve_cover_color(ctx))
     c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
     c.setFillColor(BLACK)
 
@@ -934,7 +951,7 @@ def generate_book_pdf(book_data):
 
     # Trailing blank page (pairs with the front cover in the folded A5
     # booklet so the stitched book has the correct outer/inner layout).
-    c.setFillColor(GREY_COVER)
+    c.setFillColor(_resolve_cover_color(book_data))
     c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
     c.showPage()
 
