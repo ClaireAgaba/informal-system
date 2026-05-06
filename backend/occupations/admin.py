@@ -32,7 +32,7 @@ class SectorAdmin(admin.ModelAdmin):
 class OccupationLevelInline(admin.TabularInline):
     model = OccupationLevel
     extra = 1
-    fields = ['level_name', 'structure_type', 'formal_fee', 'workers_pas_base_fee', 
+    fields = ['level_name', 'wp_level_name', 'structure_type', 'formal_fee', 'workers_pas_base_fee', 
               'workers_pas_per_module_fee', 'modular_fee_single_module', 'modular_fee_double_module', 
               'award', 'contact_hours', 'is_active']
     verbose_name = 'Level'
@@ -53,6 +53,11 @@ class OccupationAdmin(admin.ModelAdmin):
         ('Basic Information', {
             'fields': ('occ_code', 'occ_name', 'occ_category', 'wp_code', 'wp_occ_code', 'sector'),
             'description': "wp_code and wp_occ_code are required for Worker's PAS occupations and are used in the booklet number (e.g. BLD / 26 -> WP/BLD/26000001)."
+        }),
+        ("Worker's PAS Booklet", {
+            'fields': ('wp_occ_name', 'cover_color'),
+            'description': 'Settings for the Worker\'s PAS booklet. WP Book Name overrides the occupation name on the booklet (e.g. "Builder" instead of "Builder Wp"). Set cover colour as a hex value.',
+            'classes': ('collapse',)
         }),
         ('Modular Award', {
             'fields': ('award_modular',),

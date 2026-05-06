@@ -10,6 +10,7 @@ const LevelModal = ({ isOpen, onClose, onSubmit, level, isLoading }) => {
     if (level) {
       reset({
         level_name: level.level_name,
+        wp_level_name: level.wp_level_name || '',
         structure_type: level.structure_type,
         formal_fee: level.formal_fee,
         workers_pas_base_fee: level.workers_pas_base_fee,
@@ -24,6 +25,7 @@ const LevelModal = ({ isOpen, onClose, onSubmit, level, isLoading }) => {
     } else {
       reset({
         level_name: '',
+        wp_level_name: '',
         structure_type: 'modules',
         formal_fee: '0.00',
         workers_pas_base_fee: '0.00',
@@ -45,6 +47,7 @@ const LevelModal = ({ isOpen, onClose, onSubmit, level, isLoading }) => {
     // award and contact_hours are optional (N/A for Worker's PAS levels).
     const cleaned = {
       ...data,
+      wp_level_name: data.wp_level_name?.trim() || null,
       award: data.award?.trim() ? data.award.trim() : null,
       contact_hours:
         data.contact_hours === '' || data.contact_hours === null || data.contact_hours === undefined
@@ -265,6 +268,21 @@ const LevelModal = ({ isOpen, onClose, onSubmit, level, isLoading }) => {
             </p>
 
             <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  WP Level Name <span className="text-xs font-normal text-gray-500">(for the book)</span>
+                </label>
+                <input
+                  type="text"
+                  {...register('wp_level_name')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="e.g., Level 4"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Name shown on the booklet for this level. Controls the cover label and section titles. Falls back to Level Name if blank.
+                </p>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Level Description

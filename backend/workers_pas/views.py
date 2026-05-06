@@ -134,7 +134,7 @@ def _build_book_data(candidate, occupation, levels_qs, signatures, request=None)
     for lvl in levels_qs:
         modules = list(lvl.modules.filter(is_active=True).order_by('module_code'))
         levels.append({
-            'level_name': lvl.level_name,
+            'level_name': lvl.wp_level_name or lvl.level_name,
             'level_description': lvl.level_description or '',
             'competence_description': lvl.competence_description or '',
             'modules': [
@@ -169,7 +169,7 @@ def _build_book_data(candidate, occupation, levels_qs, signatures, request=None)
         'registration_number': candidate.registration_number or '',
         'date_of_birth': candidate.date_of_birth.strftime('%d/%m/%Y') if candidate.date_of_birth else '',
         'gender': (candidate.gender or '').title(),
-        'occupation_name': occupation.occ_name,
+        'occupation_name': occupation.wp_occ_name or occupation.occ_name,
         'occupation_wp_code': occupation.wp_code or '',
         'occupation_wp_occ_code': occupation.wp_occ_code or '',
         'cover_color': getattr(occupation, 'cover_color', None) or '#7d7d7d',

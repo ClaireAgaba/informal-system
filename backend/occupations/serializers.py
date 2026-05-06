@@ -27,8 +27,8 @@ class OccupationLevelCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = OccupationLevel
-        fields = ['occupation', 'level_name', 'structure_type', 'formal_fee', 
-                  'workers_pas_base_fee', 'workers_pas_per_module_fee', 
+        fields = ['occupation', 'level_name', 'wp_level_name', 'structure_type',
+                  'formal_fee', 'workers_pas_base_fee', 'workers_pas_per_module_fee', 
                   'modular_fee_single_module', 'modular_fee_double_module', 
                   'award', 'contact_hours',
                   'level_description', 'competence_description',
@@ -66,8 +66,8 @@ class OccupationCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Occupation
         fields = ['occ_code', 'occ_name', 'occ_category', 'wp_code',
-                  'wp_occ_code', 'award_modular', 'sector', 'has_modular',
-                  'cover_color', 'is_active']
+                  'wp_occ_code', 'wp_occ_name', 'award_modular', 'sector',
+                  'has_modular', 'cover_color', 'is_active']
 
     def validate_cover_color(self, value):
         """Ensure cover_color is a 7-character hex string like #RRGGBB."""

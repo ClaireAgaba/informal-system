@@ -78,6 +78,15 @@ class Occupation(models.Model):
         help_text="Tick if this occupation allows Modular registration (Level 1 only)"
     )
 
+    wp_occ_name = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        verbose_name="Worker's PAS Book Name",
+        help_text="Name used on the Worker's PAS booklet (e.g. 'Builder' instead of "
+                  "'Builder Wp'). Falls back to Occupation Name if blank.",
+    )
+
     cover_color = models.CharField(
         max_length=7,
         default='#7d7d7d',
@@ -196,6 +205,14 @@ class OccupationLevel(models.Model):
     )
 
     # Worker's PAS booklet content (only relevant when occupation is workers_pas)
+    wp_level_name = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name="Worker's PAS Level Name",
+        help_text="Name shown on the booklet for this level (e.g. 'Level 4'). "
+                  "Falls back to Level Name if blank. Also controls numbering on the cover and section pages.",
+    )
     level_description = models.TextField(
         blank=True,
         null=True,

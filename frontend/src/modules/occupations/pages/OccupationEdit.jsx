@@ -51,6 +51,7 @@ const OccupationEdit = () => {
         occ_category: occupation.occ_category,
         wp_code: occupation.wp_code || '',
         wp_occ_code: occupation.wp_occ_code ?? '',
+        wp_occ_name: occupation.wp_occ_name || '',
         award_modular: occupation.award_modular || '',
         sector: occupation.sector || '',
         has_modular: occupation.has_modular,
@@ -100,6 +101,9 @@ const OccupationEdit = () => {
         ? (formData.wp_occ_code === '' || formData.wp_occ_code == null
             ? null
             : parseInt(formData.wp_occ_code, 10))
+        : null,
+      wp_occ_name: formData.occ_category === 'workers_pas'
+        ? (formData.wp_occ_name || '').trim() || null
         : null,
       award_modular: formData.has_modular ? (formData.award_modular || null) : null,
       sector: formData.sector ? parseInt(formData.sector) : null,
@@ -255,6 +259,24 @@ const OccupationEdit = () => {
                     {errors.wp_occ_code && (
                       <p className="mt-1 text-sm text-red-600">{errors.wp_occ_code.message}</p>
                     )}
+                  </div>
+                )}
+
+                {/* WP Book Name - Only when category is Worker's PAS */}
+                {watchCategory === 'workers_pas' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Worker's PAS Book Name
+                    </label>
+                    <input
+                      type="text"
+                      {...register('wp_occ_name')}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      placeholder="e.g., Builder"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Name printed on the booklet. If blank, the occupation name is used.
+                    </p>
                   </div>
                 )}
 

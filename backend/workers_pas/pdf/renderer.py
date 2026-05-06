@@ -590,9 +590,10 @@ def _draw_page6_sections(c, ctx):
     for idx, lvl in enumerate(ctx['levels'], start=1):
         page_ref = lvl.get('section_start_page', '')
         ref_text = f" (p. {page_ref})" if page_ref else ""
+        level_num = _extract_level_number(lvl['level_name']) or idx
         parts.append(
             f"<b>Section {_ordinal(idx)}</b>{ref_text} - "
-            f"<b>COMPETENCE LEVEL {idx}</b><br/>"
+            f"<b>COMPETENCE LEVEL {level_num}</b><br/>"
         )
         parts.append(
             f"<i>{(lvl.get('competence_description') or '').strip()}</i><br/><br/>"
@@ -621,9 +622,10 @@ def _draw_section_index_page(c, level_idx, level, page_num, occupation_name):
         y -= h
 
     # Centred section title + competence level
+    level_num = _extract_level_number(level.get('level_name', '')) or level_idx
     _flow(f"<b>Section {_ordinal(level_idx)}</b>", s['h1_center'])
     y -= 2 * mm
-    _flow(f"<b>COMPETENCE LEVEL {level_idx}</b>", s['h2_center'])
+    _flow(f"<b>COMPETENCE LEVEL {level_num}</b>", s['h2_center'])
     y -= 6 * mm
 
     # TEST AREAS label (left-aligned, bold italic)
@@ -847,12 +849,26 @@ def _roman(n):
     return str(n)
 
 
+def _extract_level_number(level_name):
+    """Extract the numeric part from a level name like 'Level 4' -> 4."""
+    import re
+    m = re.search(r'(\d+)', level_name or '')
+    return int(m.group(1)) if m else None
+
+
 def _build_levels_label(levels):
     if not levels:
         return ''
-    if len(levels) == 1:
-        return f"LEVEL {_roman(1)}"
-    return "LEVEL " + ' &amp; '.join(_roman(i) for i in range(1, len(levels) + 1))
+    nums = [_extract_level_number(lvl['level_name']) for lvl in levels]
+    nums = [n for n in nums if n is not None]
+    if not nums:
+        # Fallback: use positional
+        if len(levels) == 1:
+            return f"LEVEL {_roman(1)}"
+        return "LEVEL " + ' &amp; '.join(_roman(i) for i in range(1, len(levels) + 1))
+    if len(nums) == 1:
+        return f"LEVEL {_roman(nums[0])}"
+    return "LEVEL " + ' &amp; '.join(_roman(n) for n in sorted(nums))
 
 
 # -----------------------------------------------------------------------------
@@ -976,10 +992,11 @@ class AchievementStampFlowable(Flowable):
 
 def _section_index_flowables(level_idx, lvl):
     s = _styles()
+    level_num = _extract_level_number(lvl.get('level_name', '')) or level_idx
     items = [
         Paragraph(f"<b>Section {_ordinal(level_idx)}</b>", s['h1_center']),
         Spacer(1, 2 * mm),
-        Paragraph(f"<b>COMPETENCE LEVEL {level_idx}</b>", s['h2_center']),
+        Paragraph(f"<b>COMPETENCE LEVEL {level_num}</b>", s['h2_center']),
         Spacer(1, 6 * mm),
         Paragraph("<b><i>TEST AREAS</i></b>", s['h2']),
         Spacer(1, 2 * mm),
