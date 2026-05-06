@@ -24,39 +24,32 @@ def _a5_blank():
 
 
 def impose_2up_a4(pdf_a_bytes, pdf_b_bytes=None):
-    """Saddle-stitch booklet imposition on A4 portrait, 2 booklets per sheet.
+    """Sequential 2-up duplex imposition with odd/even alignment on A4 portrait.
 
-    Each A4 sheet is divided into 4 quadrants (2x2 grid). The top row holds
-    Candidate A's pages, the bottom row holds Candidate B's. Within each
-    row, the LEFT slot holds the back page and the RIGHT slot holds the
-    front page (matching standard saddle-stitch booklet layout).
+    Each A4 portrait sheet is split into 2 horizontal rows (top = Candidate A,
+    bottom = Candidate B), and each row into 2 columns (left and right A6
+    portrait slots). For each booklet page K (1-indexed) we emit ONE imposed
+    PDF page that contains page K of BOTH candidates, placed in only one
+    column with the other column left blank:
+        - K odd  -> content in RIGHT column (right-aligned)
+        - K even -> content in LEFT column (left-aligned)
 
-    Booklet structure assumed (from the renderer):
-        page 1           = front cover (coloured)
-        page 2           = intro
-        ...
-        page N-1         = back cover (UVTAB info, white background)
-        page N           = trailing blank (white)
+    Combined with duplex printing + long-edge flip, the back of each physical
+    sheet has its content mirrored horizontally, so book page (2s) ends up on
+    the same PHYSICAL column as book page (2s-1). The print thus produces a
+    sheet whose right (or left) half carries content on BOTH sides while the
+    other half is fully blank.
 
-    Layout per A4 sheet (sheet index i, 0 = outermost):
-        FRONT of paper:
-          [ C1 page N-2i  | C1 page 1+2i  ]   <- top row
-          [ C2 page N-2i  | C2 page 1+2i  ]   <- bottom row
-        BACK of paper (mirrored for long-edge duplex flip):
-          [ C1 page N-1-2i | C1 page 2+2i ]
-          [ C2 page N-1-2i | C2 page 2+2i ]
-    For sheet 0 this gives outer = [trailing-blank | cover], inner =
-    [intro | back-cover] -- exactly the expected booklet appearance.
+    Print/cut workflow:
+        1. Print A4 portrait, duplex, FLIP ON LONG EDGE, 100% scale.
+        2. Cut horizontally between the top and bottom rows of every sheet.
+        3. Cut vertically down the middle of every strip; discard the blank
+           half. Each remaining A6 strip is one booklet leaf with content on
+           both sides.
+        4. Stack each candidate's A6 leaves in printed order. Bind/staple.
 
-    Workflow:
-        1. Print A4 portrait, duplex, FLIP ON LONG EDGE.
-        2. Cut horizontally between top and bottom rows -> 2 A5-landscape strips.
-        3. Stack each candidate's strips in order (sheet 0 outside, last inside).
-        4. Fold each stack vertically along the centre and staple in the fold.
-
-    The resulting booklet is A6 portrait (105x148mm). Each A4 sheet carries
-    4 pages of each booklet (2 on the front, 2 on the back). Booklets whose
-    page count is not a multiple of 4 are padded with blank A5 pages.
+    Input expectation: each candidate's booklet PDF is in A5 portrait with
+    pages in normal reading order (page 1 = cover, page N = trailing blank).
     """
     a4_w, a4_h = A4
     a5_w, a5_h = A5
@@ -70,12 +63,6 @@ def impose_2up_a4(pdf_a_bytes, pdf_b_bytes=None):
     scaled_w = a5_w * scale
     scaled_h = a5_h * scale
 
-    # Read sources. The booklet ends with: [..., back_cover, trailing_blank].
-    # For saddle-stitch we want:
-    #   - last page (trailing blank) -> sheet 0 outer-left (pairs with cover)
-    #   - second-to-last (back cover) -> sheet 0 inner-right (pairs with intro)
-    # So we keep both, and pad with blanks inserted JUST BEFORE the back cover
-    # (position -2) when the page count isn't a multiple of 4.
     def _load_pages(pdf_bytes):
         if not pdf_bytes:
             return []
@@ -84,29 +71,17 @@ def impose_2up_a4(pdf_a_bytes, pdf_b_bytes=None):
     pages_a = _load_pages(pdf_a_bytes)
     pages_b = _load_pages(pdf_b_bytes) if pdf_b_bytes else []
 
-    # Equalise lengths (in case the two booklets differ in size). Insert
-    # blanks before the back cover so the trailing blank stays last.
-    base_n = max(len(pages_a), len(pages_b))
-    while len(pages_a) < base_n:
-        pages_a.insert(-2, _a5_blank())
-    while len(pages_b) < base_n:
-        pages_b.insert(-2, _a5_blank())
-
-    # Pad each booklet to a multiple of 4 (saddle-stitch requirement),
-    # inserting blanks just before the back cover so back cover and trailing
-    # blank stay at positions N-2 and N-1 respectively.
-    n = ((base_n + 3) // 4) * 4
+    # Equalise lengths (Candidate B may be missing or shorter).
+    n = max(len(pages_a), len(pages_b))
     while len(pages_a) < n:
-        pages_a.insert(-2, _a5_blank())
+        pages_a.append(_a5_blank())
     while len(pages_b) < n:
-        pages_b.insert(-2, _a5_blank())
+        pages_b.append(_a5_blank())
 
-    n_sheets = n // 4
     writer = PdfWriter()
 
     def _place(target, src_page, q_x, q_y):
         """Place src_page into the quadrant whose lower-left is (q_x, q_y)."""
-        # Centre within the quadrant in case scaled dims differ slightly.
         ox = q_x + (q_w - scaled_w) / 2
         oy = q_y + (q_h - scaled_h) / 2
         src_page.add_transformation(
@@ -123,34 +98,17 @@ def impose_2up_a4(pdf_a_bytes, pdf_b_bytes=None):
         )
         target.merge_page(src_page)
 
-    for i in range(n_sheets):
-        # Saddle-stitch indices (0-indexed) for sheet i (0 = outermost):
-        #   FRONT side: physical-left = page (n-1-2i), physical-right = page (2i)
-        #   BACK  side: physical-left = page (1+2i),   physical-right = page (n-2-2i)
-        # Long-edge duplex flip mirrors LEFT<->RIGHT on the back, so PDF placement
-        # on the back side is the MIRROR of the desired physical layout.
-        front_left  = n - 1 - 2 * i  # back-cover-side (page N-2i in 1-indexed)
-        front_right = 2 * i          # front-cover-side (page 1+2i in 1-indexed)
-        back_left_pdf  = n - 2 - 2 * i  # mirrors physical-right of back -> page N-1-2i
-        back_right_pdf = 1 + 2 * i      # mirrors physical-left of back -> page 2+2i
+    # One imposed PDF page per booklet page. PDF page (k+1) is odd when k is
+    # even (k starts at 0), so the right column is used; otherwise left column.
+    for k in range(n):
+        is_odd_pdf_page = (k % 2 == 0)
+        col_x = q_w if is_odd_pdf_page else 0  # right slot for odd, left for even
 
-        # FRONT of paper
         writer.add_blank_page(width=a4_w, height=a4_h)
-        page_front = writer.pages[-1]
-        # Top row = Candidate A
-        _place(page_front, pages_a[front_left],  0,   q_h)  # top-left
-        _place(page_front, pages_a[front_right], q_w, q_h)  # top-right
-        # Bottom row = Candidate B
-        _place(page_front, pages_b[front_left],  0,   0)    # bottom-left
-        _place(page_front, pages_b[front_right], q_w, 0)    # bottom-right
-
-        # BACK of paper (mirrored for long-edge duplex flip)
-        writer.add_blank_page(width=a4_w, height=a4_h)
-        page_back = writer.pages[-1]
-        _place(page_back, pages_a[back_left_pdf],  0,   q_h)
-        _place(page_back, pages_a[back_right_pdf], q_w, q_h)
-        _place(page_back, pages_b[back_left_pdf],  0,   0)
-        _place(page_back, pages_b[back_right_pdf], q_w, 0)
+        page = writer.pages[-1]
+        # Top row = Candidate A, bottom row = Candidate B
+        _place(page, pages_a[k], col_x, q_h)
+        _place(page, pages_b[k], col_x, 0)
 
     out = BytesIO()
     writer.write(out)
