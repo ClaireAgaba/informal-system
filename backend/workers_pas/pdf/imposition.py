@@ -117,7 +117,11 @@ def impose_2up_a4(pdf_a_bytes, pdf_b_bytes=None):
 
 
 def _cut_line_overlay():
-    """Return a PyPDF page (A4 portrait) with a dashed grey cut guide at the midpoint."""
+    """Return PDF bytes (A4 portrait) with a dashed grey cut guide at the midpoint.
+
+    Returns bytes so callers can create a fresh PageObject each time via
+    PdfReader — avoids the dict.copy() / 'get_contents' error in PyPDF.
+    """
     buf = BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=A4)
     a4_w, a4_h = A4
@@ -131,8 +135,7 @@ def _cut_line_overlay():
     c.setFont('Helvetica', 6)
     c.drawCentredString(a4_w / 2, y + 2, 'cut here')
     c.save()
-    buf.seek(0)
-    return PdfReader(buf).pages[0]
+    return buf.getvalue()
 
 
 def impose_2up_a6_booklet_a4(pdf_c1_bytes, pdf_c2_bytes=None):
@@ -201,7 +204,10 @@ def impose_2up_a6_booklet_a4(pdf_c1_bytes, pdf_c2_bytes=None):
         _set_a4_boxes(src)
         target.merge_page(src)
 
-    cut_overlay = _cut_line_overlay()
+    cut_overlay_pdf = _cut_line_overlay()
+
+    def _cut_page():
+        return PdfReader(BytesIO(cut_overlay_pdf)).pages[0]
 
     for s in range(n_sheets):
         # Saddle-stitch page indices (0-based).
@@ -225,7 +231,7 @@ def impose_2up_a6_booklet_a4(pdf_c1_bytes, pdf_c2_bytes=None):
         _place(front, pages_c1[c1_fr], a6_w,  a6_h, rotated=False)
         _place(front, pages_c2[c2_fl], 0,     0,    rotated=True)
         _place(front, pages_c2[c2_fr], a6_w,  0,    rotated=True)
-        front.merge_page(cut_overlay.copy())
+        front.merge_page(_cut_page())
 
         # --- BACK page (placed in normal PDF coords; printer flip-on-long-edge
         #     will mirror left/right, which is accounted for in the formula) ---
@@ -235,7 +241,7 @@ def impose_2up_a6_booklet_a4(pdf_c1_bytes, pdf_c2_bytes=None):
         _place(back, pages_c1[c1_br], a6_w,  a6_h, rotated=False)
         _place(back, pages_c2[c2_bl], 0,     0,    rotated=True)
         _place(back, pages_c2[c2_br], a6_w,  0,    rotated=True)
-        back.merge_page(cut_overlay.copy())
+        back.merge_page(_cut_page())
 
     out = BytesIO()
     writer.write(out)
