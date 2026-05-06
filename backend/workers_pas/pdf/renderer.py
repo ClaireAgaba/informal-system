@@ -769,8 +769,15 @@ def _draw_employment_history(c, page_num, occupation_name,
     _draw_page_number(c, page_num)
 
 
-def _draw_back_cover(c, occupation_name, logo_path=None):
+def _draw_back_cover(c, occupation_name, logo_path=None, cover_color=None):
     s = _styles()
+
+    # Coloured background that matches the front cover for a unified look
+    # when the booklet is folded (front cover and back cover share colour).
+    if cover_color is not None:
+        c.setFillColor(cover_color)
+        c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
+        c.setFillColor(BLACK)
 
     # UVTAB logo — centred, placed well below the top so nothing overlaps
     logo_h = 22 * mm
@@ -945,8 +952,12 @@ def generate_book_pdf(book_data):
         c.showPage()
         current_page += 1
 
-    # Back cover (UVTAB info)
-    _draw_back_cover(c, occupation_name, book_data.get('uvtab_logo_path'))
+    # Back cover (UVTAB info) - coloured to match the front cover
+    _draw_back_cover(
+        c, occupation_name,
+        book_data.get('uvtab_logo_path'),
+        cover_color=_resolve_cover_color(book_data),
+    )
     c.showPage()
 
     # Trailing blank page (pairs with the front cover in the folded A5
