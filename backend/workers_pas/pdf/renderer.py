@@ -432,8 +432,7 @@ def _draw_page3_biodata(c, ctx):
     )
 
     _draw_paragraph(
-        c, "For changes of employer or assessor please see employment history "
-           "P.26.",
+        c, "For changes of employer or assessor please see employment history ",
         s['small'],
         MARGIN_X, line_y - 18 * mm, PAGE_W - 2 * MARGIN_X, 12 * mm,
     )
