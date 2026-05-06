@@ -244,6 +244,69 @@ const WorkersPasGenerate = () => {
         </div>
       </div>
 
+      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Output mode</label>
+            <div className="flex gap-3">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  checked={mode === 'a4_2up'}
+                  onChange={() => setMode('a4_2up')}
+                />
+                <span><b>A4 (2 candidates per page)</b> — print, then cut horizontally</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  checked={mode === 'single'}
+                  onChange={() => setMode('single')}
+                />
+                <span>A5 (one PDF per candidate)</span>
+              </label>
+            </div>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              disabled={generating || selected.size !== 1}
+              onClick={() => generate({ bulk: false })}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50"
+              title="Preview a single booklet (A5)"
+            >
+              {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+              Preview A5
+            </button>
+            <button
+              disabled={generating || selected.size === 0}
+              onClick={() => generate({ bulk: false, printMode: true })}
+              className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+              title="Generate A4 landscape booklet — print duplex, flip on short edge"
+            >
+              {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
+              Print Booklet
+            </button>
+            <button
+              disabled={generating || selected.size === 0}
+              onClick={() => generate({ bulk: true })}
+              className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+            >
+              {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileStack className="w-4 h-4 mr-2" />}
+              Generate {selected.size > 0 ? `${selected.size} ` : ''}booklets (.zip)
+            </button>
+            <button
+              disabled={generating || selected.size === 0 || selected.size > 2}
+              onClick={handle2upA6Print}
+              className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+              title="Select 1 or 2 candidates. Generates an A4 sheet with 2 A6 booklets — print duplex, flip on long edge, cut, rotate bottom half 180°, fold and staple."
+            >
+              {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
+              Print 2-up A6 Booklets
+            </button>
+          </div>
+        </div>
+      </div>
+
       {occupationId && seriesId && (
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden mb-6">
           <div className="p-4 border-b border-gray-200 flex items-center gap-3">
@@ -328,70 +391,6 @@ const WorkersPasGenerate = () => {
         </div>
       )}
 
-      {occupationId && seriesId && (
-        <div className="bg-white border border-gray-200 rounded-lg p-5">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Output mode</label>
-              <div className="flex gap-3">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={mode === 'a4_2up'}
-                    onChange={() => setMode('a4_2up')}
-                  />
-                  <span><b>A4 (2 candidates per page)</b> — print, then cut horizontally</span>
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={mode === 'single'}
-                    onChange={() => setMode('single')}
-                  />
-                  <span>A5 (one PDF per candidate)</span>
-                </label>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                disabled={generating || selected.size !== 1}
-                onClick={() => generate({ bulk: false })}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50"
-                title="Preview a single booklet (A5)"
-              >
-                {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                Preview A5
-              </button>
-              <button
-                disabled={generating || selected.size === 0}
-                onClick={() => generate({ bulk: false, printMode: true })}
-                className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-                title="Generate A4 landscape booklet — print duplex, flip on short edge"
-              >
-                {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
-                Print Booklet
-              </button>
-              <button
-                disabled={generating || selected.size === 0}
-                onClick={() => generate({ bulk: true })}
-                className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-              >
-                {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileStack className="w-4 h-4 mr-2" />}
-                Generate {selected.size > 0 ? `${selected.size} ` : ''}booklets (.zip)
-              </button>
-              <button
-                disabled={generating || selected.size === 0 || selected.size > 2}
-                onClick={handle2upA6Print}
-                className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-                title="Select 1 or 2 candidates. Generates an A4 sheet with 2 A6 booklets — print duplex, flip on long edge, cut, rotate bottom half 180°, fold and staple."
-              >
-                {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
-                Print 2-up A6 Booklets
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
