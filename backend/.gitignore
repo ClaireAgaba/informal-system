@@ -20,6 +20,7 @@ db.sqlite3
 db.sqlite3-journal
 media/
 staticfiles/
+**/migrations/**
 
 # DIT extraction data (photos, CSVs, progress files)
 scripts/dit_extract_data/

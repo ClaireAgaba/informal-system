@@ -87,6 +87,37 @@ const WorkersPasGenerate = () => {
     setSelected(next);
   };
 
+  const handle2upA6Print = async () => {
+    if (!occupationId || !seriesId) {
+      toast.error('Select an occupation and series first.');
+      return;
+    }
+    const ids = Array.from(selected);
+    if (ids.length === 0 || ids.length > 2) {
+      toast.error('Select exactly 1 or 2 candidates for 2-up A6 print.');
+      return;
+    }
+    setGenerating(true);
+    try {
+      const res = await apiClient.post(
+        '/workers-pas/2up-a6-print/',
+        { occupation_id: occupationId, series_id: seriesId, candidate_ids: ids },
+        { responseType: 'blob' },
+      );
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+      toast.success(
+        ids.length === 2
+          ? 'A4 sheet ready — print duplex, flip on long edge, cut, rotate bottom half 180°, fold and staple.'
+          : 'A4 sheet ready (1 candidate, bottom half blank) — print duplex, flip on long edge, fold and staple.',
+      );
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to generate 2-up A6 print.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const generate = async ({ bulk, printMode }) => {
     if (!occupationId || !seriesId) {
       toast.error('Select an occupation and series first.');
@@ -347,6 +378,15 @@ const WorkersPasGenerate = () => {
               >
                 {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileStack className="w-4 h-4 mr-2" />}
                 Generate {selected.size > 0 ? `${selected.size} ` : ''}booklets (.zip)
+              </button>
+              <button
+                disabled={generating || selected.size === 0 || selected.size > 2}
+                onClick={handle2upA6Print}
+                className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                title="Select 1 or 2 candidates. Generates an A4 sheet with 2 A6 booklets — print duplex, flip on long edge, cut, rotate bottom half 180°, fold and staple."
+              >
+                {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
+                Print 2-up A6 Booklets
               </button>
             </div>
           </div>

@@ -33,7 +33,7 @@ from candidates.models import Candidate, CandidateEnrollment
 from occupations.models import Occupation, OccupationLevel, OccupationModule
 
 from .models import WorkersPasBook
-from .pdf import generate_book_pdf, impose_2up_a4, impose_booklet_a4_landscape
+from .pdf import generate_book_pdf, impose_2up_a4, impose_booklet_a4_landscape, impose_2up_a6_booklet_a4
 from .serializers import (
     WPOccupationSerializer, WPAssessmentSeriesSerializer,
     WPCandidateSerializer, WorkersPasBookSerializer,
@@ -465,4 +465,66 @@ class WorkersPasBulkGenerateView(APIView):
         filename = f"{safe_base} - {n_cand} students ({suffix}).zip"
         resp = HttpResponse(zip_buf.getvalue(), content_type='application/zip')
         resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return resp
+
+
+class WorkersPas2upA6PrintView(APIView):
+    """
+    Generate a 2-up A6 saddle-stitch booklet PDF for 1 or 2 candidates on one A4 sheet.
+
+    The output is an A4 portrait PDF ready for duplex printing (flip on long edge).
+    After printing: cut horizontally at the midpoint, rotate the bottom strip 180°,
+    fold each strip at its vertical centre, and saddle-stitch (staple) to obtain
+    two independent A6 booklets.
+
+    Body params:
+      occupation_id  (required)
+      series_id      (required)
+      candidate_ids  (required) - list of exactly 1 or 2 candidate IDs
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        occupation_id = request.data.get('occupation_id')
+        series_id = request.data.get('series_id')
+        candidate_ids = request.data.get('candidate_ids') or []
+
+        if not (occupation_id and series_id):
+            return Response(
+                {'detail': 'occupation_id and series_id are required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not isinstance(candidate_ids, list) or not (1 <= len(candidate_ids) <= 2):
+            return Response(
+                {'detail': 'candidate_ids must be a list of 1 or 2 IDs.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        occupation = get_object_or_404(Occupation, pk=occupation_id)
+        series = get_object_or_404(AssessmentSeries, pk=series_id)
+        candidates = [get_object_or_404(Candidate, pk=cid) for cid in candidate_ids]
+
+        pdf_bytes_list = []
+        for cand in candidates:
+            try:
+                book, _ = _get_or_create_book(
+                    cand, occupation, series,
+                    generated_by=request.user if request.user.is_authenticated else None,
+                )
+                pdf_bytes_list.append(_render_pdf_for_book(book))
+            except ValueError as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        pdf_c1 = pdf_bytes_list[0]
+        pdf_c2 = pdf_bytes_list[1] if len(pdf_bytes_list) == 2 else None
+        result = impose_2up_a6_booklet_a4(pdf_c1, pdf_c2)
+
+        def _safe(name):
+            return re.sub(r'[\\/:*?"<>|]+', '', name or '').strip()
+
+        names = [_safe(c.full_name) for c in candidates]
+        fname = ' & '.join(names) + ' - 2up A6 Booklet.pdf'
+
+        resp = HttpResponse(result, content_type='application/pdf')
+        resp['Content-Disposition'] = f'inline; filename="{fname}"'
         return resp

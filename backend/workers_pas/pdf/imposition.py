@@ -115,6 +115,109 @@ def impose_2up_a4(pdf_a_bytes, pdf_b_bytes=None):
     return out.getvalue()
 
 
+def impose_2up_a6_booklet_a4(pdf_c1_bytes, pdf_c2_bytes=None):
+    """2-up A6 saddle-stitch booklet imposition on A4 portrait.
+
+    Two candidates are imposed on a single A4 portrait sheet — Candidate 1 on
+    the top half, Candidate 2 on the bottom half (head-to-toe, rotated 180°).
+
+    Print/cut/fold workflow:
+        1. Print A4 portrait, duplex, FLIP ON LONG EDGE.
+        2. Cut each A4 sheet horizontally at the midpoint.
+        3. Rotate the bottom strip 180° (it is printed upside-down).
+        4. Fold each strip vertically at the centre.
+        5. Saddle-stitch (staple through the spine).
+    Result: two independent A6 portrait booklets per A4 sheet.
+
+    If pdf_c2_bytes is None the bottom half of every page is left blank.
+    """
+    a4_w, a4_h = A4
+    a5_w, a5_h = A5
+
+    a6_w = a4_w / 2   # cell width
+    a6_h = a4_h / 2   # cell height
+    scale = min(a6_w / a5_w, a6_h / a5_h)
+    scaled_w = a5_w * scale
+    scaled_h = a5_h * scale
+
+    def _load(pdf_bytes):
+        return list(PdfReader(BytesIO(pdf_bytes)).pages)
+
+    pages_c1 = _load(pdf_c1_bytes)
+    pages_c2 = _load(pdf_c2_bytes) if pdf_c2_bytes else []
+
+    # Pad both to the same multiple of 4
+    n = max(len(pages_c1), len(pages_c2), 1)
+    while n % 4:
+        n += 1
+    while len(pages_c1) < n:
+        pages_c1.append(_a5_blank())
+    while len(pages_c2) < n:
+        pages_c2.append(_a5_blank())
+
+    n_sheets = n // 4
+    writer = PdfWriter()
+
+    def _set_a4_boxes(p):
+        r = RectangleObject((FloatObject(0), FloatObject(0),
+                              FloatObject(a4_w), FloatObject(a4_h)))
+        p.mediabox = r
+        p.cropbox = r
+        p.trimbox = r
+
+    def _place(target, src, cell_x, cell_y, rotated=False):
+        """Scale src into the A6 cell whose lower-left is (cell_x, cell_y)."""
+        ox = cell_x + (a6_w - scaled_w) / 2
+        oy = cell_y + (a6_h - scaled_h) / 2
+        if rotated:
+            # 180° head-to-toe: source origin maps to top-right of cell area.
+            tf = (Transformation()
+                  .scale(scale, scale)
+                  .rotate(180)
+                  .translate(ox + scaled_w, oy + scaled_h))
+        else:
+            tf = Transformation().scale(scale, scale).translate(ox, oy)
+        src.add_transformation(tf)
+        _set_a4_boxes(src)
+        target.merge_page(src)
+
+    for s in range(n_sheets):
+        # Saddle-stitch page indices (0-based).
+        # C1 front/back use standard formula.
+        # C2 back has left/right swapped vs C1 because the 180° operator
+        # rotation reverses the effective fold direction after cutting.
+        c1_fl = n - 1 - 2 * s   # C1 front-left  (back cover on first sheet)
+        c1_fr = 2 * s            # C1 front-right (front cover on first sheet)
+        c1_bl = 2 * s + 1        # C1 back-left
+        c1_br = n - 2 - 2 * s   # C1 back-right
+
+        c2_fl = 2 * s            # C2 front-left  (printed 180°; becomes cover after cut+rotate)
+        c2_fr = n - 1 - 2 * s   # C2 front-right (back cover after cut+rotate)
+        c2_bl = n - 2 - 2 * s   # C2 back-left   (swapped vs C1)
+        c2_br = 2 * s + 1        # C2 back-right  (swapped vs C1)
+
+        # --- FRONT page ---
+        writer.add_blank_page(width=a4_w, height=a4_h)
+        front = writer.pages[-1]
+        _place(front, pages_c1[c1_fl], 0,     a6_h, rotated=False)
+        _place(front, pages_c1[c1_fr], a6_w,  a6_h, rotated=False)
+        _place(front, pages_c2[c2_fl], 0,     0,    rotated=True)
+        _place(front, pages_c2[c2_fr], a6_w,  0,    rotated=True)
+
+        # --- BACK page (placed in normal PDF coords; printer flip-on-long-edge
+        #     will mirror left/right, which is accounted for in the formula) ---
+        writer.add_blank_page(width=a4_w, height=a4_h)
+        back = writer.pages[-1]
+        _place(back, pages_c1[c1_bl], 0,     a6_h, rotated=False)
+        _place(back, pages_c1[c1_br], a6_w,  a6_h, rotated=False)
+        _place(back, pages_c2[c2_bl], 0,     0,    rotated=True)
+        _place(back, pages_c2[c2_br], a6_w,  0,    rotated=True)
+
+    out = BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
 def impose_booklet_a4_landscape(pdf_bytes, rotate_back_side=True):
     """Impose a single A5 booklet PDF into an A4 LANDSCAPE duplex booklet.
 
