@@ -772,6 +772,12 @@ def _draw_employment_history(c, page_num, occupation_name,
 def _draw_back_cover(c, occupation_name, logo_path=None, cover_color=None):
     s = _styles()
 
+    # Coloured background matching the front cover
+    if cover_color is not None:
+        c.setFillColor(cover_color)
+        c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
+        c.setFillColor(BLACK)
+
     # UVTAB logo — centred, placed well below the top so nothing overlaps
     logo_h = 22 * mm
     logo_y = PAGE_H - 50 * mm
