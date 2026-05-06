@@ -155,8 +155,16 @@ def _build_book_data(candidate, occupation, levels_qs, signatures, request=None)
         except Exception:
             photo_path = None
 
+    centre_name = ''
+    try:
+        if candidate.assessment_center:
+            centre_name = candidate.assessment_center.center_name or ''
+    except Exception:
+        pass
+
     return {
         'candidate_name': candidate.full_name or '',
+        'registration_number': candidate.registration_number or '',
         'date_of_birth': candidate.date_of_birth.strftime('%d/%m/%Y') if candidate.date_of_birth else '',
         'gender': (candidate.gender or '').title(),
         'occupation_name': occupation.occ_name,
@@ -166,6 +174,7 @@ def _build_book_data(candidate, occupation, levels_qs, signatures, request=None)
         'nationality': candidate.nationality or 'Uganda',
         'print_date': date.today().strftime('%d/%m/%Y'),
         'photo_path': photo_path,
+        'centre_name': centre_name,
         'levels': levels,
         'es_signature_path': signatures.get('es'),
         'cp_signature_path': signatures.get('cp'),

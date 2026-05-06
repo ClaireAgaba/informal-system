@@ -7,10 +7,12 @@ by the candidate, occupation, levels, and modules supplied by the caller.
 from io import BytesIO
 from datetime import date
 
+import qrcode
 from reportlab.lib.pagesizes import A5
 from reportlab.lib.units import mm
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Paragraph, Frame
 from reportlab.lib import colors
@@ -848,6 +850,111 @@ def _build_levels_label(levels):
 
 
 # -----------------------------------------------------------------------------
+# QR code helpers
+# -----------------------------------------------------------------------------
+
+def _make_qr_image(text):
+    """Return a ReportLab ImageReader containing a QR code PNG for *text*."""
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=10,
+        border=2,
+    )
+    qr.add_data(text)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color='black', back_color='white')
+    buf = BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return ImageReader(buf)
+
+
+def _draw_outer_back_cover(c, book_data):
+    """Draw the outer back cover: solid occupation colour with a centred QR card.
+
+    The card shows the QR code (encoding candidate + occupation + centre) in the
+    upper portion and the candidate's key details as text below it.
+    """
+    # Solid colour background
+    cover_color = _resolve_cover_color(book_data)
+    c.setFillColor(cover_color)
+    c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
+
+    # --- QR code content ---
+    parts = [
+        "UVTAB Worker's PAS",
+        f"Book: {book_data.get('full_label', '')}",
+        f"Name: {book_data.get('candidate_name', '')}",
+        f"Reg:  {book_data.get('registration_number', '')}",
+        f"Occ:  {book_data.get('occupation_name', '')}",
+    ]
+    centre = book_data.get('centre_name', '')
+    if centre:
+        parts.append(f"Centre: {centre}")
+    parts.append(f"Date: {book_data.get('print_date', '')}")
+    parts.append("Verify: www.uvtab.go.ug")
+    qr_text = '\n'.join(p for p in parts if p.split(':', 1)[-1].strip())
+
+    try:
+        qr_img = _make_qr_image(qr_text)
+    except Exception:
+        return  # if QR generation fails, leave the cover as plain colour
+
+    # --- White card centred on the page ---
+    card_w = 118 * mm
+    card_h = 152 * mm
+    card_x = (PAGE_W - card_w) / 2
+    card_y = (PAGE_H - card_h) / 2
+    corner_r = 3 * mm
+
+    c.setFillColorRGB(1, 1, 1)
+    c.roundRect(card_x, card_y, card_w, card_h, corner_r, fill=1, stroke=0)
+
+    # --- QR code (upper portion of card) ---
+    qr_size = 68 * mm
+    qr_x = (PAGE_W - qr_size) / 2
+    qr_top_pad = 8 * mm
+    qr_y = card_y + card_h - qr_top_pad - qr_size
+    c.drawImage(qr_img, qr_x, qr_y, width=qr_size, height=qr_size)
+
+    # --- Thin divider ---
+    div_y = qr_y - 5 * mm
+    c.setStrokeColorRGB(0.75, 0.75, 0.75)
+    c.setLineWidth(0.5)
+    c.line(card_x + 8 * mm, div_y, card_x + card_w - 8 * mm, div_y)
+
+    # --- Candidate details (lower portion of card) ---
+    s = _styles()
+    name = book_data.get('candidate_name', '')
+    label = book_data.get('full_label', '')
+    reg = book_data.get('registration_number', '')
+    occ = book_data.get('occupation_name', '')
+
+    lines = []
+    if name:
+        lines.append(f"<b>{name}</b>")
+    if label:
+        lines.append(label)
+    if reg:
+        lines.append(reg)
+    if occ:
+        lines.append(occ)
+    if centre:
+        lines.append(centre)
+
+    details_html = '<br/>'.join(lines)
+    text_pad = 5 * mm
+    text_x = card_x + text_pad
+    text_w = card_w - 2 * text_pad
+    text_top = div_y - 3 * mm
+    text_h = text_top - (card_y + text_pad)
+
+    _draw_paragraph(c, details_html, s['body_center'],
+                    text_x, card_y + text_pad, text_w, text_h)
+
+
+# -----------------------------------------------------------------------------
 # Main entry point
 # -----------------------------------------------------------------------------
 
@@ -952,11 +1059,8 @@ def generate_book_pdf(book_data):
     )
     c.showPage()
 
-    # Last page (outer back cover) - coloured to match the front cover
-    cover_color = _resolve_cover_color(book_data)
-    if cover_color:
-        c.setFillColor(cover_color)
-        c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
+    # Last page (outer back cover) — colour + centred QR card
+    _draw_outer_back_cover(c, book_data)
     c.showPage()
 
     c.save()
