@@ -61,17 +61,35 @@ def impose_2up_a4(pdf_a_bytes, pdf_b_bytes=None):
     scaled_w = a5_w * scale
     scaled_h = a5_h * scale
 
-    # Read sources and pad to a multiple of 4 (saddle-stitch requirement).
-    reader_a = PdfReader(BytesIO(pdf_a_bytes))
-    pages_a = list(reader_a.pages)
-    pages_b = list(PdfReader(BytesIO(pdf_b_bytes)).pages) if pdf_b_bytes else []
+    # Read sources. The booklet renderer appends a trailing blank page to pair
+    # with the cover under simple 2-up imposition; for saddle-stitch we drop
+    # that blank so the BACK COVER is the last real page, and pad before it.
+    def _load_pages(pdf_bytes):
+        if not pdf_bytes:
+            return []
+        pages = list(PdfReader(BytesIO(pdf_bytes)).pages)
+        # Drop renderer's trailing blank (always present by design).
+        if len(pages) > 1:
+            pages = pages[:-1]
+        return pages
 
-    n = max(len(pages_a), len(pages_b))
-    n = ((n + 3) // 4) * 4  # round up to multiple of 4
+    pages_a = _load_pages(pdf_a_bytes)
+    pages_b = _load_pages(pdf_b_bytes) if pdf_b_bytes else []
+
+    # Equalise lengths first.
+    base_n = max(len(pages_a), len(pages_b))
+    while len(pages_a) < base_n:
+        pages_a.insert(-1, _a5_blank())  # before back cover
+    while len(pages_b) < base_n:
+        pages_b.insert(-1, _a5_blank())
+
+    # Pad each booklet to a multiple of 4, inserting blanks JUST BEFORE the
+    # back cover so the back cover stays at the last position.
+    n = ((base_n + 3) // 4) * 4
     while len(pages_a) < n:
-        pages_a.append(_a5_blank())
+        pages_a.insert(-1, _a5_blank())
     while len(pages_b) < n:
-        pages_b.append(_a5_blank())
+        pages_b.insert(-1, _a5_blank())
 
     n_sheets = n // 4
     writer = PdfWriter()
