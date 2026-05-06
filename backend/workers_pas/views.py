@@ -33,7 +33,7 @@ from candidates.models import Candidate, CandidateEnrollment
 from occupations.models import Occupation, OccupationLevel, OccupationModule
 
 from .models import WorkersPasBook
-from .pdf import generate_book_pdf, impose_2up_a4
+from .pdf import generate_book_pdf, impose_2up_a4, impose_booklet_a4_landscape
 from .serializers import (
     WPOccupationSerializer, WPAssessmentSeriesSerializer,
     WPCandidateSerializer, WorkersPasBookSerializer,
@@ -297,6 +297,7 @@ class WorkersPasGenerateView(APIView):
         candidate_id = request.data.get('candidate_id')
         occupation_id = request.data.get('occupation_id')
         series_id = request.data.get('series_id')
+        mode = request.data.get('mode', 'single')
 
         if not (candidate_id and occupation_id and series_id):
             return Response(
@@ -317,6 +318,9 @@ class WorkersPasGenerateView(APIView):
         except ValueError as e:
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+        if mode == 'booklet_a4':
+            pdf_bytes = impose_booklet_a4_landscape(pdf_bytes, rotate_back_side=False)
+
         resp = HttpResponse(pdf_bytes, content_type='application/pdf')
         resp['Content-Disposition'] = (
             f'inline; filename="{book.book_number.replace("/", "_")}.pdf"'
@@ -332,8 +336,9 @@ class WorkersPasBulkGenerateView(APIView):
       occupation_id (required)
       series_id     (required)
       candidate_ids (optional list) - if omitted, generate for all eligible candidates
-      mode          - 'single' (default, ZIP of A5 PDFs) or 'a4_2up'
-                      (ZIP containing paired A4 PDFs + an "all.pdf")
+      mode          - 'single' (default, ZIP of A5 PDFs)
+                      - 'a4_2up' (ZIP containing paired A4 PDFs; cut-stack)
+                      - 'booklet_a4' (ZIP of per-candidate A4 landscape duplex booklets; fold + staple)
     """
     permission_classes = [permissions.AllowAny]
 
@@ -412,6 +417,19 @@ class WorkersPasBulkGenerateView(APIView):
                     imposed = impose_2up_a4(pdf_a, pdf_b)
                     name = f"Sheet {idx:0{width}d}.pdf"
                     zf.writestr(name, imposed)
+            elif mode == 'booklet_a4':
+                # True booklet (saddle-stitch) imposition per candidate.
+                # Produces A4 LANDSCAPE sheets ready for duplex print + fold + staple.
+                width = max(2, len(str(n_cand)))
+                for idx, (book, pdf_bytes) in enumerate(generated, start=1):
+                    imposed = impose_booklet_a4_landscape(pdf_bytes, rotate_back_side=True)
+                    cand_name = re.sub(r'[\\/:*?"<>|]+', '',
+                                        book.candidate.full_name or '').strip()
+                    name = (
+                        f"{safe_base} - {idx:0{width}d} {cand_name} "
+                        f"({book.book_number.replace('/', '-')}) - Booklet A4.pdf"
+                    )
+                    zf.writestr(name, imposed)
             else:
                 width = max(2, len(str(n_cand)))
                 for idx, (book, pdf_bytes) in enumerate(generated, start=1):
@@ -424,7 +442,7 @@ class WorkersPasBulkGenerateView(APIView):
                     zf.writestr(name, pdf_bytes)
 
         zip_buf.seek(0)
-        suffix = 'A4' if mode == 'a4_2up' else 'A5'
+        suffix = 'A4' if mode in ('a4_2up', 'booklet_a4') else 'A5'
         filename = f"{safe_base} - {n_cand} students ({suffix}).zip"
         resp = HttpResponse(zip_buf.getvalue(), content_type='application/zip')
         resp['Content-Disposition'] = f'attachment; filename="{filename}"'

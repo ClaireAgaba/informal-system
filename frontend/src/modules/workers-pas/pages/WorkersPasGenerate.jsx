@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Loader2, Search, Download, FileStack, CheckSquare, Square } from 'lucide-react';
+import { ArrowLeft, BookOpen, Loader2, Search, Download, FileStack, CheckSquare, Square, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../../../services/apiClient';
 
@@ -87,14 +87,14 @@ const WorkersPasGenerate = () => {
     setSelected(next);
   };
 
-  const generate = async ({ bulk }) => {
+  const generate = async ({ bulk, printMode }) => {
     if (!occupationId || !seriesId) {
       toast.error('Select an occupation and series first.');
       return;
     }
     const ids = Array.from(selected);
     if (!bulk && ids.length !== 1) {
-      toast.error('Pick exactly one candidate to preview.');
+      toast.error('Pick exactly one candidate.');
       return;
     }
     if (bulk && ids.length === 0) {
@@ -105,14 +105,20 @@ const WorkersPasGenerate = () => {
     setGenerating(true);
     try {
       if (!bulk) {
+        const payload = {
+          candidate_id: ids[0],
+          occupation_id: occupationId,
+          series_id: seriesId,
+        };
+        if (printMode) payload.mode = 'booklet_a4';
         const res = await apiClient.post(
           '/workers-pas/generate/',
-          { candidate_id: ids[0], occupation_id: occupationId, series_id: seriesId },
+          payload,
           { responseType: 'blob' },
         );
         const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
         window.open(url, '_blank');
-        toast.success('Booklet generated.');
+        toast.success(printMode ? 'Booklet ready — print duplex, flip on short edge.' : 'Booklet generated.');
       } else {
         const res = await apiClient.post(
           '/workers-pas/bulk-generate/',
@@ -312,10 +318,19 @@ const WorkersPasGenerate = () => {
                 disabled={generating || selected.size !== 1}
                 onClick={() => generate({ bulk: false })}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50"
-                title="Preview a single booklet"
+                title="Preview a single booklet (A5)"
               >
                 {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                Preview one
+                Preview A5
+              </button>
+              <button
+                disabled={generating || selected.size !== 1}
+                onClick={() => generate({ bulk: false, printMode: true })}
+                className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                title="Generate A4 landscape booklet — print duplex, flip on short edge"
+              >
+                {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
+                Print Booklet
               </button>
               <button
                 disabled={generating || selected.size === 0}
