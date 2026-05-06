@@ -14,7 +14,12 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
-from reportlab.platypus import Paragraph, Frame
+from reportlab.platypus import (
+    BaseDocTemplate, Frame, Flowable, PageTemplate,
+    Paragraph, Spacer, PageBreak, NextPageTemplate, KeepTogether,
+)
+from reportlab.platypus.flowables import HRFlowable
+from pypdf import PdfReader, PdfWriter
 from reportlab.lib import colors
 
 # A5 portrait dimensions in points
@@ -584,8 +589,9 @@ def _draw_page6_sections(c, ctx):
     parts = ["This Worker&rsquo;s PAS has been structured in sections:<br/><br/>"]
     for idx, lvl in enumerate(ctx['levels'], start=1):
         page_ref = lvl.get('section_start_page', '')
+        ref_text = f" (p. {page_ref})" if page_ref else ""
         parts.append(
-            f"<b>Section {_ordinal(idx)}</b> (p. {page_ref}) - "
+            f"<b>Section {_ordinal(idx)}</b>{ref_text} - "
             f"<b>COMPETENCE LEVEL {idx}</b><br/>"
         )
         parts.append(
@@ -918,6 +924,228 @@ def _draw_outer_back_cover(c, book_data):
 
 
 # -----------------------------------------------------------------------------
+# Platypus: achievement stamp flowable
+# -----------------------------------------------------------------------------
+
+class AchievementStampFlowable(Flowable):
+    """Fixed-height flowable that draws the achievement level / stamp block.
+
+    Coordinate origin (0, 0) is the bottom-left of this flowable — i.e. the
+    horizontal divider line.  The labels sit at y = 59 mm, with the text frame
+    extending 14 pts above that (total HEIGHT ≈ 65 mm).
+    """
+    HEIGHT = 65 * mm
+
+    def __init__(self):
+        Flowable.__init__(self)
+        self.width = PAGE_W - 2 * MARGIN_X
+        self.height = self.HEIGHT
+
+    def draw(self):
+        c = self.canv
+        s = _styles()
+        W = self.width
+        y_top = 59 * mm  # label frame bottom, measured from the divider at y=0
+
+        _draw_paragraph(c, "<i>ACHIEVEMENT LEVEL</i>", s['h2'],
+                        0, y_top, 70 * mm, 14)
+        _draw_paragraph(c, "<i>STAMP</i>", s['h2'],
+                        W - 30 * mm, y_top, 30 * mm, 14)
+
+        rows = [
+            ('Qualified to work independently',  'Assessment Period'),
+            ('Qualified to work with assistance', 'Assessment Period'),
+        ]
+        y = y_top - 15 * mm
+        for line1, line2 in rows:
+            _draw_paragraph(c, line1, s['body'], 0, y, 80 * mm, 12)
+            c.setLineWidth(0.4)
+            c.line(60 * mm, y - 1, W - 35 * mm, y - 1)
+            y -= 8 * mm
+            _draw_paragraph(c, line2, s['body'], 0, y, 80 * mm, 12)
+            c.line(35 * mm, y - 1, W - 35 * mm, y - 1)
+            y -= 14 * mm
+
+        c.setLineWidth(0.6)
+        c.line(0, y, W, y)  # divider at y == 0
+
+
+# -----------------------------------------------------------------------------
+# Platypus: story builder helpers
+# -----------------------------------------------------------------------------
+
+def _section_index_flowables(level_idx, lvl):
+    s = _styles()
+    items = [
+        Paragraph(f"<b>Section {_ordinal(level_idx)}</b>", s['h1_center']),
+        Spacer(1, 2 * mm),
+        Paragraph(f"<b>COMPETENCE LEVEL {level_idx}</b>", s['h2_center']),
+        Spacer(1, 6 * mm),
+        Paragraph("<b><i>TEST AREAS</i></b>", s['h2']),
+        Spacer(1, 2 * mm),
+    ]
+    for i, m in enumerate(lvl.get('modules', []), start=1):
+        items.append(Paragraph(
+            f"&nbsp;&nbsp;{i}.&nbsp;&nbsp;{m['module_name']}", s['body']))
+        items.append(Spacer(1, 1 * mm))
+    return items
+
+
+def _module_block_flowables(area_no, module):
+    s = _styles()
+    items = [
+        Paragraph(
+            f"<b>Test area {area_no}: {module['module_name']}</b>",
+            s['h1_center']),
+        Spacer(1, 5 * mm),
+    ]
+    desc = module.get('wp_description') or (
+        f"The Worker has acquired adequate knowledge and skills to perform "
+        f"{module['module_name']}.")
+    items.append(Paragraph(desc, s['body_justify']))
+    items.append(Spacer(1, 2 * mm))
+
+    for item_text in [
+        i.strip()
+        for i in (module.get('wp_competence_items') or '').splitlines()
+        if i.strip()
+    ]:
+        items.append(Paragraph(f"&bull;&nbsp;{item_text}", s['body']))
+
+    items.append(Spacer(1, 4 * mm))
+    items.append(AchievementStampFlowable())
+    items.append(Spacer(1, 8 * mm))
+    return items
+
+
+def _build_sections_story(book_data):
+    levels = book_data['levels']
+    story = []
+    for level_idx, lvl in enumerate(levels, start=1):
+        if level_idx > 1:
+            # Blank separator page between levels, then back to content template
+            story += [NextPageTemplate('Blank'), PageBreak(),
+                      NextPageTemplate('Content')]
+        # Section index always gets its own page
+        story += _section_index_flowables(level_idx, lvl)
+        story.append(PageBreak())
+        # Modules: as many as fit per page, overflow to next automatically
+        for area_no, module in enumerate(lvl.get('modules', []), start=1):
+            story.append(KeepTogether(_module_block_flowables(area_no, module)))
+    return story
+
+
+# -----------------------------------------------------------------------------
+# Platypus: per-part PDF builders
+# -----------------------------------------------------------------------------
+
+def _build_front_matter_pdf(book_data):
+    """Pages 1–6 via canvas (all existing functions, zero change)."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A5)
+    c.setTitle(f"Worker's PAS - {book_data.get('candidate_name', '')}")
+    _draw_cover(c, book_data);          c.showPage()
+    _draw_page2_intro(c, book_data);    c.showPage()
+    _draw_page3_biodata(c, book_data);  c.showPage()
+    _draw_page4_levels(c, book_data);   c.showPage()
+    _draw_page5_certified(c, book_data); c.showPage()
+    _draw_page6_sections(c, book_data); c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def _build_sections_pdf(book_data):
+    """Dynamic section content via Platypus — modules flow until page fills."""
+    buf = BytesIO()
+    occ_name = book_data['occupation_name']
+
+    content_frame = Frame(
+        MARGIN_X, MARGIN_Y,
+        PAGE_W - 2 * MARGIN_X, HEADER_BOTTOM_Y - MARGIN_Y,
+        leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
+        id='content',
+    )
+    blank_frame = Frame(
+        0, 0, PAGE_W, PAGE_H,
+        leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
+        id='blank',
+    )
+
+    def on_content(canvas_obj, doc):
+        _draw_page_header(canvas_obj, occ_name)
+        _draw_page_number(canvas_obj, doc.page + 6)  # 6 front-matter pages
+
+    templates = [
+        PageTemplate(id='Content', frames=[content_frame], onPage=on_content),
+        PageTemplate(id='Blank',   frames=[blank_frame],   onPage=lambda c, d: None),
+    ]
+    doc = BaseDocTemplate(
+        buf, pagesize=A5, pageTemplates=templates,
+        leftMargin=0, rightMargin=0, topMargin=0, bottomMargin=0,
+    )
+    doc.build(_build_sections_story(book_data))
+    return buf.getvalue()
+
+
+def _build_back_matter_pdf(book_data, start_page):
+    """Grading + employment history via canvas (existing functions unchanged)."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A5)
+    occ_name = book_data['occupation_name']
+    pg = start_page
+
+    _draw_grading(c, pg, occ_name);  c.showPage();  pg += 1
+
+    rows_per_page = 5
+    eh_pages = max(1, book_data.get('employment_history_pages', 4))
+    for i in range(eh_pages):
+        _draw_employment_history(c, pg, occ_name,
+                                 rows_per_page=rows_per_page, page_index=i)
+        c.showPage();  pg += 1
+
+    c.save()
+    return buf.getvalue()
+
+
+def _build_back_covers_pdf(book_data):
+    """UVTAB info page + outer back cover (existing functions unchanged)."""
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A5)
+    _draw_back_cover(c, book_data['occupation_name'], book_data.get('uvtab_logo_path'))
+    c.showPage()
+    _draw_outer_back_cover(c, book_data)
+    c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def _count_pages(pdf_bytes):
+    return len(PdfReader(BytesIO(pdf_bytes)).pages)
+
+
+def _merge_all(front_pdf, sections_pdf, back_matter_pdf, covers_pdf):
+    """Merge all parts, inserting blank padding pages before covers so that
+    the total page count is a multiple of 4 (saddle-stitch requirement)."""
+    n_content = (_count_pages(front_pdf)
+                 + _count_pages(sections_pdf)
+                 + _count_pages(back_matter_pdf))
+    padding = (4 - (n_content + 2) % 4) % 4  # 2 cover pages
+
+    writer = PdfWriter()
+    for pdf in (front_pdf, sections_pdf, back_matter_pdf):
+        for page in PdfReader(BytesIO(pdf)).pages:
+            writer.add_page(page)
+    for _ in range(padding):
+        writer.add_blank_page(width=PAGE_W, height=PAGE_H)
+    for page in PdfReader(BytesIO(covers_pdf)).pages:
+        writer.add_page(page)
+
+    out = BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
+# -----------------------------------------------------------------------------
 # Main entry point
 # -----------------------------------------------------------------------------
 
@@ -935,105 +1163,25 @@ def generate_book_pdf(book_data):
       coat_of_arms_path, uvtab_logo_path,
       employment_history_pages: int (default 4 -> 20 rows at 5/page)
     """
-    buf = BytesIO()
-    c = canvas.Canvas(buf, pagesize=A5)
-    c.setTitle(f"Worker's PAS - {book_data.get('candidate_name', '')}")
-
-    # Pre-compute section start pages so the table-of-sections on page 6 is correct.
-    page_num = 6  # sections page itself
     levels = list(book_data['levels'])
-    page_cursor = 7  # first content page after sections page
-    for i, lvl in enumerate(levels):
-        lvl['section_start_page'] = page_cursor
-        # Section index page + 2 pages per module (detail + achievement/stamp)
-        page_cursor += 1 + 2 * len(lvl.get('modules', []))
-        # Blank page before the next section (for booklet uniformity)
-        if i < len(levels) - 1:
-            page_cursor += 1
-
     book_data['levels_label'] = _build_levels_label(levels)
+    # Section start pages cannot be pre-computed with dynamic Platypus layout;
+    # clear them so the sections list on page 6 omits the "(p. X)" references.
+    for lvl in levels:
+        lvl['section_start_page'] = ''
 
-    # Page 1 - Cover
-    _draw_cover(c, book_data)
-    c.showPage()
+    # Part 1: fixed front matter (pages 1–6) — canvas, unchanged
+    front_pdf = _build_front_matter_pdf(book_data)
 
-    # Page 2 - Intro
-    _draw_page2_intro(c, book_data)
-    c.showPage()
+    # Part 2: dynamic section content — Platypus, modules flow freely
+    sections_pdf = _build_sections_pdf(book_data)
 
-    # Page 3 - Biodata
-    _draw_page3_biodata(c, book_data)
-    c.showPage()
+    # Part 3: grading + employment history — canvas, page numbers continue
+    back_start = 6 + _count_pages(sections_pdf) + 1
+    back_matter_pdf = _build_back_matter_pdf(book_data, start_page=back_start)
 
-    # Page 4 - Levels
-    _draw_page4_levels(c, book_data)
-    c.showPage()
+    # Part 4: outer back covers — canvas, unchanged
+    covers_pdf = _build_back_covers_pdf(book_data)
 
-    occupation_name = book_data['occupation_name']
-
-    # Page 5 - Certified training
-    _draw_page5_certified(c, book_data)
-    c.showPage()
-
-    # Page 6 - Sections list
-    _draw_page6_sections(c, book_data)
-    c.showPage()
-
-    # Sections (per level)
-    current_page = 7
-    for level_idx, lvl in enumerate(levels, start=1):
-        # Blank page before each new section after the first (booklet uniformity)
-        if level_idx > 1:
-            c.showPage()
-            current_page += 1
-
-        _draw_section_index_page(c, level_idx, lvl, current_page,
-                                 occupation_name)
-        c.showPage()
-        current_page += 1
-
-        for area_no, module in enumerate(lvl.get('modules', []), start=1):
-            _draw_test_area_detail(c, area_no, module, current_page,
-                                   occupation_name)
-            c.showPage()
-            current_page += 1
-            _draw_achievement_stamp(c, current_page, occupation_name)
-            c.showPage()
-            current_page += 1
-
-    # Grading
-    _draw_grading(c, current_page, occupation_name)
-    c.showPage()
-    current_page += 1
-
-    # Employment history (split across multiple pages)
-    rows_per_page = 5
-    eh_pages = max(1, book_data.get('employment_history_pages', 4))
-    for i in range(eh_pages):
-        _draw_employment_history(c, current_page, occupation_name,
-                                 rows_per_page=rows_per_page, page_index=i)
-        c.showPage()
-        current_page += 1
-
-    # Pad to a multiple of 4 pages so saddle-stitch imposition keeps the
-    # outer back cover on the outermost sheet.  The two back-cover pages are
-    # always the last two; blanks go immediately before them.
-    total_with_covers = current_page + 1  # current_page = 1st back cover, +1 for 2nd
-    padding_needed = (4 - total_with_covers % 4) % 4
-    for _ in range(padding_needed):
-        c.showPage()
-        current_page += 1
-
-    # Back cover (UVTAB info) - white background
-    _draw_back_cover(
-        c, occupation_name,
-        book_data.get('uvtab_logo_path'),
-    )
-    c.showPage()
-
-    # Last page (outer back cover) — colour + centred QR card
-    _draw_outer_back_cover(c, book_data)
-    c.showPage()
-
-    c.save()
-    return buf.getvalue()
+    # Merge all parts with saddle-stitch padding before the covers
+    return _merge_all(front_pdf, sections_pdf, back_matter_pdf, covers_pdf)
