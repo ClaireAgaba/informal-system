@@ -31,6 +31,13 @@ def impose_2up_a4(pdf_a_bytes, pdf_b_bytes=None):
     row, the LEFT slot holds the back page and the RIGHT slot holds the
     front page (matching standard saddle-stitch booklet layout).
 
+    Booklet structure assumed (from the renderer):
+        page 1           = front cover (coloured)
+        page 2           = intro
+        ...
+        page N-1         = back cover (UVTAB info, white background)
+        page N           = trailing blank (white)
+
     Layout per A4 sheet (sheet index i, 0 = outermost):
         FRONT of paper:
           [ C1 page N-2i  | C1 page 1+2i  ]   <- top row
@@ -38,6 +45,8 @@ def impose_2up_a4(pdf_a_bytes, pdf_b_bytes=None):
         BACK of paper (mirrored for long-edge duplex flip):
           [ C1 page N-1-2i | C1 page 2+2i ]
           [ C2 page N-1-2i | C2 page 2+2i ]
+    For sheet 0 this gives outer = [trailing-blank | cover], inner =
+    [intro | back-cover] -- exactly the expected booklet appearance.
 
     Workflow:
         1. Print A4 portrait, duplex, FLIP ON LONG EDGE.
@@ -61,35 +70,36 @@ def impose_2up_a4(pdf_a_bytes, pdf_b_bytes=None):
     scaled_w = a5_w * scale
     scaled_h = a5_h * scale
 
-    # Read sources. The booklet renderer appends a trailing blank page to pair
-    # with the cover under simple 2-up imposition; for saddle-stitch we drop
-    # that blank so the BACK COVER is the last real page, and pad before it.
+    # Read sources. The booklet ends with: [..., back_cover, trailing_blank].
+    # For saddle-stitch we want:
+    #   - last page (trailing blank) -> sheet 0 outer-left (pairs with cover)
+    #   - second-to-last (back cover) -> sheet 0 inner-right (pairs with intro)
+    # So we keep both, and pad with blanks inserted JUST BEFORE the back cover
+    # (position -2) when the page count isn't a multiple of 4.
     def _load_pages(pdf_bytes):
         if not pdf_bytes:
             return []
-        pages = list(PdfReader(BytesIO(pdf_bytes)).pages)
-        # Drop renderer's trailing blank (always present by design).
-        if len(pages) > 1:
-            pages = pages[:-1]
-        return pages
+        return list(PdfReader(BytesIO(pdf_bytes)).pages)
 
     pages_a = _load_pages(pdf_a_bytes)
     pages_b = _load_pages(pdf_b_bytes) if pdf_b_bytes else []
 
-    # Equalise lengths first.
+    # Equalise lengths (in case the two booklets differ in size). Insert
+    # blanks before the back cover so the trailing blank stays last.
     base_n = max(len(pages_a), len(pages_b))
     while len(pages_a) < base_n:
-        pages_a.insert(-1, _a5_blank())  # before back cover
+        pages_a.insert(-2, _a5_blank())
     while len(pages_b) < base_n:
-        pages_b.insert(-1, _a5_blank())
+        pages_b.insert(-2, _a5_blank())
 
-    # Pad each booklet to a multiple of 4, inserting blanks JUST BEFORE the
-    # back cover so the back cover stays at the last position.
+    # Pad each booklet to a multiple of 4 (saddle-stitch requirement),
+    # inserting blanks just before the back cover so back cover and trailing
+    # blank stay at positions N-2 and N-1 respectively.
     n = ((base_n + 3) // 4) * 4
     while len(pages_a) < n:
-        pages_a.insert(-1, _a5_blank())
+        pages_a.insert(-2, _a5_blank())
     while len(pages_b) < n:
-        pages_b.insert(-1, _a5_blank())
+        pages_b.insert(-2, _a5_blank())
 
     n_sheets = n // 4
     writer = PdfWriter()
