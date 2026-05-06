@@ -93,48 +93,56 @@ const WorkersPasGenerate = () => {
       return;
     }
     const ids = Array.from(selected);
-    if (!bulk && ids.length !== 1) {
-      toast.error('Pick exactly one candidate.');
+    if (ids.length === 0) {
+      toast.error('Select at least one candidate.');
       return;
     }
-    if (bulk && ids.length === 0) {
-      toast.error('Select at least one candidate, or all candidates.');
+    if (!bulk && !printMode && ids.length !== 1) {
+      toast.error('Pick exactly one candidate to preview.');
       return;
     }
 
     setGenerating(true);
     try {
-      if (!bulk) {
-        const payload = {
-          candidate_id: ids[0],
-          occupation_id: occupationId,
-          series_id: seriesId,
-        };
-        if (printMode) payload.mode = 'booklet_a4';
+      if (printMode) {
+        // Print Booklet: works for 1 or more candidates
+        if (ids.length === 1) {
+          const res = await apiClient.post(
+            '/workers-pas/generate/',
+            { candidate_id: ids[0], occupation_id: occupationId, series_id: seriesId, mode: 'booklet_a4' },
+            { responseType: 'blob' },
+          );
+          const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+          window.open(url, '_blank');
+        } else {
+          const res = await apiClient.post(
+            '/workers-pas/bulk-generate/',
+            { occupation_id: occupationId, series_id: seriesId, candidate_ids: ids, mode: 'booklet_a4_print' },
+            { responseType: 'blob' },
+          );
+          const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+          window.open(url, '_blank');
+        }
+        toast.success(`Booklet ready — print duplex, flip on short edge.`);
+      } else if (!bulk) {
         const res = await apiClient.post(
           '/workers-pas/generate/',
-          payload,
+          { candidate_id: ids[0], occupation_id: occupationId, series_id: seriesId },
           { responseType: 'blob' },
         );
         const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
         window.open(url, '_blank');
-        toast.success(printMode ? 'Booklet ready — print duplex, flip on short edge.' : 'Booklet generated.');
+        toast.success('Booklet generated.');
       } else {
         const res = await apiClient.post(
           '/workers-pas/bulk-generate/',
-          {
-            occupation_id: occupationId,
-            series_id: seriesId,
-            candidate_ids: ids,
-            mode,
-          },
+          { occupation_id: occupationId, series_id: seriesId, candidate_ids: ids, mode },
           { responseType: 'blob' },
         );
         const blob = new Blob([res.data], { type: 'application/zip' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        // Use backend filename if available, otherwise build one
         const cd = res.headers['content-disposition'] || '';
         const match = cd.match(/filename="?([^"]+)"?/);
         a.download = match ? match[1] : `workers_pas_${ids.length}_candidates.zip`;
@@ -324,7 +332,7 @@ const WorkersPasGenerate = () => {
                 Preview A5
               </button>
               <button
-                disabled={generating || selected.size !== 1}
+                disabled={generating || selected.size === 0}
                 onClick={() => generate({ bulk: false, printMode: true })}
                 className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
                 title="Generate A4 landscape booklet — print duplex, flip on short edge"

@@ -339,6 +339,7 @@ class WorkersPasBulkGenerateView(APIView):
       mode          - 'single' (default, ZIP of A5 PDFs)
                       - 'a4_2up' (ZIP containing paired A4 PDFs; cut-stack)
                       - 'booklet_a4' (ZIP of per-candidate A4 landscape duplex booklets; fold + staple)
+                      - 'booklet_a4_print' (single merged PDF of all booklets for direct printing)
     """
     permission_classes = [permissions.AllowAny]
 
@@ -398,6 +399,24 @@ class WorkersPasBulkGenerateView(APIView):
         safe_base = re.sub(r'\s+', ' ', safe_base).strip()
 
         n_cand = len(generated)
+
+        # booklet_a4_print: merge all booklets into one PDF for direct printing
+        if mode == 'booklet_a4_print':
+            from pypdf import PdfReader, PdfWriter
+            merger = PdfWriter()
+            for book, pdf_bytes in generated:
+                imposed = impose_booklet_a4_landscape(pdf_bytes, rotate_back_side=False)
+                reader = PdfReader(io.BytesIO(imposed))
+                for page in reader.pages:
+                    merger.add_page(page)
+            out_buf = io.BytesIO()
+            merger.write(out_buf)
+            resp = HttpResponse(out_buf.getvalue(), content_type='application/pdf')
+            resp['Content-Disposition'] = (
+                f'inline; filename="{safe_base} - {n_cand} booklets.pdf"'
+            )
+            return resp
+
         zip_buf = io.BytesIO()
         with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
             if mode == 'a4_2up':
