@@ -19,8 +19,8 @@ from reportlab.lib import colors
 
 # A5 portrait dimensions in points
 PAGE_W, PAGE_H = A5
-MARGIN_X = 12 * mm
-MARGIN_Y = 12 * mm
+MARGIN_X = 17 * mm
+MARGIN_Y = 17 * mm
 
 # Palette
 DEFAULT_COVER_COLOR = '#7d7d7d'
@@ -911,47 +911,11 @@ def _draw_outer_back_cover(c, book_data):
     c.setFillColorRGB(1, 1, 1)
     c.roundRect(card_x, card_y, card_w, card_h, corner_r, fill=1, stroke=0)
 
-    # --- QR code (upper portion of card) ---
+    # --- QR code centred in card ---
     qr_size = 68 * mm
     qr_x = (PAGE_W - qr_size) / 2
-    qr_top_pad = 8 * mm
-    qr_y = card_y + card_h - qr_top_pad - qr_size
+    qr_y = card_y + (card_h - qr_size) / 2
     c.drawImage(qr_img, qr_x, qr_y, width=qr_size, height=qr_size)
-
-    # --- Thin divider ---
-    div_y = qr_y - 5 * mm
-    c.setStrokeColorRGB(0.75, 0.75, 0.75)
-    c.setLineWidth(0.5)
-    c.line(card_x + 8 * mm, div_y, card_x + card_w - 8 * mm, div_y)
-
-    # --- Candidate details (lower portion of card) ---
-    s = _styles()
-    name = book_data.get('candidate_name', '')
-    label = book_data.get('full_label', '')
-    reg = book_data.get('registration_number', '')
-    occ = book_data.get('occupation_name', '')
-
-    lines = []
-    if name:
-        lines.append(f"<b>{name}</b>")
-    if label:
-        lines.append(label)
-    if reg:
-        lines.append(reg)
-    if occ:
-        lines.append(occ)
-    if centre:
-        lines.append(centre)
-
-    details_html = '<br/>'.join(lines)
-    text_pad = 5 * mm
-    text_x = card_x + text_pad
-    text_w = card_w - 2 * text_pad
-    text_top = div_y - 3 * mm
-    text_h = text_top - (card_y + text_pad)
-
-    _draw_paragraph(c, details_html, s['body_center'],
-                    text_x, card_y + text_pad, text_w, text_h)
 
 
 # -----------------------------------------------------------------------------
@@ -1049,6 +1013,15 @@ def generate_book_pdf(book_data):
     for i in range(eh_pages):
         _draw_employment_history(c, current_page, occupation_name,
                                  rows_per_page=rows_per_page, page_index=i)
+        c.showPage()
+        current_page += 1
+
+    # Pad to a multiple of 4 pages so saddle-stitch imposition keeps the
+    # outer back cover on the outermost sheet.  The two back-cover pages are
+    # always the last two; blanks go immediately before them.
+    total_with_covers = current_page + 1  # current_page = 1st back cover, +1 for 2nd
+    padding_needed = (4 - total_with_covers % 4) % 4
+    for _ in range(padding_needed):
         c.showPage()
         current_page += 1
 
