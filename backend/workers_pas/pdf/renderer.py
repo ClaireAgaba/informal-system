@@ -19,8 +19,8 @@ from reportlab.lib import colors
 
 # A5 portrait dimensions in points
 PAGE_W, PAGE_H = A5
-MARGIN_X = 17 * mm
-MARGIN_Y = 17 * mm
+MARGIN_X = 15 * mm
+MARGIN_Y = 20 * mm
 
 # Palette
 DEFAULT_COVER_COLOR = '#7d7d7d'
@@ -128,7 +128,7 @@ def _draw_paragraph(c, html, style, x, y, width, height):
 
 def _draw_page_number(c, num):
     s = _styles()['page_number']
-    _draw_paragraph(c, str(num), s, 0, 8 * mm, PAGE_W, 12)
+    _draw_paragraph(c, str(num), s, 0, MARGIN_Y * 0.4, PAGE_W, 12)
 
 
 def _draw_page_header(c, occupation_name):
@@ -138,7 +138,7 @@ def _draw_page_header(c, occupation_name):
     blank). Content should start below ``HEADER_BOTTOM_Y`` to avoid overlap.
     """
     s = _styles()
-    label_y = PAGE_H - 10 * mm
+    label_y = PAGE_H - MARGIN_Y + 4 * mm
     _draw_paragraph(
         c, f"<b>{occupation_name}</b>", s['body'],
         MARGIN_X, label_y, PAGE_W - 2 * MARGIN_X, 12,
@@ -149,7 +149,7 @@ def _draw_page_header(c, occupation_name):
 
 
 # Y below which body content should start so it does not overlap the header.
-HEADER_BOTTOM_Y = PAGE_H - 18 * mm
+HEADER_BOTTOM_Y = PAGE_H - MARGIN_Y - 2 * mm
 
 
 def _hardcoded_intro_text(occupation_name):
@@ -893,7 +893,6 @@ def _draw_outer_back_cover(c, book_data):
     if centre:
         parts.append(f"Centre: {centre}")
     parts.append(f"Date: {book_data.get('print_date', '')}")
-    parts.append("Verify: www.uvtab.go.ug")
     qr_text = '\n'.join(p for p in parts if p.split(':', 1)[-1].strip())
 
     try:

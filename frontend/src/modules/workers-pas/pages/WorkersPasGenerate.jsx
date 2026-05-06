@@ -106,10 +106,11 @@ const WorkersPasGenerate = () => {
       );
       const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
       window.open(url, '_blank');
-      toast.success(
-        ids.length === 2
-          ? 'A4 sheet ready — print duplex, flip on long edge, cut, rotate bottom half 180°, fold and staple.'
-          : 'A4 sheet ready (1 candidate, bottom half blank) — print duplex, flip on long edge, fold and staple.',
+      const sheets = Math.ceil(ids.length / 2);
+    toast.success(
+        ids.length === 1
+          ? 'A4 sheet ready (1 candidate, bottom half blank) — print duplex, flip on long edge, fold and staple.'
+          : `${sheets} sheet${sheets > 1 ? 's' : ''} ready (${ids.length} candidates) — print duplex, flip on long edge, cut at the dashed line, rotate bottom halves 180°, fold and staple.`,
       );
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to generate 2-up A6 print.');
@@ -295,10 +296,10 @@ const WorkersPasGenerate = () => {
               Generate {selected.size > 0 ? `${selected.size} ` : ''}booklets (.zip)
             </button>
             <button
-              disabled={generating || selected.size === 0 || selected.size > 2}
+              disabled={generating || selected.size === 0}
               onClick={handle2upA6Print}
               className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-              title="Select 1 or 2 candidates. Generates an A4 sheet with 2 A6 booklets — print duplex, flip on long edge, cut, rotate bottom half 180°, fold and staple."
+              title="Generates A4 sheets with 2 A6 booklets each (candidates paired in selection order) — print duplex, flip on long edge, cut at dashed line, rotate bottom halves 180°, fold and staple."
             >
               {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
               Print 2-up A6 Booklets

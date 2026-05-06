@@ -32,6 +32,8 @@ from assessment_series.models import AssessmentSeries
 from candidates.models import Candidate, CandidateEnrollment
 from occupations.models import Occupation, OccupationLevel, OccupationModule
 
+from pypdf import PdfReader, PdfWriter
+
 from .models import WorkersPasBook
 from .pdf import generate_book_pdf, impose_2up_a4, impose_booklet_a4_landscape, impose_2up_a6_booklet_a4
 from .serializers import (
@@ -503,9 +505,9 @@ class WorkersPas2upA6PrintView(APIView):
                 {'detail': 'occupation_id and series_id are required.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if not isinstance(candidate_ids, list) or not (1 <= len(candidate_ids) <= 2):
+        if not isinstance(candidate_ids, list) or len(candidate_ids) == 0:
             return Response(
-                {'detail': 'candidate_ids must be a list of 1 or 2 IDs.'},
+                {'detail': 'candidate_ids must be a non-empty list of candidate IDs.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -513,26 +515,43 @@ class WorkersPas2upA6PrintView(APIView):
         series = get_object_or_404(AssessmentSeries, pk=series_id)
         candidates = [get_object_or_404(Candidate, pk=cid) for cid in candidate_ids]
 
-        pdf_bytes_list = []
+        # Render a PDF for every candidate.
+        pdf_bytes_map = {}
         for cand in candidates:
             try:
                 book, _ = _get_or_create_book(
                     cand, occupation, series,
                     generated_by=request.user if request.user.is_authenticated else None,
                 )
-                pdf_bytes_list.append(_render_pdf_for_book(book))
+                pdf_bytes_map[cand.id] = _render_pdf_for_book(book)
             except ValueError as exc:
                 return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        pdf_c1 = pdf_bytes_list[0]
-        pdf_c2 = pdf_bytes_list[1] if len(pdf_bytes_list) == 2 else None
-        result = impose_2up_a6_booklet_a4(pdf_c1, pdf_c2)
+        # Impose candidates in pairs (odd candidate gets blank bottom half).
+        pairs = [
+            (candidate_ids[i], candidate_ids[i + 1] if i + 1 < len(candidate_ids) else None)
+            for i in range(0, len(candidate_ids), 2)
+        ]
+        merged_writer = PdfWriter()
+        for cid1, cid2 in pairs:
+            c1_pdf = pdf_bytes_map[cid1]
+            c2_pdf = pdf_bytes_map[cid2] if cid2 is not None else None
+            sheet = impose_2up_a6_booklet_a4(c1_pdf, c2_pdf)
+            for page in PdfReader(io.BytesIO(sheet)).pages:
+                merged_writer.add_page(page)
+
+        out = io.BytesIO()
+        merged_writer.write(out)
+        result = out.getvalue()
 
         def _safe(name):
             return re.sub(r'[\\/:*?"<>|]+', '', name or '').strip()
 
         names = [_safe(c.full_name) for c in candidates]
-        fname = ' & '.join(names) + ' - 2up A6 Booklet.pdf'
+        fname = ' & '.join(names[:2])
+        if len(candidates) > 2:
+            fname += f' +{len(candidates) - 2} more'
+        fname += ' - 2up A6 Booklet.pdf'
 
         resp = HttpResponse(result, content_type='application/pdf')
         resp['Content-Disposition'] = f'inline; filename="{fname}"'
