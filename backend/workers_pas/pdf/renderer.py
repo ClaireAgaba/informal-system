@@ -269,15 +269,15 @@ def _draw_cover(c, ctx):
         c, "<u>WORKER&rsquo;S PAS</u> - Uganda", s['cover_title_md'],
         MARGIN_X, PAGE_H - 70 * mm, PAGE_W - 2 * MARGIN_X, 20,
     )
-    # Occupation name (large)
+    # Occupation name (large) – allow up to ~3 lines for long names
     _draw_paragraph(
         c, ctx['occupation_name'], s['cover_title_lg'],
-        MARGIN_X, PAGE_H - 90 * mm, PAGE_W - 2 * MARGIN_X, 30,
+        MARGIN_X, PAGE_H - 100 * mm, PAGE_W - 2 * MARGIN_X, 26 * mm,
     )
     # LEVEL I & II
     _draw_paragraph(
         c, ctx['levels_label'], s['cover_subtitle'],
-        MARGIN_X, PAGE_H - 100 * mm, PAGE_W - 2 * MARGIN_X, 16,
+        MARGIN_X, PAGE_H - 106 * mm, PAGE_W - 2 * MARGIN_X, 16,
     )
 
     # UVTAB logo
