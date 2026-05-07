@@ -987,9 +987,18 @@ def _draw_outer_back_cover(c, book_data):
     c.drawImage(qr_img, qr_x, qr_y, width=qr_size, height=qr_size)
 
     s = _styles()
+    
+    if verify_url:
+        verify_base = verify_url.split('/verify/')[0] + '/verify' if '/verify/' in verify_url else verify_url
+        verify_base = verify_base.replace('https://', '').replace('http://', '')
+        _draw_paragraph(
+            c, f"Verify at: {verify_base}", s['cover_subtitle'],
+            MARGIN_X, qr_y - 7 * mm, PAGE_W - 2 * MARGIN_X, 6 * mm,
+        )
+
     _draw_paragraph(
         c, "ISO 9001:2015", s['cover_title_md'],
-        MARGIN_X, qr_y - 16 * mm, PAGE_W - 2 * MARGIN_X, 10 * mm,
+        MARGIN_X, qr_y - 17 * mm, PAGE_W - 2 * MARGIN_X, 10 * mm,
     )
 
 
