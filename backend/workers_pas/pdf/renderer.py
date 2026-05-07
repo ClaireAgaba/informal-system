@@ -28,7 +28,8 @@ from .constants import BOOKLET_W, BOOKLET_H
 # Passport-sized booklet page
 PAGE_W, PAGE_H = BOOKLET_W, BOOKLET_H
 MARGIN_X = 8 * mm
-MARGIN_Y = 16 * mm
+MARGIN_Y = 16 * mm        # bottom content margin
+TOP_MARGIN = 20 * mm      # top safe zone (content starts ≥20 mm from top edge)
 
 # Palette
 DEFAULT_COVER_COLOR = '#7d7d7d'
@@ -115,6 +116,10 @@ def _styles():
             'small', fontName='Helvetica', fontSize=6.5,
             alignment=TA_LEFT, leading=8,
         ),
+        'small_center': ParagraphStyle(
+            'small_center', fontName='Helvetica', fontSize=6.5,
+            alignment=TA_CENTER, leading=8,
+        ),
         'page_number': ParagraphStyle(
             'page_number', fontName='Helvetica', fontSize=7,
             alignment=TA_CENTER, leading=9,
@@ -150,7 +155,8 @@ def _transparent_image(path):
 
 def _draw_page_number(c, num):
     s = _styles()['page_number']
-    _draw_paragraph(c, str(num), s, 0, 2 * mm, PAGE_W, 10)
+    # Top-right corner — sits above the occupation header in the top margin
+    _draw_paragraph(c, str(num), s, PAGE_W - MARGIN_X - 12 * mm, PAGE_H - 12 * mm, 12 * mm, 12)
 
 
 def _draw_page_header(c, occupation_name):
@@ -160,7 +166,7 @@ def _draw_page_header(c, occupation_name):
     blank). Content should start below ``HEADER_BOTTOM_Y`` to avoid overlap.
     """
     s = _styles()
-    label_y = PAGE_H - MARGIN_Y + 4 * mm
+    label_y = PAGE_H - TOP_MARGIN - 4 * mm   # label top ≈ TOP_MARGIN from page top
     _draw_paragraph(
         c, f"<b>{occupation_name}</b>", s['body'],
         MARGIN_X, label_y, PAGE_W - 2 * MARGIN_X, 12,
@@ -171,7 +177,7 @@ def _draw_page_header(c, occupation_name):
 
 
 # Y below which body content should start so it does not overlap the header.
-HEADER_BOTTOM_Y = PAGE_H - MARGIN_Y - 2 * mm
+HEADER_BOTTOM_Y = PAGE_H - TOP_MARGIN - 6 * mm
 
 
 def _hardcoded_intro_text(occupation_name):
@@ -829,7 +835,7 @@ def _draw_back_cover(c, occupation_name, logo_path=None, cover_color=None):
     s = _styles()
 
     logo_h = 18 * mm
-    logo_y = PAGE_H - MARGIN_Y - logo_h
+    logo_y = PAGE_H - TOP_MARGIN - logo_h  # respect top safe zone
     if logo_path:
         try:
             c.drawImage(logo_path, (PAGE_W - logo_h) / 2, logo_y,
@@ -850,7 +856,7 @@ def _draw_back_cover(c, occupation_name, logo_path=None, cover_color=None):
         f"<b>Mission:</b> {UVTAB_INFO['mission']}<br/><br/>"
         f"<b>Motto:</b> {UVTAB_INFO['motto']}<br/><br/>"
         f"<b>Core Values:</b> {cv}",
-        s['small'],
+        s['small_center'],
         MARGIN_X, MARGIN_Y, PAGE_W - 2 * MARGIN_X, content_top - MARGIN_Y,
     )
 

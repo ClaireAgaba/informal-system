@@ -208,7 +208,7 @@ def _signature_paths():
         'coat': _first_existing('coatofarm.png', 'coat_of_arms.png',
                                  'coat_of_arms.jpg', "uganda's embem.jpg",
                                  'uganda_emblem.jpg'),
-        'logo': _first_existing('uvtab-logo.png', 'uvtab_logo.png',
+        'logo': _first_existing('uvtab_logo.png', 'uvtab-logo.png',
                                  'uvtab-logo.jpg'),
     }
 

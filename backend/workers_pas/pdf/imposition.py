@@ -273,11 +273,6 @@ def impose_2up_a6_booklet_a4(pdf_c1_bytes, pdf_c2_bytes=None):
         _set_a4_boxes(src)
         target.merge_page(src)
 
-    cut_overlay_pdf = _cut_line_overlay()
-
-    def _cut_page():
-        return PdfReader(BytesIO(cut_overlay_pdf)).pages[0]
-
     for s in range(n_sheets):
         # Saddle-stitch page indices (0-based).
         # C1 front/back use standard formula.
@@ -300,7 +295,6 @@ def impose_2up_a6_booklet_a4(pdf_c1_bytes, pdf_c2_bytes=None):
         _place(front, pages_c1[c1_fr], a6_w,  a6_h, rotated=False)
         _place(front, pages_c2[c2_fl], 0,     0,    rotated=True)
         _place(front, pages_c2[c2_fr], a6_w,  0,    rotated=True)
-        front.merge_page(_cut_page())
 
         # --- BACK page (placed in normal PDF coords; printer flip-on-long-edge
         #     will mirror left/right, which is accounted for in the formula) ---
@@ -310,7 +304,6 @@ def impose_2up_a6_booklet_a4(pdf_c1_bytes, pdf_c2_bytes=None):
         _place(back, pages_c1[c1_br], a6_w,  a6_h, rotated=False)
         _place(back, pages_c2[c2_bl], 0,     0,    rotated=True)
         _place(back, pages_c2[c2_br], a6_w,  0,    rotated=True)
-        back.merge_page(_cut_page())
 
     out = BytesIO()
     writer.write(out)
