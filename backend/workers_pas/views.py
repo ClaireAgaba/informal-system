@@ -259,13 +259,16 @@ def _get_or_create_book(candidate, occupation, series, generated_by=None):
     return book, True
 
 
-def _render_pdf_for_book(book):
+def _render_pdf_for_book(book, request=None):
     """Render and save the PDF for ``book``, returning bytes."""
     occupation = book.occupation
     levels_qs = list(occupation.levels.filter(is_active=True).order_by('level_name'))
     sigs = _signature_paths()
     data = _build_book_data(book.candidate, occupation, levels_qs, sigs)
     data['full_label'] = book.full_label
+    if request is not None:
+        book_slug = book.book_number.replace('/', '-')
+        data['verify_url'] = request.build_absolute_uri(f'/workers-pas/verify/{book_slug}')
     pdf_bytes = generate_book_pdf(data)
 
     book.pdf_file.save(
@@ -290,7 +293,7 @@ class WorkersPasBookViewSet(viewsets.ReadOnlyModelViewSet):
     def download(self, request, pk=None):
         book = self.get_object()
         if not book.pdf_file or not os.path.exists(book.pdf_file.path):
-            pdf_bytes = _render_pdf_for_book(book)
+            pdf_bytes = _render_pdf_for_book(book, request)
         else:
             with open(book.pdf_file.path, 'rb') as f:
                 pdf_bytes = f.read()
@@ -326,7 +329,7 @@ class WorkersPasGenerateView(APIView):
                 candidate, occupation, series,
                 generated_by=request.user if request.user.is_authenticated else None,
             )
-            pdf_bytes = _render_pdf_for_book(book)
+            pdf_bytes = _render_pdf_for_book(book, request)
         except ValueError as e:
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -396,7 +399,7 @@ class WorkersPasBulkGenerateView(APIView):
                     cand, occupation, series,
                     generated_by=request.user if request.user.is_authenticated else None,
                 )
-                pdf_bytes = _render_pdf_for_book(book)
+                pdf_bytes = _render_pdf_for_book(book, request)
                 generated.append((book, pdf_bytes))
             except ValueError as e:
                 return Response(
@@ -524,7 +527,7 @@ class WorkersPas2upA6PrintView(APIView):
                     cand, occupation, series,
                     generated_by=request.user if request.user.is_authenticated else None,
                 )
-                pdf_bytes_map[cand.id] = _render_pdf_for_book(book)
+                pdf_bytes_map[cand.id] = _render_pdf_for_book(book, request)
             except ValueError as exc:
                 return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -557,3 +560,35 @@ class WorkersPas2upA6PrintView(APIView):
         resp = HttpResponse(result, content_type='application/pdf')
         resp['Content-Disposition'] = f'inline; filename="{fname}"'
         return resp
+
+
+class WorkersPasVerifyView(APIView):
+    """Public endpoint — verify a Worker's PAS book by its URL slug."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, book_slug):
+        book_number = book_slug.replace('-', '/', 2)
+        book = get_object_or_404(WorkersPasBook, book_number=book_number)
+        candidate = book.candidate
+        occupation = book.occupation
+
+        photo_url = None
+        if candidate.passport_photo:
+            try:
+                photo_url = request.build_absolute_uri(candidate.passport_photo.url)
+            except Exception:
+                pass
+
+        levels_qs = occupation.levels.filter(is_active=True).order_by('level_name')
+        level_names = [lvl.wp_level_name or lvl.level_name for lvl in levels_qs]
+
+        return Response({
+            'full_name': candidate.full_name,
+            'registration_number': candidate.registration_number,
+            'photo_url': photo_url,
+            'occupation_name': occupation.wp_occ_name or occupation.occ_name,
+            'levels': level_names,
+            'book_number': book.book_number,
+            'full_label': book.full_label,
+            'issued_date': book.issued_date,
+        })

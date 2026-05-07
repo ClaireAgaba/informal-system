@@ -58,6 +58,7 @@ import CollectionReceipts from '@modules/awards/pages/CollectionReceipts';
 import CollectionReceiptDetail from '@modules/awards/pages/CollectionReceiptDetail';
 import WorkersPasIndex from '@modules/workers-pas/pages/WorkersPasIndex';
 import WorkersPasGenerate from '@modules/workers-pas/pages/WorkersPasGenerate';
+import WorkersPasVerify from '@modules/workers-pas/pages/WorkersPasVerify';
 
 function App() {
   return (
@@ -66,6 +67,7 @@ function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/candidate-login" element={<CandidateLogin />} />
       <Route path="/candidate-portal" element={<CandidatePortal />} />
+      <Route path="/workers-pas/verify/:bookSlug" element={<WorkersPasVerify />} />
 
       {/* Dashboard - Full screen without sidebar */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

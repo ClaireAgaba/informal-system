@@ -5,7 +5,7 @@ from .views import (
     WorkersPasOccupationListView, WorkersPasSeriesListView,
     WorkersPasCandidateListView, WorkersPasGenerateView,
     WorkersPasBulkGenerateView, WorkersPasBookViewSet,
-    WorkersPas2upA6PrintView,
+    WorkersPas2upA6PrintView, WorkersPasVerifyView,
 )
 
 
@@ -26,6 +26,8 @@ urlpatterns = [
          name='workers-pas-bulk-generate'),
     path('2up-a6-print/', WorkersPas2upA6PrintView.as_view(),
          name='workers-pas-2up-a6-print'),
+    path('verify/<str:book_slug>/', WorkersPasVerifyView.as_view(),
+         name='workers-pas-verify'),
 ]
 
 urlpatterns += router.urls

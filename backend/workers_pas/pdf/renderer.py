@@ -1,10 +1,11 @@
 """
 Worker's PAS booklet PDF renderer.
 
-The booklet is rendered at passport/pocket size (100 × 118.5 mm). When imposed
-2-up on A4 and cut along the guide lines, two passport-sized booklets are
+The booklet is rendered at passport/pocket size (100 × 133.5 mm). When imposed
+2-up on A4 and cut along the guide lines, two pocket-sized booklets are
 produced per A4 sheet.
 """
+import re
 from io import BytesIO
 from datetime import date
 
@@ -27,7 +28,7 @@ from .constants import BOOKLET_W, BOOKLET_H
 # Passport-sized booklet page
 PAGE_W, PAGE_H = BOOKLET_W, BOOKLET_H
 MARGIN_X = 8 * mm
-MARGIN_Y = 10 * mm
+MARGIN_Y = 16 * mm
 
 # Palette
 DEFAULT_COVER_COLOR = '#7d7d7d'
@@ -263,12 +264,13 @@ UVTAB_INFO = {
 # -----------------------------------------------------------------------------
 
 def _draw_cover(c, ctx):
-    """Page 1 - Cover (100 × 118.5 mm passport-sized layout).
+    """Page 1 - Cover (100 × 133.5 mm passport-sized layout).
 
     All y-coordinates are absolute from page bottom to avoid cascade drift.
-    Layout (bottom → top): book label (4 mm), validation (12 mm),
-    org name (18 mm), logo (27 mm), issued-by (49 mm), level (55 mm),
-    occupation (61 mm), title (77 mm), coat (85.5 mm).
+    Layout (bottom → top, ~4-5 mm gaps):
+      book label (4 mm), validation (14 mm), logo (24 mm),
+      issued-by (49 mm), level (59 mm), occupation (68 mm),
+      title (90 mm), coat (100.5 mm).
     """
     s = _styles()
     c.setFillColor(_resolve_cover_color(ctx))
@@ -292,23 +294,22 @@ def _draw_cover(c, ctx):
     # "WORKER'S PAS - Uganda"
     _draw_paragraph(
         c, "<u>WORKER&rsquo;S PAS</u> - Uganda", s['cover_title_md'],
-        MARGIN_X, 77 * mm, PAGE_W - 2 * MARGIN_X, 7 * mm,
+        MARGIN_X, 90 * mm, PAGE_W - 2 * MARGIN_X, 7 * mm,
     )
     # Occupation name — allow 2-3 lines
     _draw_paragraph(
         c, ctx['occupation_name'], s['cover_title_lg'],
-        MARGIN_X, 61 * mm, PAGE_W - 2 * MARGIN_X, 15 * mm,
+        MARGIN_X, 68 * mm, PAGE_W - 2 * MARGIN_X, 18 * mm,
     )
     # Level label
     _draw_paragraph(
         c, ctx['levels_label'], s['cover_subtitle'],
-        MARGIN_X, 55 * mm, PAGE_W - 2 * MARGIN_X, 5 * mm,
+        MARGIN_X, 59 * mm, PAGE_W - 2 * MARGIN_X, 6 * mm,
     )
-
-    # "Issued by:" — clearly separated from level label
+    # "Issued by:"
     _draw_paragraph(
         c, "<b>Issued by:</b>", s['cover_subtitle'],
-        MARGIN_X, 49 * mm, PAGE_W - 2 * MARGIN_X, 4 * mm,
+        MARGIN_X, 49 * mm, PAGE_W - 2 * MARGIN_X, 5 * mm,
     )
 
     # UVTAB logo — transparent background
@@ -316,26 +317,18 @@ def _draw_cover(c, ctx):
     if logo:
         try:
             c.drawImage(_transparent_image(logo),
-                        (PAGE_W - logo_size) / 2, 27 * mm,
+                        (PAGE_W - logo_size) / 2, 24 * mm,
                         width=logo_size, height=logo_size,
                         preserveAspectRatio=True)
         except Exception:
             pass
 
-    # Org name
-    _draw_paragraph(
-        c,
-        "Directorate of Industrial Training (DIT)<br/>"
-        "Ministry of Education &amp; Sports",
-        s['cover_subtitle'],
-        MARGIN_X, 18 * mm, PAGE_W - 2 * MARGIN_X, 8 * mm,
-    )
     # Validation tagline
     _draw_paragraph(
         c,
         "<i>Validation of Non-formal and Informally Acquired Skills</i>",
         s['cover_subtitle'],
-        MARGIN_X, 12 * mm, PAGE_W - 2 * MARGIN_X, 5 * mm,
+        MARGIN_X, 14 * mm, PAGE_W - 2 * MARGIN_X, 5 * mm,
     )
 
     # Book number label — white box at bottom
@@ -884,10 +877,22 @@ def _roman(n):
 
 
 def _extract_level_number(level_name):
-    """Extract the numeric part from a level name like 'Level 4' -> 4."""
-    import re
-    m = re.search(r'(\d+)', level_name or '')
-    return int(m.group(1)) if m else None
+    """Extract level number — handles Arabic ('Level 4') and Roman ('Level IV')."""
+    name = level_name or ''
+    m = re.search(r'(\d+)', name)
+    if m:
+        return int(m.group(1))
+    # Check Roman numerals longest-first so 'IV' isn't shadowed by 'I'
+    roman_map = [
+        ('VIII', 8), ('VII', 7), ('VI', 6), ('IV', 4),
+        ('III', 3), ('IX', 9), ('II', 2), ('X', 10),
+        ('V', 5), ('I', 1),
+    ]
+    upper = name.upper()
+    for roman, val in roman_map:
+        if re.search(r'\b' + roman + r'\b', upper):
+            return val
+    return None
 
 
 def _build_levels_label(levels):
@@ -909,11 +914,13 @@ def _build_levels_label(levels):
 # QR code helpers
 # -----------------------------------------------------------------------------
 
-def _make_qr_image(text):
+def _make_qr_image(text, error_correction=None):
     """Return a ReportLab ImageReader containing a QR code PNG for *text*."""
+    if error_correction is None:
+        error_correction = qrcode.constants.ERROR_CORRECT_H
     qr = qrcode.QRCode(
         version=None,
-        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        error_correction=error_correction,
         box_size=10,
         border=2,
     )
@@ -927,36 +934,34 @@ def _make_qr_image(text):
 
 
 def _draw_outer_back_cover(c, book_data):
-    """Draw the outer back cover: solid occupation colour with a centred QR card.
+    """Draw the outer back cover: solid occupation colour with a centred QR code.
 
-    The card shows the QR code (encoding candidate + occupation + centre) in the
-    upper portion and the candidate's key details as text below it.
+    The QR code encodes the verify URL so anyone can scan and confirm the holder.
+    Falls back to plain text if no verify_url is present.
     """
     # Solid colour background
     cover_color = _resolve_cover_color(book_data)
     c.setFillColor(cover_color)
     c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
 
-    # --- QR code content ---
-    parts = [
-        "UVTAB Worker's PAS",
-        f"Book: {book_data.get('full_label', '')}",
-        f"Name: {book_data.get('candidate_name', '')}",
-        f"Reg:  {book_data.get('registration_number', '')}",
-        f"Occ:  {book_data.get('occupation_name', '')}",
-    ]
-    centre = book_data.get('centre_name', '')
-    if centre:
-        parts.append(f"Centre: {centre}")
-    parts.append(f"Date: {book_data.get('print_date', '')}")
-    qr_text = '\n'.join(p for p in parts if p.split(':', 1)[-1].strip())
+    # Prefer the verify URL; fall back to plain text for offline-generated PDFs
+    verify_url = book_data.get('verify_url')
+    if verify_url:
+        qr_content = verify_url
+    else:
+        qr_content = (
+            "UVTAB Worker's PAS\n"
+            f"Book: {book_data.get('full_label', '')}\n"
+            f"Name: {book_data.get('candidate_name', '')}\n"
+            f"Reg:  {book_data.get('registration_number', '')}"
+        )
 
     try:
-        qr_img = _make_qr_image(qr_text)
+        qr_img = _make_qr_image(qr_content)
     except Exception:
         return  # if QR generation fails, leave the cover as plain colour
 
-    # --- QR code centred on the page (no card background) ---
+    # --- QR code centred on the page ---
     qr_size = 40 * mm
     qr_x = (PAGE_W - qr_size) / 2
     qr_y = (PAGE_H - qr_size) / 2

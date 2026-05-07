@@ -134,13 +134,12 @@ def _cut_line_overlay():
     """Return PDF bytes (A4 portrait) with dashed grey trim guide lines.
 
     Lines drawn:
-      1. Horizontal at midpoint + 3 cm  — bottom-trim guide for top candidate
-      2. Horizontal at midpoint − 3 cm  — bottom-trim guide for bottom candidate
+      1. Horizontal at midpoint + waste  — bottom-trim guide for top candidate
+      2. Horizontal at midpoint − waste  — top-trim guide for bottom candidate
       3. Vertical at 0.5 cm from each edge — side-trim guides (narrow each strip)
 
-    Labels sit in the 6 cm waste strip between the two trim lines so they
-    never overlap booklet content.  No separate "cut here" line — the two
-    trim cuts already separate and size both candidates in one operation each.
+    waste = A4_h/2 − BOOKLET_H (≈ 15 mm with BOOKLET_H = 133.5 mm).
+    Labels sit in the waste strip between the two trim lines.
 
     Returns bytes so callers can create a fresh PageObject each time via
     PdfReader — avoids the dict.copy() / 'get_contents' error in PyPDF.
@@ -149,8 +148,9 @@ def _cut_line_overlay():
     c = rl_canvas.Canvas(buf, pagesize=A4)
     a4_w, a4_h = A4
     mid_y = a4_h / 2
-    top_trim = mid_y + 3 * cm   # bottom edge of top booklet
-    bot_trim = mid_y - 3 * cm   # top edge of bottom booklet
+    waste = a4_h / 2 - BOOKLET_H
+    top_trim = mid_y + waste   # bottom edge of top booklet
+    bot_trim = mid_y - waste   # top edge of bottom booklet
 
     c.setStrokeColorRGB(0.55, 0.55, 0.55)
     c.setLineWidth(0.6)
@@ -248,7 +248,7 @@ def impose_2up_a6_booklet_a4(pdf_c1_bytes, pdf_c2_bytes=None):
         makes the horizontal trim lines land exactly at the booklet edges.
         """
         h_gap = a6_w - scaled_w   # ≈ 5 mm (= 0.5 cm trim on outer edge)
-        v_gap = a6_h - scaled_h   # ≈ 30 mm (= 3 cm trim on inner edge)
+        v_gap = a6_h - scaled_h   # ≈ 15 mm (= 1.5 cm trim on inner edge)
 
         # Horizontal: flush each column toward the fold (centre of A4).
         if cell_x == 0:           # left column — flush right (toward fold)
