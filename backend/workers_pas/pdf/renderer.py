@@ -263,7 +263,13 @@ UVTAB_INFO = {
 # -----------------------------------------------------------------------------
 
 def _draw_cover(c, ctx):
-    """Page 1 - Cover (100 × 118.5 mm passport-sized layout)."""
+    """Page 1 - Cover (100 × 118.5 mm passport-sized layout).
+
+    All y-coordinates are absolute from page bottom to avoid cascade drift.
+    Layout (bottom → top): book label (4 mm), validation (12 mm),
+    org name (18 mm), logo (27 mm), issued-by (49 mm), level (55 mm),
+    occupation (61 mm), title (77 mm), coat (85.5 mm).
+    """
     s = _styles()
     c.setFillColor(_resolve_cover_color(ctx))
     c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
@@ -272,7 +278,7 @@ def _draw_cover(c, ctx):
     coat_size = 28 * mm
     logo_size = 20 * mm
 
-    # Coat of arms — near top
+    # Coat of arms — 5 mm from top
     coat = ctx.get('coat_of_arms_path')
     if coat:
         try:
@@ -283,29 +289,26 @@ def _draw_cover(c, ctx):
         except Exception:
             pass
 
-    # "WORKER'S PAS - Uganda" — just below coat
+    # "WORKER'S PAS - Uganda"
     _draw_paragraph(
         c, "<u>WORKER&rsquo;S PAS</u> - Uganda", s['cover_title_md'],
-        MARGIN_X, PAGE_H - 5 * mm - coat_size - 8 * mm,
-        PAGE_W - 2 * MARGIN_X, 8 * mm,
+        MARGIN_X, 77 * mm, PAGE_W - 2 * MARGIN_X, 7 * mm,
     )
     # Occupation name — allow 2-3 lines
     _draw_paragraph(
         c, ctx['occupation_name'], s['cover_title_lg'],
-        MARGIN_X, PAGE_H - 5 * mm - coat_size - 26 * mm,
-        PAGE_W - 2 * MARGIN_X, 16 * mm,
+        MARGIN_X, 61 * mm, PAGE_W - 2 * MARGIN_X, 15 * mm,
     )
     # Level label
     _draw_paragraph(
         c, ctx['levels_label'], s['cover_subtitle'],
-        MARGIN_X, PAGE_H - 5 * mm - coat_size - 32 * mm,
-        PAGE_W - 2 * MARGIN_X, 6 * mm,
+        MARGIN_X, 55 * mm, PAGE_W - 2 * MARGIN_X, 5 * mm,
     )
 
-    # Issued by section
+    # "Issued by:" — clearly separated from level label
     _draw_paragraph(
         c, "<b>Issued by:</b>", s['cover_subtitle'],
-        MARGIN_X, 54 * mm, PAGE_W - 2 * MARGIN_X, 5 * mm,
+        MARGIN_X, 49 * mm, PAGE_W - 2 * MARGIN_X, 4 * mm,
     )
 
     # UVTAB logo — transparent background
@@ -313,34 +316,37 @@ def _draw_cover(c, ctx):
     if logo:
         try:
             c.drawImage(_transparent_image(logo),
-                        (PAGE_W - logo_size) / 2, 32 * mm,
+                        (PAGE_W - logo_size) / 2, 27 * mm,
                         width=logo_size, height=logo_size,
                         preserveAspectRatio=True)
         except Exception:
             pass
 
+    # Org name
     _draw_paragraph(
-        c, "Directorate of Industrial Training (DIT)<br/>"
-           "Ministry of Education &amp; Sports",
+        c,
+        "Directorate of Industrial Training (DIT)<br/>"
+        "Ministry of Education &amp; Sports",
         s['cover_subtitle'],
-        MARGIN_X, 21 * mm, PAGE_W - 2 * MARGIN_X, 11 * mm,
+        MARGIN_X, 18 * mm, PAGE_W - 2 * MARGIN_X, 8 * mm,
     )
+    # Validation tagline
     _draw_paragraph(
-        c, "<i>Validation of Non-formal and Informally Acquired Skills</i>",
+        c,
+        "<i>Validation of Non-formal and Informally Acquired Skills</i>",
         s['cover_subtitle'],
-        MARGIN_X, 15 * mm, PAGE_W - 2 * MARGIN_X, 6 * mm,
+        MARGIN_X, 12 * mm, PAGE_W - 2 * MARGIN_X, 5 * mm,
     )
 
     # Book number label — white box at bottom
     label_w, label_h = 50 * mm, 7 * mm
     label_x = (PAGE_W - label_w) / 2
-    label_y = 4 * mm
     c.setFillColor(colors.white)
-    c.rect(label_x, label_y, label_w, label_h, fill=1, stroke=0)
+    c.rect(label_x, 4 * mm, label_w, label_h, fill=1, stroke=0)
     c.setFillColor(BLACK)
     _draw_paragraph(
         c, f"<b>{ctx['full_label']}</b>", s['cover_label'],
-        label_x, label_y + 1 * mm, label_w, label_h - 2 * mm,
+        label_x, 5 * mm, label_w, 5 * mm,
     )
 
 
