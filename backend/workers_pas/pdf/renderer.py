@@ -27,9 +27,9 @@ from .constants import BOOKLET_W, BOOKLET_H
 
 # Passport-sized booklet page
 PAGE_W, PAGE_H = BOOKLET_W, BOOKLET_H
-MARGIN_X = 8 * mm
-MARGIN_Y = 16 * mm        # bottom content margin
-TOP_MARGIN = 20 * mm      # top safe zone (content starts ≥20 mm from top edge)
+MARGIN_X = 12 * mm
+MARGIN_Y = 20 * mm        # bottom content margin
+TOP_MARGIN = 24 * mm      # top safe zone (content starts ≥24 mm from top edge)
 
 # Palette
 DEFAULT_COVER_COLOR = '#7d7d7d'
@@ -59,6 +59,10 @@ def _resolve_cover_color(book_data):
 
 def _styles():
     return {
+        'cover_title_xl': ParagraphStyle(
+            'cover_title_xl', fontName='Helvetica-Bold', fontSize=17,
+            alignment=TA_CENTER, leading=20, textColor=colors.white,
+        ),
         'cover_title_lg': ParagraphStyle(
             'cover_title_lg', fontName='Helvetica-Bold', fontSize=15,
             alignment=TA_CENTER, leading=18, textColor=colors.white,
@@ -72,9 +76,8 @@ def _styles():
             alignment=TA_CENTER, leading=11, textColor=colors.white,
         ),
         'cover_label': ParagraphStyle(
-            'cover_label', fontName='Helvetica-Bold', fontSize=10,
-            alignment=TA_CENTER, leading=12, textColor=colors.black,
-            backColor=colors.white,
+            'cover_label', fontName='Helvetica-Bold', fontSize=11.5,
+            alignment=TA_CENTER, leading=14, textColor=colors.black,
         ),
         'h1': ParagraphStyle(
             'h1', fontName='Helvetica-Bold', fontSize=9,
@@ -273,22 +276,22 @@ def _draw_cover(c, ctx):
     c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
     c.setFillColor(BLACK)
 
-    coat_size = 42 * mm
-    logo_size = 36 * mm
+    coat_size = 40 * mm
+    logo_size = 28 * mm
 
     # Coat of arms
     coat = ctx.get('coat_of_arms_path')
     if coat:
         try:
             c.drawImage(coat, (PAGE_W - coat_size) / 2,
-                        89.5 * mm,
-                        width=coat_size, height=coat_size, mask='auto',
+                        91.5 * mm,
+                        width=coat_size, height=coat_size,
                         preserveAspectRatio=True)
         except Exception:
             pass
 
     # Dynamic layout for the text block to eliminate extra spaces
-    p_title = Paragraph("<u>WORKER&rsquo;S PAS</u> - Uganda", s['cover_title_md'])
+    p_title = Paragraph("<u>Worker&rsquo;s PAS</u> - Uganda", s['cover_title_xl'])
     w_title, h_title = p_title.wrap(PAGE_W - 2 * MARGIN_X, PAGE_H)
 
     p_occ = Paragraph(ctx['occupation_name'], s['cover_title_lg'])
@@ -300,12 +303,10 @@ def _draw_cover(c, ctx):
     p_iss = Paragraph("<b>Issued by:</b>", s['cover_subtitle'])
     w_iss, h_iss = p_iss.wrap(PAGE_W - 2 * MARGIN_X, PAGE_H)
 
-    gap1, gap2, gap3 = 1.5 * mm, 3 * mm, 1.5 * mm
-    total_h = h_title + gap1 + h_occ + gap2 + h_lvl + gap3 + h_iss
+    gap1, gap2, gap3 = 1.5 * mm, 2 * mm, 1.5 * mm
 
-    avail_top = 89.5 * mm
-    avail_bottom = 54 * mm
-    current_y = ((avail_top + avail_bottom) / 2) + (total_h / 2)
+    # Anchor the text block just below the Coat of Arms to keep the gap consistently tight
+    current_y = 91.5 * mm - 2.5 * mm
 
     p_title.drawOn(c, MARGIN_X, current_y - h_title)
     current_y -= h_title + gap1
@@ -323,8 +324,8 @@ def _draw_cover(c, ctx):
     if logo:
         try:
             c.drawImage(logo,
-                        (PAGE_W - logo_size) / 2, 18 * mm,
-                        width=logo_size, height=logo_size, mask='auto',
+                        (PAGE_W - logo_size) / 2, 28 * mm,
+                        width=logo_size, height=logo_size,
                         preserveAspectRatio=True)
         except Exception:
             pass
@@ -334,18 +335,20 @@ def _draw_cover(c, ctx):
         c,
         "<i>Validation of Non-formal and Informally Acquired Skills</i>",
         s['cover_subtitle'],
-        MARGIN_X, 12 * mm, PAGE_W - 2 * MARGIN_X, 4 * mm,
+        MARGIN_X, 22 * mm, PAGE_W - 2 * MARGIN_X, 4 * mm,
     )
 
     # Book number label
-    label_w, label_h = 60 * mm, 8 * mm
+    label_w, label_h = 65 * mm, 9 * mm
     label_x = (PAGE_W - label_w) / 2
     c.setFillColor(colors.white)
-    c.rect(label_x, 2 * mm, label_w, label_h, fill=1, stroke=0)
+    c.rect(label_x, 11.5 * mm, label_w, label_h, fill=1, stroke=0)
     c.setFillColor(BLACK)
+    
+    # Nudge the frame's top edge down to properly vertically center the text
     _draw_paragraph(
         c, f"<b>{ctx['full_label']}</b>", s['cover_label'],
-        label_x, 3 * mm, label_w, 6 * mm,
+        label_x, 11.5 * mm, label_w, 7.5 * mm,
     )
 
 
@@ -426,7 +429,7 @@ def _draw_page3_biodata(c, ctx):
     if ctx.get('photo_path'):
         try:
             c.drawImage(ctx['photo_path'], photo_x, photo_y,
-                        width=photo_w, height=photo_h, mask='auto',
+                        width=photo_w, height=photo_h,
                         preserveAspectRatio=True)
         except Exception:
             pass
@@ -448,7 +451,7 @@ def _draw_page3_biodata(c, ctx):
     if ctx.get('es_signature_path'):
         try:
             c.drawImage(ctx['es_signature_path'], es_x, sig_y,
-                        width=sig_w, height=11 * mm, mask='auto',
+                        width=sig_w, height=11 * mm,
                         preserveAspectRatio=True)
         except Exception:
             pass
@@ -839,7 +842,7 @@ def _draw_back_cover(c, occupation_name, logo_path=None, cover_color=None):
     if logo_path:
         try:
             c.drawImage(logo_path, (PAGE_W - logo_h) / 2, logo_y,
-                        width=logo_h, height=logo_h, mask='auto',
+                        width=logo_h, height=logo_h,
                         preserveAspectRatio=True)
         except Exception:
             pass
