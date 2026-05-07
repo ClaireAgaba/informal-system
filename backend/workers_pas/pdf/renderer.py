@@ -14,6 +14,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
 from reportlab.lib.utils import ImageReader
+from PIL import Image
 from reportlab.pdfgen import canvas
 from reportlab.platypus import (
     BaseDocTemplate, Frame, Flowable, PageTemplate,
@@ -145,9 +146,6 @@ def _draw_paragraph(c, html, style, x, y, width, height):
 def _draw_transparent_image(c, path, x, y, width, height, bg_color=None):
     """Draw an image preserving its true 8-bit alpha channel by compositing over the background color."""
     try:
-        from PIL import Image
-        from reportlab.lib.utils import ImageReader
-        
         img = Image.open(path)
         
         # Fallback to mask='auto' for images without an alpha channel
@@ -160,7 +158,6 @@ def _draw_transparent_image(c, path, x, y, width, height, bg_color=None):
             img = img.convert('RGBA')
             
         if bg_color is None:
-            from reportlab.lib import colors
             bg_color = colors.white
             
         bg_rgb = (int(bg_color.red * 255), int(bg_color.green * 255), int(bg_color.blue * 255), 255)
@@ -451,7 +448,6 @@ def _draw_page3_biodata(c, ctx):
     c.setLineWidth(0.6)
     c.rect(photo_x, photo_y, photo_w, photo_h, fill=0, stroke=1)
     if ctx.get('photo_path'):
-        from reportlab.lib import colors
         _draw_transparent_image(c, ctx['photo_path'], photo_x, photo_y,
                                 photo_w, photo_h, bg_color=colors.white)
 
@@ -470,7 +466,6 @@ def _draw_page3_biodata(c, ctx):
     sig_y = y
 
     if ctx.get('es_signature_path'):
-        from reportlab.lib import colors
         _draw_transparent_image(c, ctx['es_signature_path'], es_x, sig_y,
                                 sig_w, 11 * mm, bg_color=colors.white)
 
@@ -858,7 +853,6 @@ def _draw_back_cover(c, occupation_name, logo_path=None, cover_color=None):
     logo_h = 24 * mm
     logo_y = PAGE_H - TOP_MARGIN - logo_h  # respect top safe zone
     if logo_path:
-        from reportlab.lib import colors
         _draw_transparent_image(c, logo_path, (PAGE_W - logo_h) / 2, logo_y,
                                 logo_h, logo_h, bg_color=colors.white)
 
