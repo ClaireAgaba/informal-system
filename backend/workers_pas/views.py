@@ -391,6 +391,10 @@ class WorkersPasBulkGenerateView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        if mode == 'split_inner':
+            # Inner pages are identical for all candidates in the occupation; we only need one.
+            candidates = candidates[:1]
+
         # Generate per-candidate PDFs (A5)
         generated = []
         for cand in candidates:
@@ -415,20 +419,45 @@ class WorkersPasBulkGenerateView(APIView):
 
         n_cand = len(generated)
 
-        # booklet_a4_print: merge all booklets into one PDF for direct printing
-        if mode == 'booklet_a4_print':
+        # booklet_a4_print and split modes: merge booklets into one PDF for direct printing
+        if mode in ('booklet_a4_print', 'split_cover', 'split_second', 'split_inner'):
             from pypdf import PdfReader, PdfWriter
             merger = PdfWriter()
+            
             for book, pdf_bytes in generated:
                 imposed = impose_booklet_a4_landscape(pdf_bytes, rotate_back_side=False)
                 reader = PdfReader(io.BytesIO(imposed))
-                for page in reader.pages:
-                    merger.add_page(page)
+                
+                if mode == 'split_cover':
+                    if len(reader.pages) >= 2:
+                        merger.add_page(reader.pages[0])
+                        merger.add_page(reader.pages[1])
+                elif mode == 'split_second':
+                    if len(reader.pages) >= 4:
+                        merger.add_page(reader.pages[2])
+                        merger.add_page(reader.pages[3])
+                elif mode == 'split_inner':
+                    for i in range(4, len(reader.pages)):
+                        merger.add_page(reader.pages[i])
+                else:  # booklet_a4_print
+                    for page in reader.pages:
+                        merger.add_page(page)
+                        
             out_buf = io.BytesIO()
             merger.write(out_buf)
             resp = HttpResponse(out_buf.getvalue(), content_type='application/pdf')
+            
+            if mode == 'split_cover':
+                filename_suffix = "Cover Papers"
+            elif mode == 'split_second':
+                filename_suffix = "Second Papers"
+            elif mode == 'split_inner':
+                filename_suffix = "Inner Papers"
+            else:
+                filename_suffix = f"{n_cand} booklets"
+                
             resp['Content-Disposition'] = (
-                f'inline; filename="{safe_base} - {n_cand} booklets.pdf"'
+                f'inline; filename="{safe_base} - {filename_suffix}.pdf"'
             )
             return resp
 
@@ -503,6 +532,10 @@ class WorkersPas2upA6PrintView(APIView):
         occupation_id = request.data.get('occupation_id')
         series_id = request.data.get('series_id')
         candidate_ids = request.data.get('candidate_ids') or []
+        mode = request.data.get('mode', 'full')
+
+        if mode == 'split_inner' and candidate_ids:
+            candidate_ids = candidate_ids[:1]
 
         if not (occupation_id and series_id):
             return Response(
@@ -531,18 +564,36 @@ class WorkersPas2upA6PrintView(APIView):
             except ValueError as exc:
                 return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Impose candidates in pairs (odd candidate gets blank bottom half).
-        pairs = [
-            (candidate_ids[i], candidate_ids[i + 1] if i + 1 < len(candidate_ids) else None)
-            for i in range(0, len(candidate_ids), 2)
-        ]
         merged_writer = PdfWriter()
-        for cid1, cid2 in pairs:
-            c1_pdf = pdf_bytes_map[cid1]
-            c2_pdf = pdf_bytes_map[cid2] if cid2 is not None else None
-            sheet = impose_2up_a6_booklet_a4(c1_pdf, c2_pdf)
-            for page in PdfReader(io.BytesIO(sheet)).pages:
-                merged_writer.add_page(page)
+        
+        if mode == 'split_inner':
+            c1_pdf = pdf_bytes_map[candidates[0].id]
+            sheet = impose_2up_a6_booklet_a4(c1_pdf, c1_pdf)
+            reader = PdfReader(io.BytesIO(sheet))
+            for i in range(4, len(reader.pages)):
+                merged_writer.add_page(reader.pages[i])
+        else:
+            pairs = [
+                (candidate_ids[i], candidate_ids[i + 1] if i + 1 < len(candidate_ids) else None)
+                for i in range(0, len(candidate_ids), 2)
+            ]
+            for cid1, cid2 in pairs:
+                c1_pdf = pdf_bytes_map[cid1]
+                c2_pdf = pdf_bytes_map[cid2] if cid2 is not None else None
+                sheet = impose_2up_a6_booklet_a4(c1_pdf, c2_pdf)
+                reader = PdfReader(io.BytesIO(sheet))
+                
+                if mode == 'split_cover':
+                    if len(reader.pages) >= 2:
+                        merged_writer.add_page(reader.pages[0])
+                        merged_writer.add_page(reader.pages[1])
+                elif mode == 'split_second':
+                    if len(reader.pages) >= 4:
+                        merged_writer.add_page(reader.pages[2])
+                        merged_writer.add_page(reader.pages[3])
+                else:  # full
+                    for page in reader.pages:
+                        merged_writer.add_page(page)
 
         out = io.BytesIO()
         merged_writer.write(out)
@@ -555,7 +606,15 @@ class WorkersPas2upA6PrintView(APIView):
         fname = ' & '.join(names[:2])
         if len(candidates) > 2:
             fname += f' +{len(candidates) - 2} more'
-        fname += ' - 2up A6 Booklet.pdf'
+            
+        if mode == 'split_cover':
+            fname += ' - Cover Papers (A4).pdf'
+        elif mode == 'split_second':
+            fname += ' - Second Papers (A4).pdf'
+        elif mode == 'split_inner':
+            fname += ' - Inner Papers Master (A4).pdf'
+        else:
+            fname += ' - 2up A6 Booklet.pdf'
 
         resp = HttpResponse(result, content_type='application/pdf')
         resp['Content-Disposition'] = f'inline; filename="{fname}"'

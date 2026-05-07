@@ -17,6 +17,7 @@ const WorkersPasGenerate = () => {
   const [loadingCandidates, setLoadingCandidates] = useState(false);
 
   const [generating, setGenerating] = useState(false);
+  const [printMode, setPrintMode] = useState('full');
 
   // Lookups
   useEffect(() => {
@@ -100,17 +101,26 @@ const WorkersPasGenerate = () => {
     try {
       const res = await apiClient.post(
         '/workers-pas/2up-a6-print/',
-        { occupation_id: occupationId, series_id: seriesId, candidate_ids: ids },
+        { occupation_id: occupationId, series_id: seriesId, candidate_ids: ids, mode: printMode },
         { responseType: 'blob' },
       );
       const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
       window.open(url, '_blank');
-      const sheets = Math.ceil(ids.length / 2);
-      toast.success(
-        ids.length === 1
+      
+      let msg = '';
+      if (printMode === 'split_cover') {
+        msg = 'Cover Papers generated successfully.';
+      } else if (printMode === 'split_second') {
+        msg = 'Second Papers generated successfully.';
+      } else if (printMode === 'split_inner') {
+        msg = 'Inner Papers master generated. You only need to print this once in bulk.';
+      } else {
+        const sheets = Math.ceil(ids.length / 2);
+        msg = ids.length === 1
           ? 'Sheet ready — print duplex, flip on long edge, cut guides show where to trim, fold and staple.'
-          : `${sheets} sheet${sheets > 1 ? 's' : ''} ready — print duplex, flip on long edge, cut along dashed guides, fold and staple.`,
-      );
+          : `${sheets} sheet${sheets > 1 ? 's' : ''} ready — print duplex, flip on long edge, cut along dashed guides, fold and staple.`;
+      }
+      toast.success(msg);
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to generate booklets.');
     } finally {
@@ -172,15 +182,28 @@ const WorkersPasGenerate = () => {
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-4 flex justify-end">
+      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium text-gray-700">Print Extraction:</label>
+          <select
+            value={printMode}
+            onChange={(e) => setPrintMode(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="full">Complete 2-up Booklets</option>
+            <option value="split_cover">Cover Papers Only (Sheet 1)</option>
+            <option value="split_second">Second Papers Only (Sheet 2)</option>
+            <option value="split_inner">Inner Papers Master (Sheets 3+)</option>
+          </select>
+        </div>
         <button
           disabled={generating || selected.size === 0}
           onClick={handlePrintBooklets}
           className="inline-flex items-center px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-          title="Print 2-up passport-size booklets — one A4 sheet per 2 candidates, cut along dashed guides, fold and staple."
+          title="Generate PDF based on the selected print extraction mode."
         >
           {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
-          Print Booklets
+          Generate PDF
         </button>
       </div>
 
