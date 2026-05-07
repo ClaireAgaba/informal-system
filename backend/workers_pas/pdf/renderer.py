@@ -149,7 +149,7 @@ def _transparent_image(path):
 
 def _draw_page_number(c, num):
     s = _styles()['page_number']
-    _draw_paragraph(c, str(num), s, 0, MARGIN_Y * 0.5, PAGE_W, 10)
+    _draw_paragraph(c, str(num), s, 0, 2 * mm, PAGE_W, 10)
 
 
 def _draw_page_header(c, occupation_name):
