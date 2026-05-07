@@ -306,10 +306,10 @@ def _draw_cover(c, ctx):
     c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
     c.setFillColor(BLACK)
 
-    coat_w = 60 * mm
-    coat_h = 32 * mm
-    logo_w = 38 * mm
-    logo_h = 34 * mm
+    coat_w = 54 * mm
+    coat_h = 29 * mm
+    logo_w = 34 * mm
+    logo_h = 30 * mm
     
     cover_bg = _resolve_cover_color(ctx)
 
@@ -317,7 +317,7 @@ def _draw_cover(c, ctx):
     coat = ctx.get('coat_of_arms_path')
     if coat:
         _draw_transparent_image(c, coat, (PAGE_W - coat_w) / 2,
-                                88 * mm, coat_w, coat_h, bg_color=cover_bg)
+                                94 * mm, coat_w, coat_h, bg_color=cover_bg)
 
     # Dynamic layout for the text block to eliminate extra spaces
     p_title = Paragraph("<u>Worker&rsquo;s PAS</u> - Uganda", s['cover_title_xl'])
@@ -335,7 +335,7 @@ def _draw_cover(c, ctx):
     gap1, gap2, gap3 = 1.5 * mm, 2 * mm, 1.5 * mm
 
     # Anchor the text block directly below the Coat of Arms (no break lines)
-    current_y = 88 * mm
+    current_y = 94 * mm
 
     p_title.drawOn(c, MARGIN_X, current_y - h_title)
     current_y -= h_title + gap1
@@ -352,7 +352,7 @@ def _draw_cover(c, ctx):
     logo = ctx.get('uvtab_logo_path')
     if logo:
         _draw_transparent_image(c, logo, (PAGE_W - logo_w) / 2,
-                                22 * mm, logo_w, logo_h, bg_color=cover_bg)
+                                26 * mm, logo_w, logo_h, bg_color=cover_bg)
 
     # Validation tagline
     _draw_paragraph(
