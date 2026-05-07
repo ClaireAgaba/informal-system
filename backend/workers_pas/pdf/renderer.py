@@ -306,16 +306,17 @@ def _draw_cover(c, ctx):
     c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
     c.setFillColor(BLACK)
 
-    coat_size = 50 * mm
-    logo_size = 28 * mm
+    coat_w = 60 * mm
+    coat_h = 32 * mm
+    logo_size = 30 * mm
     
     cover_bg = _resolve_cover_color(ctx)
 
     # Coat of arms
     coat = ctx.get('coat_of_arms_path')
     if coat:
-        _draw_transparent_image(c, coat, (PAGE_W - coat_size) / 2,
-                                81.5 * mm, coat_size, coat_size, bg_color=cover_bg)
+        _draw_transparent_image(c, coat, (PAGE_W - coat_w) / 2,
+                                88 * mm, coat_w, coat_h, bg_color=cover_bg)
 
     # Dynamic layout for the text block to eliminate extra spaces
     p_title = Paragraph("<u>Worker&rsquo;s PAS</u> - Uganda", s['cover_title_xl'])
@@ -333,7 +334,7 @@ def _draw_cover(c, ctx):
     gap1, gap2, gap3 = 1.5 * mm, 2 * mm, 1.5 * mm
 
     # Anchor the text block directly below the Coat of Arms (no break lines)
-    current_y = 81.5 * mm
+    current_y = 88 * mm
 
     p_title.drawOn(c, MARGIN_X, current_y - h_title)
     current_y -= h_title + gap1
@@ -853,12 +854,12 @@ def _draw_employment_history(c, page_num, occupation_name,
 def _draw_back_cover(c, occupation_name, logo_path=None, cover_color=None):
     s = _styles()
 
-    logo_h = 18 * mm
+    logo_h = 24 * mm
     logo_y = PAGE_H - TOP_MARGIN - logo_h  # respect top safe zone
     if logo_path:
-        cover_bg = _resolve_cover_color({'cover_color': cover_color}) if cover_color else _resolve_cover_color({})
+        from reportlab.lib import colors
         _draw_transparent_image(c, logo_path, (PAGE_W - logo_h) / 2, logo_y,
-                                logo_h, logo_h, bg_color=cover_bg)
+                                logo_h, logo_h, bg_color=colors.white)
 
     content_top = logo_y - 3 * mm
     cv = ', '.join(UVTAB_INFO['core_values'])
