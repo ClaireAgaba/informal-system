@@ -142,6 +142,19 @@ def _draw_paragraph(c, html, style, x, y, width, height):
     f.addFromList([p], c)
 
 
+def _draw_transparent_image(c, path, x, y, width, height):
+    """Draw an image preserving its true 8-bit alpha channel."""
+    try:
+        from PIL import Image
+        from reportlab.lib.utils import ImageReader
+        img = Image.open(path)
+        if img.mode != 'RGBA':
+            img = img.convert('RGBA')
+        c.drawImage(ImageReader(img), x, y, width=width, height=height, preserveAspectRatio=True)
+    except Exception:
+        pass
+
+
 
 
 def _draw_page_number(c, num):
@@ -282,13 +295,8 @@ def _draw_cover(c, ctx):
     # Coat of arms
     coat = ctx.get('coat_of_arms_path')
     if coat:
-        try:
-            c.drawImage(coat, (PAGE_W - coat_size) / 2,
-                        91.5 * mm,
-                        width=coat_size, height=coat_size,
-                        preserveAspectRatio=True)
-        except Exception:
-            pass
+        _draw_transparent_image(c, coat, (PAGE_W - coat_size) / 2,
+                                91.5 * mm, coat_size, coat_size)
 
     # Dynamic layout for the text block to eliminate extra spaces
     p_title = Paragraph("<u>Worker&rsquo;s PAS</u> - Uganda", s['cover_title_xl'])
@@ -322,13 +330,8 @@ def _draw_cover(c, ctx):
     # UVTAB logo
     logo = ctx.get('uvtab_logo_path')
     if logo:
-        try:
-            c.drawImage(logo,
-                        (PAGE_W - logo_size) / 2, 28 * mm,
-                        width=logo_size, height=logo_size,
-                        preserveAspectRatio=True)
-        except Exception:
-            pass
+        _draw_transparent_image(c, logo, (PAGE_W - logo_size) / 2,
+                                28 * mm, logo_size, logo_size)
 
     # Validation tagline
     _draw_paragraph(
@@ -427,12 +430,8 @@ def _draw_page3_biodata(c, ctx):
     c.setLineWidth(0.6)
     c.rect(photo_x, photo_y, photo_w, photo_h, fill=0, stroke=1)
     if ctx.get('photo_path'):
-        try:
-            c.drawImage(ctx['photo_path'], photo_x, photo_y,
-                        width=photo_w, height=photo_h,
-                        preserveAspectRatio=True)
-        except Exception:
-            pass
+        _draw_transparent_image(c, ctx['photo_path'], photo_x, photo_y,
+                                photo_w, photo_h)
 
     y -= 3 * mm
     _draw_paragraph(
@@ -449,12 +448,8 @@ def _draw_page3_biodata(c, ctx):
     sig_y = y
 
     if ctx.get('es_signature_path'):
-        try:
-            c.drawImage(ctx['es_signature_path'], es_x, sig_y,
-                        width=sig_w, height=11 * mm,
-                        preserveAspectRatio=True)
-        except Exception:
-            pass
+        _draw_transparent_image(c, ctx['es_signature_path'], es_x, sig_y,
+                                sig_w, 11 * mm)
 
     line_y = sig_y - 1
     c.line(es_x, line_y, es_x + sig_w, line_y)
@@ -840,12 +835,8 @@ def _draw_back_cover(c, occupation_name, logo_path=None, cover_color=None):
     logo_h = 18 * mm
     logo_y = PAGE_H - TOP_MARGIN - logo_h  # respect top safe zone
     if logo_path:
-        try:
-            c.drawImage(logo_path, (PAGE_W - logo_h) / 2, logo_y,
-                        width=logo_h, height=logo_h,
-                        preserveAspectRatio=True)
-        except Exception:
-            pass
+        _draw_transparent_image(c, logo_path, (PAGE_W - logo_h) / 2, logo_y,
+                                logo_h, logo_h)
 
     content_top = logo_y - 3 * mm
     cv = ', '.join(UVTAB_INFO['core_values'])
