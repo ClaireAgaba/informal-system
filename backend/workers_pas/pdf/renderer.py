@@ -60,20 +60,20 @@ def _resolve_cover_color(book_data):
 def _styles():
     return {
         'cover_title_lg': ParagraphStyle(
-            'cover_title_lg', fontName='Helvetica-Bold', fontSize=13,
-            alignment=TA_CENTER, leading=16, textColor=colors.white,
+            'cover_title_lg', fontName='Helvetica-Bold', fontSize=15,
+            alignment=TA_CENTER, leading=18, textColor=colors.white,
         ),
         'cover_title_md': ParagraphStyle(
-            'cover_title_md', fontName='Helvetica-Bold', fontSize=10,
-            alignment=TA_CENTER, leading=13, textColor=colors.white,
+            'cover_title_md', fontName='Helvetica-Bold', fontSize=12,
+            alignment=TA_CENTER, leading=15, textColor=colors.white,
         ),
         'cover_subtitle': ParagraphStyle(
-            'cover_subtitle', fontName='Helvetica', fontSize=7,
-            alignment=TA_CENTER, leading=9, textColor=colors.white,
+            'cover_subtitle', fontName='Helvetica', fontSize=9,
+            alignment=TA_CENTER, leading=11, textColor=colors.white,
         ),
         'cover_label': ParagraphStyle(
-            'cover_label', fontName='Helvetica-Bold', fontSize=8,
-            alignment=TA_CENTER, leading=10, textColor=colors.black,
+            'cover_label', fontName='Helvetica-Bold', fontSize=10,
+            alignment=TA_CENTER, leading=12, textColor=colors.black,
             backColor=colors.white,
         ),
         'h1': ParagraphStyle(
@@ -139,24 +139,14 @@ def _draw_paragraph(c, html, style, x, y, width, height):
     f.addFromList([p], c)
 
 
-def _transparent_image(path):
-    """Return ImageReader with near-white background made transparent via Pillow."""
-    from PIL import Image
-    img = Image.open(path).convert("RGBA")
-    pixels = img.getdata()
-    new = [(r, g, b, 0) if r > 230 and g > 230 and b > 230 else (r, g, b, a)
-           for r, g, b, a in pixels]
-    img.putdata(new)
-    buf = BytesIO()
-    img.save(buf, format='PNG')
-    buf.seek(0)
-    return ImageReader(buf)
 
 
 def _draw_page_number(c, num):
-    s = _styles()['page_number']
-    # Top-right corner — sits above the occupation header in the top margin
-    _draw_paragraph(c, str(num), s, PAGE_W - MARGIN_X - 12 * mm, PAGE_H - 12 * mm, 12 * mm, 12)
+    c.setFont('Helvetica-Bold', 8)
+    c.setFillColor(BLACK)
+    label_y = PAGE_H - TOP_MARGIN - 4 * mm
+    # Draw right-aligned at the right margin, visually aligned with the header text
+    c.drawRightString(PAGE_W - MARGIN_X, label_y + 4, str(num))
 
 
 def _draw_page_header(c, occupation_name):
@@ -283,15 +273,15 @@ def _draw_cover(c, ctx):
     c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
     c.setFillColor(BLACK)
 
-    coat_size = 28 * mm
-    logo_size = 20 * mm
+    coat_size = 38 * mm
+    logo_size = 32 * mm
 
-    # Coat of arms — 5 mm from top
+    # Coat of arms
     coat = ctx.get('coat_of_arms_path')
     if coat:
         try:
             c.drawImage(coat, (PAGE_W - coat_size) / 2,
-                        PAGE_H - 5 * mm - coat_size,
+                        94 * mm,
                         width=coat_size, height=coat_size, mask='auto',
                         preserveAspectRatio=True)
         except Exception:
@@ -300,31 +290,31 @@ def _draw_cover(c, ctx):
     # "WORKER'S PAS - Uganda"
     _draw_paragraph(
         c, "<u>WORKER&rsquo;S PAS</u> - Uganda", s['cover_title_md'],
-        MARGIN_X, 90 * mm, PAGE_W - 2 * MARGIN_X, 7 * mm,
+        MARGIN_X, 87 * mm, PAGE_W - 2 * MARGIN_X, 6 * mm,
     )
-    # Occupation name — allow 2-3 lines
+    # Occupation name
     _draw_paragraph(
         c, ctx['occupation_name'], s['cover_title_lg'],
-        MARGIN_X, 68 * mm, PAGE_W - 2 * MARGIN_X, 18 * mm,
+        MARGIN_X, 65 * mm, PAGE_W - 2 * MARGIN_X, 21 * mm,
     )
     # Level label
     _draw_paragraph(
         c, ctx['levels_label'], s['cover_subtitle'],
-        MARGIN_X, 59 * mm, PAGE_W - 2 * MARGIN_X, 6 * mm,
+        MARGIN_X, 58 * mm, PAGE_W - 2 * MARGIN_X, 5 * mm,
     )
     # "Issued by:"
     _draw_paragraph(
         c, "<b>Issued by:</b>", s['cover_subtitle'],
-        MARGIN_X, 49 * mm, PAGE_W - 2 * MARGIN_X, 5 * mm,
+        MARGIN_X, 53 * mm, PAGE_W - 2 * MARGIN_X, 4 * mm,
     )
 
-    # UVTAB logo — transparent background
+    # UVTAB logo
     logo = ctx.get('uvtab_logo_path')
     if logo:
         try:
-            c.drawImage(_transparent_image(logo),
-                        (PAGE_W - logo_size) / 2, 24 * mm,
-                        width=logo_size, height=logo_size,
+            c.drawImage(logo,
+                        (PAGE_W - logo_size) / 2, 19 * mm,
+                        width=logo_size, height=logo_size, mask='auto',
                         preserveAspectRatio=True)
         except Exception:
             pass
@@ -334,18 +324,18 @@ def _draw_cover(c, ctx):
         c,
         "<i>Validation of Non-formal and Informally Acquired Skills</i>",
         s['cover_subtitle'],
-        MARGIN_X, 14 * mm, PAGE_W - 2 * MARGIN_X, 5 * mm,
+        MARGIN_X, 13 * mm, PAGE_W - 2 * MARGIN_X, 4 * mm,
     )
 
-    # Book number label — white box at bottom
-    label_w, label_h = 50 * mm, 7 * mm
+    # Book number label
+    label_w, label_h = 60 * mm, 8 * mm
     label_x = (PAGE_W - label_w) / 2
     c.setFillColor(colors.white)
-    c.rect(label_x, 4 * mm, label_w, label_h, fill=1, stroke=0)
+    c.rect(label_x, 2 * mm, label_w, label_h, fill=1, stroke=0)
     c.setFillColor(BLACK)
     _draw_paragraph(
         c, f"<b>{ctx['full_label']}</b>", s['cover_label'],
-        label_x, 5 * mm, label_w, 5 * mm,
+        label_x, 3 * mm, label_w, 6 * mm,
     )
 
 
