@@ -142,17 +142,34 @@ def _draw_paragraph(c, html, style, x, y, width, height):
     f.addFromList([p], c)
 
 
-def _draw_transparent_image(c, path, x, y, width, height):
-    """Draw an image preserving its true 8-bit alpha channel."""
+def _draw_transparent_image(c, path, x, y, width, height, bg_color=None):
+    """Draw an image preserving its true 8-bit alpha channel by compositing over the background color."""
     try:
         from PIL import Image
         from reportlab.lib.utils import ImageReader
+        
         img = Image.open(path)
+        
+        # Fallback to mask='auto' for images without an alpha channel
+        if img.mode not in ('RGBA', 'LA', 'P') or (img.mode == 'P' and 'transparency' not in img.info):
+            c.drawImage(path, x, y, width=width, height=height, preserveAspectRatio=True, mask='auto')
+            return
+
+        # Image has an alpha channel. Composite it over the target background color for perfect blending.
         if img.mode != 'RGBA':
             img = img.convert('RGBA')
-        c.drawImage(ImageReader(img), x, y, width=width, height=height, preserveAspectRatio=True)
-    except Exception:
-        pass
+            
+        if bg_color is None:
+            from reportlab.lib import colors
+            bg_color = colors.white
+            
+        bg_rgb = (int(bg_color.red * 255), int(bg_color.green * 255), int(bg_color.blue * 255), 255)
+        bg = Image.new('RGBA', img.size, bg_rgb)
+        
+        composited = Image.alpha_composite(bg, img)
+        c.drawImage(ImageReader(composited.convert('RGB')), x, y, width=width, height=height, preserveAspectRatio=True)
+    except Exception as e:
+        print(f"Error drawing composite image: {e}")
 
 
 
@@ -289,14 +306,16 @@ def _draw_cover(c, ctx):
     c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
     c.setFillColor(BLACK)
 
-    coat_size = 40 * mm
+    coat_size = 50 * mm
     logo_size = 28 * mm
+    
+    cover_bg = _resolve_cover_color(ctx)
 
     # Coat of arms
     coat = ctx.get('coat_of_arms_path')
     if coat:
         _draw_transparent_image(c, coat, (PAGE_W - coat_size) / 2,
-                                91.5 * mm, coat_size, coat_size)
+                                81.5 * mm, coat_size, coat_size, bg_color=cover_bg)
 
     # Dynamic layout for the text block to eliminate extra spaces
     p_title = Paragraph("<u>Worker&rsquo;s PAS</u> - Uganda", s['cover_title_xl'])
@@ -313,8 +332,8 @@ def _draw_cover(c, ctx):
 
     gap1, gap2, gap3 = 1.5 * mm, 2 * mm, 1.5 * mm
 
-    # Anchor the text block just below the Coat of Arms to keep the gap consistently tight
-    current_y = 91.5 * mm - 2.5 * mm
+    # Anchor the text block directly below the Coat of Arms (no break lines)
+    current_y = 81.5 * mm
 
     p_title.drawOn(c, MARGIN_X, current_y - h_title)
     current_y -= h_title + gap1
@@ -331,7 +350,7 @@ def _draw_cover(c, ctx):
     logo = ctx.get('uvtab_logo_path')
     if logo:
         _draw_transparent_image(c, logo, (PAGE_W - logo_size) / 2,
-                                28 * mm, logo_size, logo_size)
+                                28 * mm, logo_size, logo_size, bg_color=cover_bg)
 
     # Validation tagline
     _draw_paragraph(
@@ -430,8 +449,9 @@ def _draw_page3_biodata(c, ctx):
     c.setLineWidth(0.6)
     c.rect(photo_x, photo_y, photo_w, photo_h, fill=0, stroke=1)
     if ctx.get('photo_path'):
+        from reportlab.lib import colors
         _draw_transparent_image(c, ctx['photo_path'], photo_x, photo_y,
-                                photo_w, photo_h)
+                                photo_w, photo_h, bg_color=colors.white)
 
     y -= 3 * mm
     _draw_paragraph(
@@ -448,8 +468,9 @@ def _draw_page3_biodata(c, ctx):
     sig_y = y
 
     if ctx.get('es_signature_path'):
+        from reportlab.lib import colors
         _draw_transparent_image(c, ctx['es_signature_path'], es_x, sig_y,
-                                sig_w, 11 * mm)
+                                sig_w, 11 * mm, bg_color=colors.white)
 
     line_y = sig_y - 1
     c.line(es_x, line_y, es_x + sig_w, line_y)
@@ -835,8 +856,9 @@ def _draw_back_cover(c, occupation_name, logo_path=None, cover_color=None):
     logo_h = 18 * mm
     logo_y = PAGE_H - TOP_MARGIN - logo_h  # respect top safe zone
     if logo_path:
+        cover_bg = _resolve_cover_color({'cover_color': cover_color}) if cover_color else _resolve_cover_color({})
         _draw_transparent_image(c, logo_path, (PAGE_W - logo_h) / 2, logo_y,
-                                logo_h, logo_h)
+                                logo_h, logo_h, bg_color=cover_bg)
 
     content_top = logo_y - 3 * mm
     cv = ', '.join(UVTAB_INFO['core_values'])
