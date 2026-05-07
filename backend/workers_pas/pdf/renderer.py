@@ -273,47 +273,57 @@ def _draw_cover(c, ctx):
     c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
     c.setFillColor(BLACK)
 
-    coat_size = 38 * mm
-    logo_size = 32 * mm
+    coat_size = 42 * mm
+    logo_size = 36 * mm
 
     # Coat of arms
     coat = ctx.get('coat_of_arms_path')
     if coat:
         try:
             c.drawImage(coat, (PAGE_W - coat_size) / 2,
-                        94 * mm,
+                        89.5 * mm,
                         width=coat_size, height=coat_size, mask='auto',
                         preserveAspectRatio=True)
         except Exception:
             pass
 
-    # "WORKER'S PAS - Uganda"
-    _draw_paragraph(
-        c, "<u>WORKER&rsquo;S PAS</u> - Uganda", s['cover_title_md'],
-        MARGIN_X, 87 * mm, PAGE_W - 2 * MARGIN_X, 6 * mm,
-    )
-    # Occupation name
-    _draw_paragraph(
-        c, ctx['occupation_name'], s['cover_title_lg'],
-        MARGIN_X, 65 * mm, PAGE_W - 2 * MARGIN_X, 21 * mm,
-    )
-    # Level label
-    _draw_paragraph(
-        c, ctx['levels_label'], s['cover_subtitle'],
-        MARGIN_X, 58 * mm, PAGE_W - 2 * MARGIN_X, 5 * mm,
-    )
-    # "Issued by:"
-    _draw_paragraph(
-        c, "<b>Issued by:</b>", s['cover_subtitle'],
-        MARGIN_X, 53 * mm, PAGE_W - 2 * MARGIN_X, 4 * mm,
-    )
+    # Dynamic layout for the text block to eliminate extra spaces
+    p_title = Paragraph("<u>WORKER&rsquo;S PAS</u> - Uganda", s['cover_title_md'])
+    w_title, h_title = p_title.wrap(PAGE_W - 2 * MARGIN_X, PAGE_H)
+
+    p_occ = Paragraph(ctx['occupation_name'], s['cover_title_lg'])
+    w_occ, h_occ = p_occ.wrap(PAGE_W - 2 * MARGIN_X, PAGE_H)
+
+    p_lvl = Paragraph(ctx['levels_label'], s['cover_subtitle'])
+    w_lvl, h_lvl = p_lvl.wrap(PAGE_W - 2 * MARGIN_X, PAGE_H)
+
+    p_iss = Paragraph("<b>Issued by:</b>", s['cover_subtitle'])
+    w_iss, h_iss = p_iss.wrap(PAGE_W - 2 * MARGIN_X, PAGE_H)
+
+    gap1, gap2, gap3 = 1.5 * mm, 3 * mm, 1.5 * mm
+    total_h = h_title + gap1 + h_occ + gap2 + h_lvl + gap3 + h_iss
+
+    avail_top = 89.5 * mm
+    avail_bottom = 54 * mm
+    current_y = ((avail_top + avail_bottom) / 2) + (total_h / 2)
+
+    p_title.drawOn(c, MARGIN_X, current_y - h_title)
+    current_y -= h_title + gap1
+
+    p_occ.drawOn(c, MARGIN_X, current_y - h_occ)
+    current_y -= h_occ + gap2
+
+    p_lvl.drawOn(c, MARGIN_X, current_y - h_lvl)
+    current_y -= h_lvl + gap3
+
+    p_iss.drawOn(c, MARGIN_X, current_y - h_iss)
 
     # UVTAB logo
     logo = ctx.get('uvtab_logo_path')
     if logo:
         try:
             c.drawImage(logo,
-                        (PAGE_W - logo_size) / 2, 19 * mm,
+                        (PAGE_W - logo_size) / 2, 18 * mm,
                         width=logo_size, height=logo_size, mask='auto',
                         preserveAspectRatio=True)
         except Exception:
@@ -324,7 +334,7 @@ def _draw_cover(c, ctx):
         c,
         "<i>Validation of Non-formal and Informally Acquired Skills</i>",
         s['cover_subtitle'],
-        MARGIN_X, 13 * mm, PAGE_W - 2 * MARGIN_X, 4 * mm,
+        MARGIN_X, 12 * mm, PAGE_W - 2 * MARGIN_X, 4 * mm,
     )
 
     # Book number label
