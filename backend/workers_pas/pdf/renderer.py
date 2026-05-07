@@ -1,14 +1,14 @@
 """
 Worker's PAS booklet PDF renderer.
 
-The booklet is rendered at A5 portrait. Page composition is fixed and driven
-by the candidate, occupation, levels, and modules supplied by the caller.
+The booklet is rendered at passport/pocket size (100 × 118.5 mm). When imposed
+2-up on A4 and cut along the guide lines, two passport-sized booklets are
+produced per A4 sheet.
 """
 from io import BytesIO
 from datetime import date
 
 import qrcode
-from reportlab.lib.pagesizes import A5
 from reportlab.lib.units import mm
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
@@ -22,10 +22,12 @@ from reportlab.platypus.flowables import HRFlowable
 from pypdf import PdfReader, PdfWriter
 from reportlab.lib import colors
 
-# A5 portrait dimensions in points
-PAGE_W, PAGE_H = A5
-MARGIN_X = 15 * mm
-MARGIN_Y = 20 * mm
+from .constants import BOOKLET_W, BOOKLET_H
+
+# Passport-sized booklet page
+PAGE_W, PAGE_H = BOOKLET_W, BOOKLET_H
+MARGIN_X = 8 * mm
+MARGIN_Y = 10 * mm
 
 # Palette
 DEFAULT_COVER_COLOR = '#7d7d7d'
@@ -56,65 +58,65 @@ def _resolve_cover_color(book_data):
 def _styles():
     return {
         'cover_title_lg': ParagraphStyle(
-            'cover_title_lg', fontName='Helvetica-Bold', fontSize=22,
-            alignment=TA_CENTER, leading=26, textColor=colors.white,
+            'cover_title_lg', fontName='Helvetica-Bold', fontSize=13,
+            alignment=TA_CENTER, leading=16, textColor=colors.white,
         ),
         'cover_title_md': ParagraphStyle(
-            'cover_title_md', fontName='Helvetica-Bold', fontSize=16,
-            alignment=TA_CENTER, leading=20, textColor=colors.white,
-        ),
-        'cover_subtitle': ParagraphStyle(
-            'cover_subtitle', fontName='Helvetica', fontSize=10,
+            'cover_title_md', fontName='Helvetica-Bold', fontSize=10,
             alignment=TA_CENTER, leading=13, textColor=colors.white,
         ),
+        'cover_subtitle': ParagraphStyle(
+            'cover_subtitle', fontName='Helvetica', fontSize=7,
+            alignment=TA_CENTER, leading=9, textColor=colors.white,
+        ),
         'cover_label': ParagraphStyle(
-            'cover_label', fontName='Helvetica-Bold', fontSize=11,
-            alignment=TA_CENTER, leading=14, textColor=colors.black,
+            'cover_label', fontName='Helvetica-Bold', fontSize=8,
+            alignment=TA_CENTER, leading=10, textColor=colors.black,
             backColor=colors.white,
         ),
         'h1': ParagraphStyle(
-            'h1', fontName='Helvetica-Bold', fontSize=12,
-            alignment=TA_CENTER, leading=15,
+            'h1', fontName='Helvetica-Bold', fontSize=9,
+            alignment=TA_CENTER, leading=11,
         ),
         'h2': ParagraphStyle(
-            'h2', fontName='Helvetica-Bold', fontSize=11,
-            alignment=TA_LEFT, leading=14,
+            'h2', fontName='Helvetica-Bold', fontSize=8,
+            alignment=TA_LEFT, leading=10,
         ),
         'body': ParagraphStyle(
-            'body', fontName='Helvetica', fontSize=9.5,
-            alignment=TA_LEFT, leading=12,
+            'body', fontName='Helvetica', fontSize=7.5,
+            alignment=TA_LEFT, leading=9,
         ),
         'body_center': ParagraphStyle(
-            'body_center', fontName='Helvetica', fontSize=9.5,
-            alignment=TA_CENTER, leading=12,
+            'body_center', fontName='Helvetica', fontSize=7.5,
+            alignment=TA_CENTER, leading=9,
         ),
         'body_italic': ParagraphStyle(
-            'body_italic', fontName='Helvetica-Oblique', fontSize=9.5,
-            alignment=TA_LEFT, leading=12,
+            'body_italic', fontName='Helvetica-Oblique', fontSize=7.5,
+            alignment=TA_LEFT, leading=9,
         ),
         'body_italic_center': ParagraphStyle(
-            'body_italic_center', fontName='Helvetica-Oblique', fontSize=9.5,
-            alignment=TA_CENTER, leading=12,
+            'body_italic_center', fontName='Helvetica-Oblique', fontSize=7.5,
+            alignment=TA_CENTER, leading=9,
         ),
         'body_justify': ParagraphStyle(
-            'body_justify', fontName='Helvetica', fontSize=9.5,
-            alignment=TA_JUSTIFY, leading=13,
+            'body_justify', fontName='Helvetica', fontSize=7.5,
+            alignment=TA_JUSTIFY, leading=9,
         ),
         'h1_center': ParagraphStyle(
-            'h1_center', fontName='Helvetica-Bold', fontSize=12,
-            alignment=TA_CENTER, leading=15,
+            'h1_center', fontName='Helvetica-Bold', fontSize=9,
+            alignment=TA_CENTER, leading=11,
         ),
         'h2_center': ParagraphStyle(
-            'h2_center', fontName='Helvetica-Bold', fontSize=11,
-            alignment=TA_CENTER, leading=14,
+            'h2_center', fontName='Helvetica-Bold', fontSize=8,
+            alignment=TA_CENTER, leading=10,
         ),
         'small': ParagraphStyle(
-            'small', fontName='Helvetica', fontSize=8,
-            alignment=TA_LEFT, leading=11,
+            'small', fontName='Helvetica', fontSize=6.5,
+            alignment=TA_LEFT, leading=8,
         ),
         'page_number': ParagraphStyle(
-            'page_number', fontName='Helvetica', fontSize=9,
-            alignment=TA_CENTER, leading=11,
+            'page_number', fontName='Helvetica', fontSize=7,
+            alignment=TA_CENTER, leading=9,
         ),
     }
 
@@ -131,9 +133,23 @@ def _draw_paragraph(c, html, style, x, y, width, height):
     f.addFromList([p], c)
 
 
+def _transparent_image(path):
+    """Return ImageReader with near-white background made transparent via Pillow."""
+    from PIL import Image
+    img = Image.open(path).convert("RGBA")
+    pixels = img.getdata()
+    new = [(r, g, b, 0) if r > 230 and g > 230 and b > 230 else (r, g, b, a)
+           for r, g, b, a in pixels]
+    img.putdata(new)
+    buf = BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return ImageReader(buf)
+
+
 def _draw_page_number(c, num):
     s = _styles()['page_number']
-    _draw_paragraph(c, str(num), s, 0, MARGIN_Y * 0.65, PAGE_W, 12)
+    _draw_paragraph(c, str(num), s, 0, MARGIN_Y * 0.5, PAGE_W, 10)
 
 
 def _draw_page_header(c, occupation_name):
@@ -247,90 +263,103 @@ UVTAB_INFO = {
 # -----------------------------------------------------------------------------
 
 def _draw_cover(c, ctx):
-    """Page 1 - Cover."""
+    """Page 1 - Cover (100 × 118.5 mm passport-sized layout)."""
     s = _styles()
-    # Per-occupation coloured background
     c.setFillColor(_resolve_cover_color(ctx))
     c.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
     c.setFillColor(BLACK)
 
-    # Coat of arms (try to load)
+    coat_size = 28 * mm
+    logo_size = 20 * mm
+
+    # Coat of arms — near top
     coat = ctx.get('coat_of_arms_path')
     if coat:
         try:
-            c.drawImage(coat, (PAGE_W - 30 * mm) / 2, PAGE_H - 50 * mm,
-                        width=30 * mm, height=30 * mm, mask='auto',
+            c.drawImage(coat, (PAGE_W - coat_size) / 2,
+                        PAGE_H - 5 * mm - coat_size,
+                        width=coat_size, height=coat_size, mask='auto',
                         preserveAspectRatio=True)
         except Exception:
             pass
 
-    # WORKER'S PAS - Uganda
+    # "WORKER'S PAS - Uganda" — just below coat
     _draw_paragraph(
         c, "<u>WORKER&rsquo;S PAS</u> - Uganda", s['cover_title_md'],
-        MARGIN_X, PAGE_H - 70 * mm, PAGE_W - 2 * MARGIN_X, 20,
+        MARGIN_X, PAGE_H - 5 * mm - coat_size - 8 * mm,
+        PAGE_W - 2 * MARGIN_X, 8 * mm,
     )
-    # Occupation name (large) – allow up to ~3 lines for long names
+    # Occupation name — allow 2-3 lines
     _draw_paragraph(
         c, ctx['occupation_name'], s['cover_title_lg'],
-        MARGIN_X, PAGE_H - 100 * mm, PAGE_W - 2 * MARGIN_X, 26 * mm,
+        MARGIN_X, PAGE_H - 5 * mm - coat_size - 26 * mm,
+        PAGE_W - 2 * MARGIN_X, 16 * mm,
     )
-    # LEVEL I & II
+    # Level label
     _draw_paragraph(
         c, ctx['levels_label'], s['cover_subtitle'],
-        MARGIN_X, PAGE_H - 106 * mm, PAGE_W - 2 * MARGIN_X, 16,
+        MARGIN_X, PAGE_H - 5 * mm - coat_size - 32 * mm,
+        PAGE_W - 2 * MARGIN_X, 6 * mm,
     )
 
-    # UVTAB logo
+    # Issued by section
+    _draw_paragraph(
+        c, "<b>Issued by:</b>", s['cover_subtitle'],
+        MARGIN_X, 54 * mm, PAGE_W - 2 * MARGIN_X, 5 * mm,
+    )
+
+    # UVTAB logo — transparent background
     logo = ctx.get('uvtab_logo_path')
     if logo:
         try:
-            c.drawImage(logo, (PAGE_W - 30 * mm) / 2, PAGE_H - 135 * mm,
-                        width=30 * mm, height=30 * mm, mask='auto',
+            c.drawImage(_transparent_image(logo),
+                        (PAGE_W - logo_size) / 2, 32 * mm,
+                        width=logo_size, height=logo_size,
                         preserveAspectRatio=True)
         except Exception:
             pass
 
     _draw_paragraph(
-        c, "Uganda Vocational and Technical<br/>Assessment Board",
+        c, "Directorate of Industrial Training (DIT)<br/>"
+           "Ministry of Education &amp; Sports",
         s['cover_subtitle'],
-        MARGIN_X, PAGE_H - 152 * mm, PAGE_W - 2 * MARGIN_X, 28,
+        MARGIN_X, 21 * mm, PAGE_W - 2 * MARGIN_X, 11 * mm,
     )
     _draw_paragraph(
-        c, "<i>Validation of Informally Acquired Skills</i>",
+        c, "<i>Validation of Non-formal and Informally Acquired Skills</i>",
         s['cover_subtitle'],
-        MARGIN_X, PAGE_H - 168 * mm, PAGE_W - 2 * MARGIN_X, 14,
+        MARGIN_X, 15 * mm, PAGE_W - 2 * MARGIN_X, 6 * mm,
     )
 
-    # Book number label - white box near bottom
-    label_w, label_h = 70 * mm, 10 * mm
+    # Book number label — white box at bottom
+    label_w, label_h = 50 * mm, 7 * mm
     label_x = (PAGE_W - label_w) / 2
-    label_y = 25 * mm
+    label_y = 4 * mm
     c.setFillColor(colors.white)
     c.rect(label_x, label_y, label_w, label_h, fill=1, stroke=0)
     c.setFillColor(BLACK)
     _draw_paragraph(
         c, f"<b>{ctx['full_label']}</b>", s['cover_label'],
-        label_x, label_y + 1.5 * mm, label_w, label_h - 3 * mm,
+        label_x, label_y + 1 * mm, label_w, label_h - 2 * mm,
     )
 
 
 def _draw_page2_intro(c, ctx):
     s = _styles()
     _draw_page_header(c, ctx['occupation_name'])
-    # Bordered box
-    box_x, box_y = 18 * mm, 30 * mm
-    box_w, box_h = PAGE_W - 36 * mm, HEADER_BOTTOM_Y - box_y
+    box_x, box_y = 12 * mm, 14 * mm
+    box_w, box_h = PAGE_W - 24 * mm, HEADER_BOTTOM_Y - box_y
     c.setStrokeColor(BLACK)
     c.setLineWidth(0.5)
     c.rect(box_x, box_y, box_w, box_h, fill=0, stroke=1)
-    c.rect(box_x + 1.5 * mm, box_y + 1.5 * mm,
-           box_w - 3 * mm, box_h - 3 * mm, fill=0, stroke=1)
+    c.rect(box_x + 1 * mm, box_y + 1 * mm,
+           box_w - 2 * mm, box_h - 2 * mm, fill=0, stroke=1)
 
     _draw_paragraph(
         c, _hardcoded_intro_text(ctx['occupation_name']),
         s['body_italic_center'],
-        box_x + 6 * mm, box_y + 30 * mm,
-        box_w - 12 * mm, box_h - 60 * mm,
+        box_x + 3 * mm, box_y + 16 * mm,
+        box_w - 6 * mm, box_h - 28 * mm,
     )
 
     _draw_paragraph(
@@ -338,8 +367,8 @@ def _draw_page2_intro(c, ctx):
         "For verification of authenticity of holder, please visit data base at:<br/>"
         "<b>www.uvtab.go.ug</b>",
         s['body_center'],
-        box_x + 6 * mm, box_y + 6 * mm,
-        box_w - 12 * mm, 20 * mm,
+        box_x + 3 * mm, box_y + 3 * mm,
+        box_w - 6 * mm, 13 * mm,
     )
 
     _draw_page_number(c, 2)
@@ -349,28 +378,26 @@ def _draw_page3_biodata(c, ctx):
     s = _styles()
     _draw_page_header(c, ctx['occupation_name'])
 
-    # Top section: "Worker's PAS issued to:"
-    y = HEADER_BOTTOM_Y - 8 * mm
+    y = HEADER_BOTTOM_Y - 5 * mm
     _draw_paragraph(
         c, "<b>Worker&rsquo;s PAS issued to:</b>", s['body'],
-        MARGIN_X, y, 90 * mm, 12,
+        MARGIN_X, y, 60 * mm, 10,
     )
-    y -= 12 * mm
+    y -= 7 * mm
 
-    # Name prefix (Mr. / Mrs. / Ms.) then the candidate name on a line.
     _draw_paragraph(
         c, f"<b>Mr. / Mrs. / Ms.:</b> &nbsp;{ctx['candidate_name']}", s['body'],
-        MARGIN_X, y, 100 * mm, 14,
+        MARGIN_X, y, 65 * mm, 10,
     )
     c.setLineWidth(0.5)
-    c.line(MARGIN_X, y - 1, MARGIN_X + 100 * mm, y - 1)
-    y -= 14 * mm
+    c.line(MARGIN_X, y - 1, MARGIN_X + 65 * mm, y - 1)
+    y -= 8 * mm
 
     _draw_paragraph(
         c, f"<b>Date of birth:</b> &nbsp;<u>{ctx['date_of_birth']}</u>", s['body'],
-        MARGIN_X, y, 80 * mm, 12,
+        MARGIN_X, y, 55 * mm, 10,
     )
-    y -= 14 * mm
+    y -= 8 * mm
 
     fields = [
         ('GENDER', ctx.get('gender', '')),
@@ -380,14 +407,14 @@ def _draw_page3_biodata(c, ctx):
     for label, value in fields:
         _draw_paragraph(
             c, f"<b>{label}:</b> {value}", s['body'],
-            MARGIN_X, y, 90 * mm, 12,
+            MARGIN_X, y, 60 * mm, 10,
         )
-        y -= 10 * mm
+        y -= 6 * mm
 
     # Photo placeholder (top right)
-    photo_x = PAGE_W - MARGIN_X - 30 * mm
-    photo_y = HEADER_BOTTOM_Y - 65 * mm
-    photo_w = photo_h = 30 * mm
+    photo_w = photo_h = 20 * mm
+    photo_x = PAGE_W - MARGIN_X - photo_w
+    photo_y = HEADER_BOTTOM_Y - 38 * mm
     c.setStrokeColor(BLACK)
     c.setLineWidth(0.6)
     c.rect(photo_x, photo_y, photo_w, photo_h, fill=0, stroke=1)
@@ -399,26 +426,24 @@ def _draw_page3_biodata(c, ctx):
         except Exception:
             pass
 
-    # Issued by section
-    y -= 6 * mm
+    y -= 3 * mm
     _draw_paragraph(
         c,
         "<b>Worker&rsquo;s PAS issued by</b><br/>"
         "Uganda Vocational and Technical Assessment Board (UVTAB)",
         s['body'],
-        MARGIN_X, y - 12 * mm, PAGE_W - 2 * MARGIN_X, 18 * mm,
+        MARGIN_X, y - 7 * mm, PAGE_W - 2 * MARGIN_X, 10 * mm,
     )
-    y -= 34 * mm
+    y -= 20 * mm
 
-    # Executive Secretary signature (centred).
-    sig_w = 70 * mm
+    sig_w = 47 * mm
     es_x = (PAGE_W - sig_w) / 2
     sig_y = y
 
     if ctx.get('es_signature_path'):
         try:
             c.drawImage(ctx['es_signature_path'], es_x, sig_y,
-                        width=sig_w, height=16 * mm, mask='auto',
+                        width=sig_w, height=11 * mm, mask='auto',
                         preserveAspectRatio=True)
         except Exception:
             pass
@@ -427,13 +452,13 @@ def _draw_page3_biodata(c, ctx):
     c.line(es_x, line_y, es_x + sig_w, line_y)
     _draw_paragraph(
         c, "<b>Executive Secretary</b>", s['body_center'],
-        es_x, line_y - 6 * mm, sig_w, 12,
+        es_x, line_y - 4 * mm, sig_w, 10,
     )
 
     _draw_paragraph(
         c, "<i>For changes of employer or assessor please see employment history</i>",
         s['small'],
-        MARGIN_X, line_y - 20 * mm, PAGE_W - 2 * MARGIN_X, 12 * mm,
+        MARGIN_X, line_y - 11 * mm, PAGE_W - 2 * MARGIN_X, 8 * mm,
     )
     _draw_page_number(c, 3)
 
@@ -462,7 +487,7 @@ def _draw_page4_levels(c, ctx):
     content_w = PAGE_W - 2 * MARGIN_X
 
     # Centred heading (three lines)
-    heading_h = 22 * mm
+    heading_h = 14 * mm
     heading_y = HEADER_BOTTOM_Y - heading_h
     _draw_paragraph(
         c,
@@ -473,28 +498,28 @@ def _draw_page4_levels(c, ctx):
     )
 
     # "Information" sub-heading
-    sub_y = heading_y - 8 * mm
+    sub_y = heading_y - 5 * mm
     _draw_paragraph(
         c, "Information", s['h2_center'],
-        MARGIN_X, sub_y, content_w, 14,
+        MARGIN_X, sub_y, content_w, 10,
     )
 
-    # Intro paragraph (left-aligned; image shows ragged right)
+    # Intro paragraph
     intro = (
         "The holder of this Worker&rsquo;s PAS has practiced the skills, "
         "as far as they have been certified, on the following levels:"
     )
     intro_p = Paragraph(intro, s['body'])
-    _, intro_h = intro_p.wrap(content_w, 40 * mm)
-    intro_top = sub_y - 4 * mm
+    _, intro_h = intro_p.wrap(content_w, 25 * mm)
+    intro_top = sub_y - 3 * mm
     intro_p.drawOn(c, MARGIN_X, intro_top - intro_h)
 
     # Ordered-list items
-    marker_col_w = 12 * mm
-    body_col_x = MARGIN_X + marker_col_w + 3 * mm
+    marker_col_w = 8 * mm
+    body_col_x = MARGIN_X + marker_col_w + 2 * mm
     body_col_w = PAGE_W - MARGIN_X - body_col_x
 
-    y_cursor = intro_top - intro_h - 8 * mm
+    y_cursor = intro_top - intro_h - 5 * mm
     for idx, lvl in enumerate(ctx['levels']):
         label = f"({letters[idx] if idx < len(letters) else str(idx + 1)})"
         desc = (lvl.get('level_description') or '').replace('\n', '<br/>')
@@ -513,7 +538,7 @@ def _draw_page4_levels(c, ctx):
         )
         item_p.drawOn(c, body_col_x, y_cursor - item_h)
 
-        y_cursor -= item_h + 6 * mm
+        y_cursor -= item_h + 4 * mm
 
     _draw_page_number(c, 4)
 
@@ -532,10 +557,10 @@ def _draw_page5_certified(c, ctx):
     _draw_page_header(c, ctx['occupation_name'])
 
     content_w = PAGE_W - 2 * MARGIN_X
-    indent = 5 * mm
+    indent = 3 * mm
     block_w = content_w - indent
 
-    y = HEADER_BOTTOM_Y - 8 * mm
+    y = HEADER_BOTTOM_Y - 5 * mm
 
     def _flow(html, style, width, x):
         """Draw a paragraph starting at current ``y`` and advance ``y``."""
@@ -547,7 +572,7 @@ def _draw_page5_certified(c, ctx):
 
     # Main heading
     _flow("<b>Certified training on the job</b>", s['body'], content_w, MARGIN_X)
-    y -= 2 * mm
+    y -= 1 * mm
 
     # Intro paragraph (justified)
     _flow(
@@ -556,7 +581,7 @@ def _draw_page5_certified(c, ctx):
         "qualifications obtained during the holder&rsquo;s period of practice.",
         s['body_justify'], content_w, MARGIN_X,
     )
-    y -= 4 * mm
+    y -= 2 * mm
 
     blocks = [
         ("For the assessor",
@@ -574,9 +599,9 @@ def _draw_page5_certified(c, ctx):
     ]
     for title, body in blocks:
         _flow(f"<b><i>{title}</i></b>", s['body'], block_w, MARGIN_X + indent)
-        y -= 1 * mm
+        y -= 0.5 * mm
         _flow(body, s['body_justify'], block_w, MARGIN_X + indent)
-        y -= 4 * mm
+        y -= 2 * mm
 
     _draw_page_number(c, 5)
 
@@ -599,8 +624,8 @@ def _draw_page6_sections(c, ctx):
     parts.append(ACHIEVEMENT_TAIL_TEXT)
     _draw_paragraph(
         c, ''.join(parts), s['body'],
-        MARGIN_X, 18 * mm, PAGE_W - 2 * MARGIN_X,
-        HEADER_BOTTOM_Y - 18 * mm,
+        MARGIN_X, 10 * mm, PAGE_W - 2 * MARGIN_X,
+        HEADER_BOTTOM_Y - 10 * mm,
     )
     _draw_page_number(c, 6)
 
@@ -716,9 +741,10 @@ def _draw_grading(c, page_num, occupation_name):
     rows = ["<b>Score&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Grade</b>"]
     for score, grade in GRADING_ROWS:
         rows.append(f"{score}&nbsp;&nbsp;&nbsp;&nbsp;{grade}")
+    # Frame bottom at HEADER_BOTTOM_Y-50mm, height 40mm → text starts just below heading
     _draw_paragraph(
         c, '<br/>'.join(rows), s['body'],
-        MARGIN_X, PAGE_H - 95 * mm, 60 * mm, 60 * mm,
+        MARGIN_X, HEADER_BOTTOM_Y - 50 * mm, 40 * mm, 40 * mm,
     )
 
     qual_lines = []
@@ -726,83 +752,72 @@ def _draw_grading(c, page_num, occupation_name):
         qual_lines.append(f"{score} &nbsp;-&nbsp; {qual}")
     _draw_paragraph(
         c, '<br/><br/>'.join(qual_lines), s['body'],
-        MARGIN_X, PAGE_H - 130 * mm, PAGE_W - 2 * MARGIN_X, 30 * mm,
+        MARGIN_X, MARGIN_Y, PAGE_W - 2 * MARGIN_X, 25 * mm,
     )
     _draw_page_number(c, page_num)
 
 
 def _draw_employment_history(c, page_num, occupation_name,
-                             rows_per_page=5, page_index=0):
+                             rows_per_page=4, page_index=0):
     s = _styles()
     _draw_page_header(c, occupation_name)
     _draw_paragraph(
         c, "<b>Employment History</b>", s['h2'],
-        MARGIN_X, HEADER_BOTTOM_Y - 6 * mm, 80 * mm, 14,
+        MARGIN_X, HEADER_BOTTOM_Y - 6 * mm, 60 * mm, 14,
     )
     _draw_paragraph(
         c, "<i>STAMP</i>", s['h2'],
-        PAGE_W - MARGIN_X - 25 * mm, HEADER_BOTTOM_Y - 6 * mm, 25 * mm, 14,
+        PAGE_W - MARGIN_X - 18 * mm, HEADER_BOTTOM_Y - 6 * mm, 18 * mm, 14,
     )
 
     y = HEADER_BOTTOM_Y - 14 * mm
-    bottom_y = 25 * mm
+    bottom_y = 14 * mm
     box_h = (y - bottom_y) / rows_per_page
 
-    # Geometry for labels and the writing lines beside them.
     label_x = MARGIN_X + 1 * mm
-    line_right = PAGE_W - MARGIN_X - 22 * mm  # leave room for STAMP box
-
-    c.setFont('Helvetica', 8)
+    line_right = PAGE_W - MARGIN_X - 14 * mm  # leave room for STAMP box
 
     def _label(text, x, ly, line_x_start, line_x_end):
-        c.setFont('Helvetica', 8)
+        c.setFont('Helvetica', 6)
         c.setFillColor(BLACK)
         c.drawString(x, ly + 1, text)
         c.setLineWidth(0.3)
         c.line(line_x_start, ly, line_x_end, ly)
 
     for _ in range(rows_per_page):
-        # outer divider
         c.setLineWidth(0.5)
         c.line(MARGIN_X, y, PAGE_W - MARGIN_X, y)
 
-        # vertical positions of the 5 sub-rows inside the box
-        sub_h = (box_h - 4 * mm) / 5
+        sub_h = (box_h - 3 * mm) / 5
         ly = y - sub_h
 
-        # Row 1: Company/Employer: ___________
         _label("Company/Employer:", label_x, ly,
-               MARGIN_X + 36 * mm, line_right)
+               MARGIN_X + 22 * mm, line_right)
         ly -= sub_h
 
-        # Row 2: Contact (Tel. Email etc.): ___________
-        _label("Contact (Tel. Email etc.):", label_x, ly,
+        _label("Contact (Tel./Email):", label_x, ly,
+               MARGIN_X + 28 * mm, line_right)
+        ly -= sub_h
+
+        _label("Starting date:", label_x, ly,
+               MARGIN_X + 13 * mm, MARGIN_X + 30 * mm)
+        _label("Finishing date:", MARGIN_X + 32 * mm, ly,
                MARGIN_X + 46 * mm, line_right)
         ly -= sub_h
 
-        # Row 3: Starting date: ____  Finishing date: ____
-        _label("Starting date:", label_x, ly,
-               MARGIN_X + 22 * mm, MARGIN_X + 50 * mm)
-        _label("Finishing date:", MARGIN_X + 53 * mm, ly,
-               MARGIN_X + 77 * mm, line_right)
-        ly -= sub_h
-
-        # Row 4: Authorised assessor: ___________
         _label("Authorised assessor:", label_x, ly,
-               MARGIN_X + 36 * mm, line_right)
+               MARGIN_X + 22 * mm, line_right)
         ly -= sub_h
 
-        # Row 5: Position with firm: ____  Name/Signature: ____
         _label("Position with firm:", label_x, ly,
-               MARGIN_X + 28 * mm, MARGIN_X + 55 * mm)
-        _label("Name/Signature:", MARGIN_X + 58 * mm, ly,
-               MARGIN_X + 82 * mm, line_right)
+               MARGIN_X + 17 * mm, MARGIN_X + 33 * mm)
+        _label("Name/Signature:", MARGIN_X + 35 * mm, ly,
+               MARGIN_X + 49 * mm, line_right)
 
-        # stamp box (right)
-        sx = PAGE_W - MARGIN_X - 18 * mm
-        sy = y - box_h + 3 * mm
+        sx = PAGE_W - MARGIN_X - 11 * mm
+        sy = y - box_h + 2 * mm
         c.setDash(2, 2)
-        c.rect(sx, sy, 16 * mm, box_h - 6 * mm, stroke=1, fill=0)
+        c.rect(sx, sy, 9 * mm, box_h - 4 * mm, stroke=1, fill=0)
         c.setDash()
         y -= box_h
 
@@ -814,9 +829,8 @@ def _draw_employment_history(c, page_num, occupation_name,
 def _draw_back_cover(c, occupation_name, logo_path=None, cover_color=None):
     s = _styles()
 
-    # UVTAB logo — centred, placed well below the top so nothing overlaps
-    logo_h = 22 * mm
-    logo_y = PAGE_H - 50 * mm
+    logo_h = 18 * mm
+    logo_y = PAGE_H - MARGIN_Y - logo_h
     if logo_path:
         try:
             c.drawImage(logo_path, (PAGE_W - logo_h) / 2, logo_y,
@@ -825,38 +839,20 @@ def _draw_back_cover(c, occupation_name, logo_path=None, cover_color=None):
         except Exception:
             pass
 
-    # Start text well below the logo (large gap prevents overlap)
-    y = logo_y - 12 * mm
+    content_top = logo_y - 3 * mm
+    cv = ', '.join(UVTAB_INFO['core_values'])
     _draw_paragraph(
-        c, f"<b>{UVTAB_INFO['name']}</b>", s['body_center'],
-        MARGIN_X, y, PAGE_W - 2 * MARGIN_X, 14,
-    )
-    y -= 8 * mm
-    info_lines = [
-        UVTAB_INFO['address'], UVTAB_INFO['po_box'], UVTAB_INFO['tel'],
-        UVTAB_INFO['email'], UVTAB_INFO['website'],
-    ]
-    _draw_paragraph(
-        c, '<br/>'.join(info_lines), s['body_center'],
-        MARGIN_X, y - 22 * mm, PAGE_W - 2 * MARGIN_X, 22 * mm,
-    )
-    y -= 28 * mm
-
-    blocks = [
-        ('Vision', UVTAB_INFO['vision']),
-        ('Mission', UVTAB_INFO['mission']),
-        ('Motto', UVTAB_INFO['motto']),
-    ]
-    for title, body in blocks:
-        _draw_paragraph(
-            c, f"<b>{title}</b><br/>{body}", s['body_center'],
-            MARGIN_X, y - 14 * mm, PAGE_W - 2 * MARGIN_X, 14 * mm,
-        )
-        y -= 18 * mm
-    _draw_paragraph(
-        c, "<b>Core Values</b><br/>" + '<br/>'.join(UVTAB_INFO['core_values']),
-        s['body_center'],
-        MARGIN_X, 20 * mm, PAGE_W - 2 * MARGIN_X, y - 20 * mm,
+        c,
+        f"<b>{UVTAB_INFO['name']}</b><br/>"
+        f"{UVTAB_INFO['address']}<br/>{UVTAB_INFO['po_box']}<br/>"
+        f"{UVTAB_INFO['tel']}<br/>{UVTAB_INFO['email']}<br/>"
+        f"{UVTAB_INFO['website']}<br/><br/>"
+        f"<b>Vision:</b> {UVTAB_INFO['vision']}<br/><br/>"
+        f"<b>Mission:</b> {UVTAB_INFO['mission']}<br/><br/>"
+        f"<b>Motto:</b> {UVTAB_INFO['motto']}<br/><br/>"
+        f"<b>Core Values:</b> {cv}",
+        s['small'],
+        MARGIN_X, MARGIN_Y, PAGE_W - 2 * MARGIN_X, content_top - MARGIN_Y,
     )
 
 
@@ -968,44 +964,48 @@ def _draw_outer_back_cover(c, book_data):
 class AchievementStampFlowable(Flowable):
     """Fixed-height flowable that draws the achievement level / stamp block.
 
-    Coordinate origin (0, 0) is the bottom-left of this flowable — i.e. the
-    horizontal divider line.  The labels sit at y = 59 mm, with the text frame
-    extending 14 pts above that (total HEIGHT ≈ 65 mm).
+    Coordinate origin (0, 0) is the bottom-left of this flowable — the
+    horizontal divider line.  Labels sit at y_top=33mm; two rows descend in
+    5mm + 7mm steps so the divider lands exactly at y=0 (HEIGHT=37mm).
     """
-    HEIGHT = 65 * mm
+    HEIGHT = 37 * mm
 
     def __init__(self):
         Flowable.__init__(self)
         self.width = PAGE_W - 2 * MARGIN_X
         self.height = self.HEIGHT
 
+    def wrap(self, availWidth, availHeight):
+        self.width = availWidth
+        return self.width, self.height
+
     def draw(self):
         c = self.canv
         s = _styles()
         W = self.width
-        y_top = 59 * mm  # label frame bottom, measured from the divider at y=0
+        y_top = 33 * mm
 
         _draw_paragraph(c, "<i>ACHIEVEMENT LEVEL</i>", s['h2'],
                         0, y_top, 70 * mm, 14)
         _draw_paragraph(c, "<i>STAMP</i>", s['h2'],
-                        W - 30 * mm, y_top, 30 * mm, 14)
+                        W - 20 * mm, y_top, 20 * mm, 14)
 
         rows = [
             ('Qualified to work independently',  'Assessment Period'),
             ('Qualified to work with assistance', 'Assessment Period'),
         ]
-        y = y_top - 15 * mm
+        y = y_top - 9 * mm
         for line1, line2 in rows:
-            _draw_paragraph(c, line1, s['body'], 0, y, 80 * mm, 12)
+            _draw_paragraph(c, line1, s['body'], 0, y, W, 12)
             c.setLineWidth(0.4)
-            c.line(60 * mm, y - 1, W - 35 * mm, y - 1)
-            y -= 8 * mm
-            _draw_paragraph(c, line2, s['body'], 0, y, 80 * mm, 12)
-            c.line(35 * mm, y - 1, W - 35 * mm, y - 1)
-            y -= 14 * mm
+            c.line(35 * mm, y - 1, W - 20 * mm, y - 1)
+            y -= 5 * mm
+            _draw_paragraph(c, line2, s['body'], 0, y, W, 12)
+            c.line(20 * mm, y - 1, W - 20 * mm, y - 1)
+            y -= 7 * mm
 
         c.setLineWidth(0.6)
-        c.line(0, y, W, y)  # divider at y == 0
+        c.line(0, 0, W, 0)
 
 
 # -----------------------------------------------------------------------------
@@ -1087,7 +1087,7 @@ def _build_sections_story(book_data):
 def _build_front_matter_pdf(book_data):
     """Pages 1–6 via canvas (all existing functions, zero change)."""
     buf = BytesIO()
-    c = canvas.Canvas(buf, pagesize=A5)
+    c = canvas.Canvas(buf, pagesize=(PAGE_W, PAGE_H))
     c.setTitle(f"Worker's PAS - {book_data.get('candidate_name', '')}")
     _draw_cover(c, book_data);          c.showPage()
     _draw_page2_intro(c, book_data);    c.showPage()
@@ -1125,7 +1125,7 @@ def _build_sections_pdf(book_data):
         PageTemplate(id='Blank',   frames=[blank_frame],   onPage=lambda c, d: None),
     ]
     doc = BaseDocTemplate(
-        buf, pagesize=A5, pageTemplates=templates,
+        buf, pagesize=(PAGE_W, PAGE_H), pageTemplates=templates,
         leftMargin=0, rightMargin=0, topMargin=0, bottomMargin=0,
     )
     doc.build(_build_sections_story(book_data))
@@ -1135,13 +1135,13 @@ def _build_sections_pdf(book_data):
 def _build_back_matter_pdf(book_data, start_page):
     """Grading + employment history via canvas (existing functions unchanged)."""
     buf = BytesIO()
-    c = canvas.Canvas(buf, pagesize=A5)
+    c = canvas.Canvas(buf, pagesize=(PAGE_W, PAGE_H))
     occ_name = book_data['occupation_name']
     pg = start_page
 
     _draw_grading(c, pg, occ_name);  c.showPage();  pg += 1
 
-    rows_per_page = 5
+    rows_per_page = 4
     eh_pages = max(1, book_data.get('employment_history_pages', 4))
     for i in range(eh_pages):
         _draw_employment_history(c, pg, occ_name,
@@ -1155,7 +1155,7 @@ def _build_back_matter_pdf(book_data, start_page):
 def _build_back_covers_pdf(book_data):
     """UVTAB info page + outer back cover (existing functions unchanged)."""
     buf = BytesIO()
-    c = canvas.Canvas(buf, pagesize=A5)
+    c = canvas.Canvas(buf, pagesize=(PAGE_W, PAGE_H))
     _draw_back_cover(c, book_data['occupation_name'], book_data.get('uvtab_logo_path'))
     c.showPage()
     _draw_outer_back_cover(c, book_data)

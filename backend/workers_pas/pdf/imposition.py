@@ -1,21 +1,35 @@
 """A4 2-up duplex imposition for Worker's PAS booklets.
 
-Given two single-candidate A5 booklet PDFs, produce an A4 portrait PDF
+Given two single-candidate booklet PDFs, produce an A4 portrait PDF
 ready for duplex (double-sided) printing (flip on long edge).
 
-Each physical A4 sheet, when printed on both sides and cut horizontally,
-yields two A5 half-sheets with consecutive pages back-to-back.
+Each physical A4 sheet, when printed on both sides and cut along the
+dashed guide lines, yields two pocket-sized booklets.
 """
 from io import BytesIO
 
 from pypdf import PdfReader, PdfWriter, Transformation, PageObject
 from pypdf.generic import FloatObject, RectangleObject
 from reportlab.lib.pagesizes import A4, A5, landscape
+from reportlab.lib.units import cm
 from reportlab.pdfgen import canvas as rl_canvas
+
+from .constants import BOOKLET_W, BOOKLET_H
 
 
 def _a5_blank():
     w, h = A5
+    p = PageObject.create_blank_page(width=w, height=h)
+    for box in ("mediabox", "cropbox", "trimbox"):
+        setattr(p, box, RectangleObject(
+            (FloatObject(0), FloatObject(0), FloatObject(w), FloatObject(h))
+        ))
+    return p
+
+
+def _booklet_blank():
+    """Blank page at the booklet page size (passport-sized)."""
+    w, h = BOOKLET_W, BOOKLET_H
     p = PageObject.create_blank_page(width=w, height=h)
     for box in ("mediabox", "cropbox", "trimbox"):
         setattr(p, box, RectangleObject(
@@ -117,7 +131,12 @@ def impose_2up_a4(pdf_a_bytes, pdf_b_bytes=None):
 
 
 def _cut_line_overlay():
-    """Return PDF bytes (A4 portrait) with a dashed grey cut guide at the midpoint.
+    """Return PDF bytes (A4 portrait) with dashed grey cut/trim guide lines.
+
+    Lines drawn:
+      1. Horizontal at midpoint          — main cut separating the two candidates
+      2. Horizontal at midpoint ± 3 cm   — bottom-trim guides (shorten each half)
+      3. Vertical at 0.5 cm from each edge — side-trim guides (narrow each strip)
 
     Returns bytes so callers can create a fresh PageObject each time via
     PdfReader — avoids the dict.copy() / 'get_contents' error in PyPDF.
@@ -125,43 +144,71 @@ def _cut_line_overlay():
     buf = BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=A4)
     a4_w, a4_h = A4
-    y = a4_h / 2
+    mid_y = a4_h / 2
+
     c.setStrokeColorRGB(0.55, 0.55, 0.55)
     c.setLineWidth(0.6)
-    c.setDash(5, 3)
-    c.line(8, y, a4_w - 8, y)
-    c.setDash()
     c.setFillColorRGB(0.55, 0.55, 0.55)
+    c.setFont('Helvetica', 5)
+
+    # 1. Main horizontal — separates the two candidates
+    c.setDash(5, 3)
+    c.line(8, mid_y, a4_w - 8, mid_y)
+    c.setDash()
     c.setFont('Helvetica', 6)
-    c.drawCentredString(a4_w / 2, y + 2, 'cut here')
+    c.drawCentredString(a4_w / 2, mid_y + 2, 'cut here')
+
+    # 2. Bottom-trim horizontals — 3 cm above/below midpoint
+    c.setFont('Helvetica', 5)
+    for y_trim in (mid_y + 3 * cm, mid_y - 3 * cm):
+        c.setDash(3, 4)
+        c.line(8, y_trim, a4_w - 8, y_trim)
+        c.setDash()
+        c.drawCentredString(a4_w / 2, y_trim + 1.5, 'trim')
+
+    # 3. Side-trim verticals — 0.5 cm from each edge (1 cm total width reduction)
+    for x_trim in (0.5 * cm, a4_w - 0.5 * cm):
+        c.setDash(3, 4)
+        c.line(x_trim, 8, x_trim, a4_h - 8)
+        c.setDash()
+
     c.save()
     return buf.getvalue()
 
 
 def impose_2up_a6_booklet_a4(pdf_c1_bytes, pdf_c2_bytes=None):
-    """2-up A6 saddle-stitch booklet imposition on A4 portrait.
+    """2-up passport-size saddle-stitch booklet imposition on A4 portrait.
 
     Two candidates are imposed on a single A4 portrait sheet — Candidate 1 on
     the top half, Candidate 2 on the bottom half (head-to-toe, rotated 180°).
+    Booklet pages (BOOKLET_W × BOOKLET_H) are placed at 1:1 scale, centred
+    within each A6 cell (A4/2).  Dashed cut-guide lines on the overlay show
+    the operator where to trim for a passport-sized finished booklet.
 
     Print/cut/fold workflow:
         1. Print A4 portrait, duplex, FLIP ON LONG EDGE.
-        2. Cut each A4 sheet horizontally at the midpoint.
-        3. Rotate the bottom strip 180° (it is printed upside-down).
-        4. Fold each strip vertically at the centre.
-        5. Saddle-stitch (staple through the spine).
-    Result: two independent A6 portrait booklets per A4 sheet.
+        2. Cut at the main horizontal dashed line — separates the two candidates.
+        3. Cut each strip at the two vertical dashed lines (0.5 cm each side).
+        4. Cut at the bottom-trim dashed line — shortens the strip by 3 cm.
+        5. Rotate the lower strip 180°.
+        6. Fold each strip vertically at the centre (x = 105 mm).
+        7. Saddle-stitch (staple).
+    Result: two independent ~100 × 118.5 mm portrait booklets per A4 sheet.
 
     If pdf_c2_bytes is None the bottom half of every page is left blank.
     """
     a4_w, a4_h = A4
-    a5_w, a5_h = A5
 
-    a6_w = a4_w / 2   # cell width
-    a6_h = a4_h / 2   # cell height
-    scale = min(a6_w / a5_w, a6_h / a5_h)
-    scaled_w = a5_w * scale
-    scaled_h = a5_h * scale
+    a6_w = a4_w / 2   # cell width  (≈ 105 mm)
+    a6_h = a4_h / 2   # cell height (≈ 148.5 mm)
+
+    # Booklet pages are placed at 1:1 — centred within the A6 cell.
+    # Margins: (a6_w - BOOKLET_W)/2 ≈ 2.5 mm each side horizontally,
+    #          (a6_h - BOOKLET_H)/2 ≈ 15 mm each side vertically.
+    src_w, src_h = BOOKLET_W, BOOKLET_H
+    scale = 1.0
+    scaled_w = src_w
+    scaled_h = src_h
 
     def _load(pdf_bytes):
         return list(PdfReader(BytesIO(pdf_bytes)).pages)
@@ -174,9 +221,9 @@ def impose_2up_a6_booklet_a4(pdf_c1_bytes, pdf_c2_bytes=None):
     while n % 4:
         n += 1
     while len(pages_c1) < n:
-        pages_c1.append(_a5_blank())
+        pages_c1.append(_booklet_blank())
     while len(pages_c2) < n:
-        pages_c2.append(_a5_blank())
+        pages_c2.append(_booklet_blank())
 
     n_sheets = n // 4
     writer = PdfWriter()

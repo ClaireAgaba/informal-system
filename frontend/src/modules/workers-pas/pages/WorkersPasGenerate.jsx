@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Loader2, Search, Download, FileStack, CheckSquare, Square, Printer } from 'lucide-react';
+import { ArrowLeft, BookOpen, Loader2, Search, CheckSquare, Square, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../../../services/apiClient';
 
@@ -16,7 +16,6 @@ const WorkersPasGenerate = () => {
   const [selected, setSelected] = useState(new Set());
   const [loadingCandidates, setLoadingCandidates] = useState(false);
 
-  const [mode, setMode] = useState('a4_2up');
   const [generating, setGenerating] = useState(false);
 
   // Lookups
@@ -87,14 +86,14 @@ const WorkersPasGenerate = () => {
     setSelected(next);
   };
 
-  const handle2upA6Print = async () => {
+  const handlePrintBooklets = async () => {
     if (!occupationId || !seriesId) {
       toast.error('Select an occupation and series first.');
       return;
     }
     const ids = Array.from(selected);
-    if (ids.length === 0 || ids.length > 2) {
-      toast.error('Select exactly 1 or 2 candidates for 2-up A6 print.');
+    if (ids.length === 0) {
+      toast.error('Select at least one candidate.');
       return;
     }
     setGenerating(true);
@@ -107,85 +106,13 @@ const WorkersPasGenerate = () => {
       const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
       window.open(url, '_blank');
       const sheets = Math.ceil(ids.length / 2);
-    toast.success(
+      toast.success(
         ids.length === 1
-          ? 'A4 sheet ready (1 candidate, bottom half blank) — print duplex, flip on long edge, fold and staple.'
-          : `${sheets} sheet${sheets > 1 ? 's' : ''} ready (${ids.length} candidates) — print duplex, flip on long edge, cut at the dashed line, rotate bottom halves 180°, fold and staple.`,
+          ? 'Sheet ready — print duplex, flip on long edge, cut guides show where to trim, fold and staple.'
+          : `${sheets} sheet${sheets > 1 ? 's' : ''} ready — print duplex, flip on long edge, cut along dashed guides, fold and staple.`,
       );
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to generate 2-up A6 print.');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const generate = async ({ bulk, printMode }) => {
-    if (!occupationId || !seriesId) {
-      toast.error('Select an occupation and series first.');
-      return;
-    }
-    const ids = Array.from(selected);
-    if (ids.length === 0) {
-      toast.error('Select at least one candidate.');
-      return;
-    }
-    if (!bulk && !printMode && ids.length !== 1) {
-      toast.error('Pick exactly one candidate to preview.');
-      return;
-    }
-
-    setGenerating(true);
-    try {
-      if (printMode) {
-        // Print Booklet: works for 1 or more candidates
-        if (ids.length === 1) {
-          const res = await apiClient.post(
-            '/workers-pas/generate/',
-            { candidate_id: ids[0], occupation_id: occupationId, series_id: seriesId, mode: 'booklet_a4' },
-            { responseType: 'blob' },
-          );
-          const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-          window.open(url, '_blank');
-        } else {
-          const res = await apiClient.post(
-            '/workers-pas/bulk-generate/',
-            { occupation_id: occupationId, series_id: seriesId, candidate_ids: ids, mode: 'booklet_a4_print' },
-            { responseType: 'blob' },
-          );
-          const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-          window.open(url, '_blank');
-        }
-        toast.success(`Booklet ready — print duplex, flip on short edge.`);
-      } else if (!bulk) {
-        const res = await apiClient.post(
-          '/workers-pas/generate/',
-          { candidate_id: ids[0], occupation_id: occupationId, series_id: seriesId },
-          { responseType: 'blob' },
-        );
-        const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-        window.open(url, '_blank');
-        toast.success('Booklet generated.');
-      } else {
-        const res = await apiClient.post(
-          '/workers-pas/bulk-generate/',
-          { occupation_id: occupationId, series_id: seriesId, candidate_ids: ids, mode },
-          { responseType: 'blob' },
-        );
-        const blob = new Blob([res.data], { type: 'application/zip' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const cd = res.headers['content-disposition'] || '';
-        const match = cd.match(/filename="?([^"]+)"?/);
-        a.download = match ? match[1] : `workers_pas_${ids.length}_candidates.zip`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-        toast.success(`Generated ${ids.length} booklets.`);
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to generate.');
+      toast.error(err.response?.data?.detail || 'Failed to generate booklets.');
     } finally {
       setGenerating(false);
     }
@@ -206,7 +133,7 @@ const WorkersPasGenerate = () => {
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
               <BookOpen className="w-6 h-6 text-primary-600" /> Generate Worker's PAS booklets
             </h1>
-            <p className="text-sm text-gray-500">Pick an occupation and series, choose candidates, then generate.</p>
+            <p className="text-sm text-gray-500">Pick an occupation and series, choose candidates, then print.</p>
           </div>
         </div>
       </div>
@@ -245,67 +172,16 @@ const WorkersPasGenerate = () => {
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Output mode</label>
-            <div className="flex gap-3">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  checked={mode === 'a4_2up'}
-                  onChange={() => setMode('a4_2up')}
-                />
-                <span><b>A4 (2 candidates per page)</b> — print, then cut horizontally</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  checked={mode === 'single'}
-                  onChange={() => setMode('single')}
-                />
-                <span>A5 (one PDF per candidate)</span>
-              </label>
-            </div>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <button
-              disabled={generating || selected.size !== 1}
-              onClick={() => generate({ bulk: false })}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50"
-              title="Preview a single booklet (A5)"
-            >
-              {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-              Preview A5
-            </button>
-            <button
-              disabled={generating || selected.size === 0}
-              onClick={() => generate({ bulk: false, printMode: true })}
-              className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-              title="Generate A4 landscape booklet — print duplex, flip on short edge"
-            >
-              {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
-              Print Booklet
-            </button>
-            <button
-              disabled={generating || selected.size === 0}
-              onClick={() => generate({ bulk: true })}
-              className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-            >
-              {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileStack className="w-4 h-4 mr-2" />}
-              Generate {selected.size > 0 ? `${selected.size} ` : ''}booklets (.zip)
-            </button>
-            <button
-              disabled={generating || selected.size === 0}
-              onClick={handle2upA6Print}
-              className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-              title="Generates A4 sheets with 2 A6 booklets each (candidates paired in selection order) — print duplex, flip on long edge, cut at dashed line, rotate bottom halves 180°, fold and staple."
-            >
-              {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
-              Print 2-up A6 Booklets
-            </button>
-          </div>
-        </div>
+      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-4 flex justify-end">
+        <button
+          disabled={generating || selected.size === 0}
+          onClick={handlePrintBooklets}
+          className="inline-flex items-center px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+          title="Print 2-up passport-size booklets — one A4 sheet per 2 candidates, cut along dashed guides, fold and staple."
+        >
+          {generating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
+          Print Booklets
+        </button>
       </div>
 
       {occupationId && seriesId && (
