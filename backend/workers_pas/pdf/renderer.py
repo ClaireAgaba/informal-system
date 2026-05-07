@@ -308,7 +308,8 @@ def _draw_cover(c, ctx):
 
     coat_w = 60 * mm
     coat_h = 32 * mm
-    logo_size = 30 * mm
+    logo_w = 38 * mm
+    logo_h = 34 * mm
     
     cover_bg = _resolve_cover_color(ctx)
 
@@ -350,8 +351,8 @@ def _draw_cover(c, ctx):
     # UVTAB logo
     logo = ctx.get('uvtab_logo_path')
     if logo:
-        _draw_transparent_image(c, logo, (PAGE_W - logo_size) / 2,
-                                28 * mm, logo_size, logo_size, bg_color=cover_bg)
+        _draw_transparent_image(c, logo, (PAGE_W - logo_w) / 2,
+                                22 * mm, logo_w, logo_h, bg_color=cover_bg)
 
     # Validation tagline
     _draw_paragraph(
