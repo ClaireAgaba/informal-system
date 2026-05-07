@@ -131,12 +131,16 @@ def impose_2up_a4(pdf_a_bytes, pdf_b_bytes=None):
 
 
 def _cut_line_overlay():
-    """Return PDF bytes (A4 portrait) with dashed grey cut/trim guide lines.
+    """Return PDF bytes (A4 portrait) with dashed grey trim guide lines.
 
     Lines drawn:
-      1. Horizontal at midpoint          — main cut separating the two candidates
-      2. Horizontal at midpoint ± 3 cm   — bottom-trim guides (shorten each half)
+      1. Horizontal at midpoint + 3 cm  — bottom-trim guide for top candidate
+      2. Horizontal at midpoint − 3 cm  — bottom-trim guide for bottom candidate
       3. Vertical at 0.5 cm from each edge — side-trim guides (narrow each strip)
+
+    Labels sit in the 6 cm waste strip between the two trim lines so they
+    never overlap booklet content.  No separate "cut here" line — the two
+    trim cuts already separate and size both candidates in one operation each.
 
     Returns bytes so callers can create a fresh PageObject each time via
     PdfReader — avoids the dict.copy() / 'get_contents' error in PyPDF.
@@ -145,28 +149,27 @@ def _cut_line_overlay():
     c = rl_canvas.Canvas(buf, pagesize=A4)
     a4_w, a4_h = A4
     mid_y = a4_h / 2
+    top_trim = mid_y + 3 * cm   # bottom edge of top booklet
+    bot_trim = mid_y - 3 * cm   # top edge of bottom booklet
 
     c.setStrokeColorRGB(0.55, 0.55, 0.55)
     c.setLineWidth(0.6)
     c.setFillColorRGB(0.55, 0.55, 0.55)
-    c.setFont('Helvetica', 5)
 
-    # 1. Main horizontal — separates the two candidates
-    c.setDash(5, 3)
-    c.line(8, mid_y, a4_w - 8, mid_y)
+    # 1. Trim line for top candidate — label in waste strip below the line
+    c.setDash(3, 4)
+    c.line(8, top_trim, a4_w - 8, top_trim)
     c.setDash()
-    c.setFont('Helvetica', 6)
-    c.drawCentredString(a4_w / 2, mid_y + 2, 'cut here')
-
-    # 2. Bottom-trim horizontals — 3 cm above/below midpoint
     c.setFont('Helvetica', 5)
-    for y_trim in (mid_y + 3 * cm, mid_y - 3 * cm):
-        c.setDash(3, 4)
-        c.line(8, y_trim, a4_w - 8, y_trim)
-        c.setDash()
-        c.drawCentredString(a4_w / 2, y_trim + 1.5, 'trim')
+    c.drawCentredString(a4_w / 2, top_trim - 7, 'trim')
 
-    # 3. Side-trim verticals — 0.5 cm from each edge (1 cm total width reduction)
+    # 2. Trim line for bottom candidate — label in waste strip above the line
+    c.setDash(3, 4)
+    c.line(8, bot_trim, a4_w - 8, bot_trim)
+    c.setDash()
+    c.drawCentredString(a4_w / 2, bot_trim + 2, 'trim')
+
+    # 3. Side-trim verticals — 0.5 cm from each edge
     for x_trim in (0.5 * cm, a4_w - 0.5 * cm):
         c.setDash(3, 4)
         c.line(x_trim, 8, x_trim, a4_h - 8)
@@ -236,11 +239,30 @@ def impose_2up_a6_booklet_a4(pdf_c1_bytes, pdf_c2_bytes=None):
         p.trimbox = r
 
     def _place(target, src, cell_x, cell_y, rotated=False):
-        """Scale src into the A6 cell whose lower-left is (cell_x, cell_y)."""
-        ox = cell_x + (a6_w - scaled_w) / 2
-        oy = cell_y + (a6_h - scaled_h) / 2
+        """Place src into the A6 cell, flushed to the outer edge.
+
+        Horizontal: flush to the fold (A4 centre).  Each column's booklet
+        aligns with the vertical trim lines at 0.5 cm from each A4 edge.
+        Vertical: flush away from mid_y.  Top-half pages sit against the top
+        of the A4; bottom-half (rotated) pages sit against the bottom.  This
+        makes the horizontal trim lines land exactly at the booklet edges.
+        """
+        h_gap = a6_w - scaled_w   # ≈ 5 mm (= 0.5 cm trim on outer edge)
+        v_gap = a6_h - scaled_h   # ≈ 30 mm (= 3 cm trim on inner edge)
+
+        # Horizontal: flush each column toward the fold (centre of A4).
+        if cell_x == 0:           # left column — flush right (toward fold)
+            ox = h_gap
+        else:                      # right column — flush left (toward fold)
+            ox = cell_x
+
+        # Vertical: flush away from the main cut (mid_y).
+        if rotated:                # bottom half — flush to page bottom
+            oy = cell_y
+        else:                      # top half — flush to page top
+            oy = cell_y + v_gap
+
         if rotated:
-            # 180° head-to-toe: source origin maps to top-right of cell area.
             tf = (Transformation()
                   .scale(scale, scale)
                   .rotate(180)

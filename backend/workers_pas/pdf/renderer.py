@@ -758,7 +758,7 @@ def _draw_grading(c, page_num, occupation_name):
 
 
 def _draw_employment_history(c, page_num, occupation_name,
-                             rows_per_page=4, page_index=0):
+                             rows_per_page=5, page_index=0):
     s = _styles()
     _draw_page_header(c, occupation_name)
     _draw_paragraph(
@@ -770,8 +770,8 @@ def _draw_employment_history(c, page_num, occupation_name,
         PAGE_W - MARGIN_X - 18 * mm, HEADER_BOTTOM_Y - 6 * mm, 18 * mm, 14,
     )
 
-    y = HEADER_BOTTOM_Y - 14 * mm
-    bottom_y = 14 * mm
+    y = HEADER_BOTTOM_Y - 12 * mm
+    bottom_y = 8 * mm
     box_h = (y - bottom_y) / rows_per_page
 
     label_x = MARGIN_X + 1 * mm
@@ -1141,7 +1141,7 @@ def _build_back_matter_pdf(book_data, start_page):
 
     _draw_grading(c, pg, occ_name);  c.showPage();  pg += 1
 
-    rows_per_page = 4
+    rows_per_page = 5
     eh_pages = max(1, book_data.get('employment_history_pages', 4))
     for i in range(eh_pages):
         _draw_employment_history(c, pg, occ_name,
