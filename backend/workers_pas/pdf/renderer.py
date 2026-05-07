@@ -133,7 +133,7 @@ def _draw_paragraph(c, html, style, x, y, width, height):
 
 def _draw_page_number(c, num):
     s = _styles()['page_number']
-    _draw_paragraph(c, str(num), s, 0, MARGIN_Y * 0.4, PAGE_W, 12)
+    _draw_paragraph(c, str(num), s, 0, MARGIN_Y * 0.65, PAGE_W, 12)
 
 
 def _draw_page_header(c, occupation_name):
@@ -350,28 +350,27 @@ def _draw_page3_biodata(c, ctx):
     _draw_page_header(c, ctx['occupation_name'])
 
     # Top section: "Worker's PAS issued to:"
-    y = HEADER_BOTTOM_Y - 6 * mm
+    y = HEADER_BOTTOM_Y - 8 * mm
     _draw_paragraph(
         c, "<b>Worker&rsquo;s PAS issued to:</b>", s['body'],
         MARGIN_X, y, 90 * mm, 12,
     )
-    y -= 8 * mm
+    y -= 12 * mm
 
     # Name prefix (Mr. / Mrs. / Ms.) then the candidate name on a line.
-    # The end-user will cross out the salutation that does not apply.
     _draw_paragraph(
         c, f"<b>Mr. / Mrs. / Ms.:</b> &nbsp;{ctx['candidate_name']}", s['body'],
         MARGIN_X, y, 100 * mm, 14,
     )
     c.setLineWidth(0.5)
     c.line(MARGIN_X, y - 1, MARGIN_X + 100 * mm, y - 1)
-    y -= 8 * mm
+    y -= 14 * mm
 
     _draw_paragraph(
-        c, f"Date of birth: <u>{ctx['date_of_birth']}</u>", s['body'],
+        c, f"<b>Date of birth:</b> &nbsp;<u>{ctx['date_of_birth']}</u>", s['body'],
         MARGIN_X, y, 80 * mm, 12,
     )
-    y -= 10 * mm
+    y -= 14 * mm
 
     fields = [
         ('GENDER', ctx.get('gender', '')),
@@ -383,11 +382,11 @@ def _draw_page3_biodata(c, ctx):
             c, f"<b>{label}:</b> {value}", s['body'],
             MARGIN_X, y, 90 * mm, 12,
         )
-        y -= 6 * mm
+        y -= 10 * mm
 
     # Photo placeholder (top right)
     photo_x = PAGE_W - MARGIN_X - 30 * mm
-    photo_y = PAGE_H - 70 * mm
+    photo_y = HEADER_BOTTOM_Y - 65 * mm
     photo_w = photo_h = 30 * mm
     c.setStrokeColor(BLACK)
     c.setLineWidth(0.6)
@@ -401,17 +400,17 @@ def _draw_page3_biodata(c, ctx):
             pass
 
     # Issued by section
-    y -= 4 * mm
+    y -= 6 * mm
     _draw_paragraph(
         c,
         "<b>Worker&rsquo;s PAS issued by</b><br/>"
-        "Uganda Vocational and Technical&nbsp;&nbsp;Assessment Board (UVTAB)",
+        "Uganda Vocational and Technical Assessment Board (UVTAB)",
         s['body'],
         MARGIN_X, y - 12 * mm, PAGE_W - 2 * MARGIN_X, 18 * mm,
     )
-    y -= 26 * mm
+    y -= 34 * mm
 
-    # Executive Secretary signature (centred; Board Chairperson removed).
+    # Executive Secretary signature (centred).
     sig_w = 70 * mm
     es_x = (PAGE_W - sig_w) / 2
     sig_y = y
@@ -419,7 +418,7 @@ def _draw_page3_biodata(c, ctx):
     if ctx.get('es_signature_path'):
         try:
             c.drawImage(ctx['es_signature_path'], es_x, sig_y,
-                        width=sig_w, height=14 * mm, mask='auto',
+                        width=sig_w, height=16 * mm, mask='auto',
                         preserveAspectRatio=True)
         except Exception:
             pass
@@ -432,11 +431,11 @@ def _draw_page3_biodata(c, ctx):
     )
 
     _draw_paragraph(
-        c, "For changes of employer or assessor please see employment history ",
+        c, "<i>For changes of employer or assessor please see employment history</i>",
         s['small'],
-        MARGIN_X, line_y - 18 * mm, PAGE_W - 2 * MARGIN_X, 12 * mm,
+        MARGIN_X, line_y - 20 * mm, PAGE_W - 2 * MARGIN_X, 12 * mm,
     )
-    # Page number intentionally omitted on the biodata page.
+    _draw_page_number(c, 3)
 
 
 def _draw_page4_levels(c, ctx):
@@ -736,36 +735,69 @@ def _draw_employment_history(c, page_num, occupation_name,
                              rows_per_page=5, page_index=0):
     s = _styles()
     _draw_page_header(c, occupation_name)
-    if page_index == 0:
-        _draw_paragraph(
-            c, "<b>Employment History</b>", s['h2'],
-            MARGIN_X, HEADER_BOTTOM_Y - 6 * mm, 80 * mm, 14,
-        )
-        _draw_paragraph(
-            c, "<i>STAMP</i>", s['h2'],
-            PAGE_W - MARGIN_X - 25 * mm, HEADER_BOTTOM_Y - 6 * mm, 25 * mm, 14,
-        )
+    _draw_paragraph(
+        c, "<b>Employment History</b>", s['h2'],
+        MARGIN_X, HEADER_BOTTOM_Y - 6 * mm, 80 * mm, 14,
+    )
+    _draw_paragraph(
+        c, "<i>STAMP</i>", s['h2'],
+        PAGE_W - MARGIN_X - 25 * mm, HEADER_BOTTOM_Y - 6 * mm, 25 * mm, 14,
+    )
 
     y = HEADER_BOTTOM_Y - 14 * mm
-    box_h = (y - 25 * mm) / rows_per_page
+    bottom_y = 25 * mm
+    box_h = (y - bottom_y) / rows_per_page
+
+    # Geometry for labels and the writing lines beside them.
+    label_x = MARGIN_X + 1 * mm
+    line_right = PAGE_W - MARGIN_X - 22 * mm  # leave room for STAMP box
+
+    c.setFont('Helvetica', 8)
+
+    def _label(text, x, ly, line_x_start, line_x_end):
+        c.setFont('Helvetica', 8)
+        c.setFillColor(BLACK)
+        c.drawString(x, ly + 1, text)
+        c.setLineWidth(0.3)
+        c.line(line_x_start, ly, line_x_end, ly)
 
     for _ in range(rows_per_page):
         # outer divider
         c.setLineWidth(0.5)
         c.line(MARGIN_X, y, PAGE_W - MARGIN_X, y)
-        # row content
-        labels = [
-            "Company/Employer:",
-            "Contact (Tel. Email etc.):",
-            "Starting date:           Finishing date:",
-            "Authorised assessor:",
-            "Position with firm:           Name/Signature:",
-        ]
-        ly = y - 5 * mm
-        for lbl in labels:
-            _draw_paragraph(c, lbl, s['small'],
-                            MARGIN_X + 1 * mm, ly, PAGE_W - 2 * MARGIN_X - 22 * mm, 10)
-            ly -= 4.5 * mm
+
+        # vertical positions of the 5 sub-rows inside the box
+        sub_h = (box_h - 4 * mm) / 5
+        ly = y - sub_h
+
+        # Row 1: Company/Employer: ___________
+        _label("Company/Employer:", label_x, ly,
+               MARGIN_X + 36 * mm, line_right)
+        ly -= sub_h
+
+        # Row 2: Contact (Tel. Email etc.): ___________
+        _label("Contact (Tel. Email etc.):", label_x, ly,
+               MARGIN_X + 46 * mm, line_right)
+        ly -= sub_h
+
+        # Row 3: Starting date: ____  Finishing date: ____
+        _label("Starting date:", label_x, ly,
+               MARGIN_X + 22 * mm, MARGIN_X + 50 * mm)
+        _label("Finishing date:", MARGIN_X + 53 * mm, ly,
+               MARGIN_X + 77 * mm, line_right)
+        ly -= sub_h
+
+        # Row 4: Authorised assessor: ___________
+        _label("Authorised assessor:", label_x, ly,
+               MARGIN_X + 36 * mm, line_right)
+        ly -= sub_h
+
+        # Row 5: Position with firm: ____  Name/Signature: ____
+        _label("Position with firm:", label_x, ly,
+               MARGIN_X + 28 * mm, MARGIN_X + 55 * mm)
+        _label("Name/Signature:", MARGIN_X + 58 * mm, ly,
+               MARGIN_X + 82 * mm, line_right)
+
         # stamp box (right)
         sx = PAGE_W - MARGIN_X - 18 * mm
         sy = y - box_h + 3 * mm
@@ -773,6 +805,7 @@ def _draw_employment_history(c, page_num, occupation_name,
         c.rect(sx, sy, 16 * mm, box_h - 6 * mm, stroke=1, fill=0)
         c.setDash()
         y -= box_h
+
     c.setLineWidth(0.5)
     c.line(MARGIN_X, y, PAGE_W - MARGIN_X, y)
     _draw_page_number(c, page_num)
@@ -921,20 +954,10 @@ def _draw_outer_back_cover(c, book_data):
     except Exception:
         return  # if QR generation fails, leave the cover as plain colour
 
-    # --- White card centred on the page ---
-    card_w = 118 * mm
-    card_h = 152 * mm
-    card_x = (PAGE_W - card_w) / 2
-    card_y = (PAGE_H - card_h) / 2
-    corner_r = 3 * mm
-
-    c.setFillColorRGB(1, 1, 1)
-    c.roundRect(card_x, card_y, card_w, card_h, corner_r, fill=1, stroke=0)
-
-    # --- QR code centred in card ---
-    qr_size = 68 * mm
+    # --- QR code centred on the page (no card background) ---
+    qr_size = 40 * mm
     qr_x = (PAGE_W - qr_size) / 2
-    qr_y = card_y + (card_h - qr_size) / 2
+    qr_y = (PAGE_H - qr_size) / 2
     c.drawImage(qr_img, qr_x, qr_y, width=qr_size, height=qr_size)
 
 
@@ -993,6 +1016,7 @@ def _section_index_flowables(level_idx, lvl):
     s = _styles()
     level_num = _extract_level_number(lvl.get('level_name', '')) or level_idx
     items = [
+        Spacer(1, 4 * mm),
         Paragraph(f"<b>Section {_ordinal(level_idx)}</b>", s['h1_center']),
         Spacer(1, 2 * mm),
         Paragraph(f"<b>COMPETENCE LEVEL {level_num}</b>", s['h2_center']),
@@ -1039,9 +1063,14 @@ def _build_sections_story(book_data):
     story = []
     for level_idx, lvl in enumerate(levels, start=1):
         if level_idx > 1:
-            # Blank separator page between levels, then back to content template
-            story += [NextPageTemplate('Blank'), PageBreak(),
-                      NextPageTemplate('Content')]
+            # Blank separator page between levels, then a fresh content page
+            # for the next section index. Two PageBreaks: first ends the
+            # current content page (last module) and starts a Blank page;
+            # second ends the Blank page and starts a fresh Content page.
+            story += [
+                NextPageTemplate('Blank'), PageBreak(),
+                NextPageTemplate('Content'), PageBreak(),
+            ]
         # Section index always gets its own page
         story += _section_index_flowables(level_idx, lvl)
         story.append(PageBreak())
