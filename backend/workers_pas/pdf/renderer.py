@@ -967,11 +967,18 @@ def _draw_outer_back_cover(c, book_data):
     except Exception:
         return  # if QR generation fails, leave the cover as plain colour
 
-    # --- QR code centred on the page ---
+    # --- QR code and ISO text centred on the page ---
     qr_size = 40 * mm
+    shift_up = 5 * mm
     qr_x = (PAGE_W - qr_size) / 2
-    qr_y = (PAGE_H - qr_size) / 2
+    qr_y = (PAGE_H - qr_size) / 2 + shift_up
     c.drawImage(qr_img, qr_x, qr_y, width=qr_size, height=qr_size)
+
+    s = _styles()
+    _draw_paragraph(
+        c, "ISO 9001:2015", s['cover_title_md'],
+        MARGIN_X, qr_y - 16 * mm, PAGE_W - 2 * MARGIN_X, 10 * mm,
+    )
 
 
 # -----------------------------------------------------------------------------
