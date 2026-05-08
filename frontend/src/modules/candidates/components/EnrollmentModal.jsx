@@ -47,20 +47,34 @@ const EnrollmentModal = ({ candidate, onClose }) => {
         fee = parseFloat(level?.formal_fee || 0);
       }
     } else if (regCategory === 'modular') {
-      // Calculate fee based on retake vs new modules
+      // Billing tiers:
+      //   - 1 new module  → modular_fee_single_module (e.g. 70,000)
+      //   - 2 new modules → modular_fee_double_module  (e.g. 90,000) — flat rate, NOT 2×single
+      //   - retake module → 50% of single_module_fee each
       const singleModuleFee = parseFloat(options.level?.modular_fee_single_module || 0);
+      const doubleModuleFee = parseFloat(options.level?.modular_fee_double_module || 0);
       const retakeFee = parseFloat(options.level?.modular_fee_retake || singleModuleFee / 2);
-      
-      let totalFee = 0;
+
+      let newModuleCount = 0;
+      let retakeModuleCount = 0;
       formData.modules.forEach(moduleId => {
         const module = options.modules?.find(m => m.id === moduleId);
         if (module?.is_retake) {
-          totalFee += retakeFee;
+          retakeModuleCount += 1;
         } else {
-          totalFee += singleModuleFee;
+          newModuleCount += 1;
         }
       });
-      fee = totalFee;
+
+      // Pick the correct flat-rate tier for new modules
+      let newModulesFee = 0;
+      if (newModuleCount === 2) {
+        newModulesFee = doubleModuleFee;
+      } else if (newModuleCount === 1) {
+        newModulesFee = singleModuleFee;
+      }
+
+      fee = newModulesFee + (retakeFee * retakeModuleCount);
     } else if (regCategory === 'workers_pas') {
       // For Workers PAS: fee per paper selected
       const paperCount = formData.papers.length;
