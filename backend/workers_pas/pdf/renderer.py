@@ -18,7 +18,7 @@ from PIL import Image
 from reportlab.pdfgen import canvas
 from reportlab.platypus import (
     BaseDocTemplate, Frame, Flowable, PageTemplate,
-    Paragraph, Spacer, PageBreak, NextPageTemplate, KeepTogether,
+    Paragraph, Spacer, PageBreak, NextPageTemplate, KeepTogether, Table
 )
 from reportlab.platypus.flowables import HRFlowable
 from pypdf import PdfReader, PdfWriter
