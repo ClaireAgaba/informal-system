@@ -1107,12 +1107,12 @@ def _module_left_flowables(area_no, module):
     ]:
         items.append(Paragraph(f"&bull;&nbsp;{item_text}", s['body']))
 
-    items.append(Spacer(1, 8 * mm))
+    items.append(Spacer(1, 2 * mm))
     return items
 
 
 def _module_right_flowables():
-    return [Spacer(1, 10 * mm), AchievementStampFlowable(), Spacer(1, 8 * mm)]
+    return [Spacer(1, 2 * mm), AchievementStampFlowable(), Spacer(1, 2 * mm)]
 
 
 def _build_sections_story(book_data):
@@ -1123,24 +1123,34 @@ def _build_sections_story(book_data):
     gap_w = 2 * MARGIN_X
     
     for level_idx, lvl in enumerate(levels, start=1):
-        # Section index always gets its own page (Left side of double-wide)
+        if level_idx > 1:
+            # We are finishing the previous section's modules.
+            # Start a new page for the next Section Index layout.
+            story.append(NextPageTemplate('Index'))
+            story.append(PageBreak())
+
+        # We are on an 'Index' layout page
         idx_flowables = _section_index_flowables(level_idx, lvl)
         story.append(Table(
             [[idx_flowables, '', '']], 
             colWidths=[col_w, gap_w, col_w],
             style=[('VALIGN', (0,0), (-1,-1), 'TOP')]
         ))
+        
+        # We want all subsequent pages for the modules to use the 'Modules' layout
+        story.append(NextPageTemplate('Modules'))
         story.append(PageBreak())
         
-        # Modules: Table rows wrap them to the Left and Right cells
         for area_no, module in enumerate(lvl.get('modules', []), start=1):
             left_f = _module_left_flowables(area_no, module)
             right_f = _module_right_flowables()
-            story.append(KeepTogether(Table(
+            # We remove KeepTogether so that two modules can cleanly share the same page
+            # Platypus will move the whole table row to next page if it doesn't fit
+            story.append(Table(
                 [[left_f, '', right_f]],
                 colWidths=[col_w, gap_w, col_w],
                 style=[('VALIGN', (0,0), (-1,-1), 'TOP')]
-            )))
+            ))
     return story
 
 
@@ -1182,9 +1192,25 @@ def _build_sections_pdf(book_data):
         id='blank',
     )
 
-    def on_content(canvas_obj, doc):
-        left_pg = (doc.page - 1) * 2 + 1 + 6
-        right_pg = (doc.page - 1) * 2 + 2 + 6
+    page_types = []
+    physical_page = [7]  # front matter uses pages 1-6
+
+    def on_index(canvas_obj, doc):
+        page_types.append('index')
+        left_pg = physical_page[0]
+        
+        _draw_page_header(canvas_obj, occ_name)
+        _draw_page_number(canvas_obj, left_pg)
+        
+        physical_page[0] += 1
+        # If the next physical page is odd, we will keep the blank right half to pad it to Even
+        if physical_page[0] % 2 != 0:
+            physical_page[0] += 1
+
+    def on_modules(canvas_obj, doc):
+        page_types.append('modules')
+        left_pg = physical_page[0]
+        right_pg = physical_page[0] + 1
         
         # Left half header
         _draw_page_header(canvas_obj, occ_name)
@@ -1196,9 +1222,12 @@ def _build_sections_pdf(book_data):
         _draw_page_header(canvas_obj, occ_name)
         _draw_page_number(canvas_obj, right_pg)
         canvas_obj.restoreState()
+        
+        physical_page[0] += 2
 
     templates = [
-        PageTemplate(id='Content', frames=[content_frame], onPage=on_content),
+        PageTemplate(id='Index', frames=[content_frame], onPage=on_index),
+        PageTemplate(id='Modules', frames=[content_frame], onPage=on_modules),
         PageTemplate(id='Blank',   frames=[blank_frame],   onPage=lambda c, d: None),
     ]
     doc = BaseDocTemplate(
@@ -1215,17 +1244,32 @@ def _build_sections_pdf(book_data):
     reader2 = PdfReader(BytesIO(buf.getvalue()))
     writer = PdfWriter()
     
-    for p_left, p_right in zip(reader1.pages, reader2.pages):
+    next_page_num = 7
+    for i, (p_left, p_right) in enumerate(zip(reader1.pages, reader2.pages)):
+        ptype = page_types[i]
+        
         # Left page: crop the left half
         p_left.mediabox = RectangleObject((FloatObject(0), FloatObject(0), FloatObject(PAGE_W), FloatObject(PAGE_H)))
         p_left.cropbox = p_left.mediabox
         writer.add_page(p_left)
+        next_page_num += 1
         
-        # Right page: translate left by PAGE_W, then crop to same window
-        p_right.add_transformation(Transformation().translate(float(-PAGE_W), 0))
-        p_right.mediabox = RectangleObject((FloatObject(0), FloatObject(0), FloatObject(PAGE_W), FloatObject(PAGE_H)))
-        p_right.cropbox = p_right.mediabox
-        writer.add_page(p_right)
+        if ptype == 'index':
+            # Index pages only use the left half. We drop the right half unless
+            # we need to pad the page count so the next Test Area lands on an Even page.
+            if next_page_num % 2 != 0:
+                p_right.add_transformation(Transformation().translate(float(-PAGE_W), 0))
+                p_right.mediabox = RectangleObject((FloatObject(0), FloatObject(0), FloatObject(PAGE_W), FloatObject(PAGE_H)))
+                p_right.cropbox = p_right.mediabox
+                writer.add_page(p_right)
+                next_page_num += 1
+        else:
+            # Modules use both sides
+            p_right.add_transformation(Transformation().translate(float(-PAGE_W), 0))
+            p_right.mediabox = RectangleObject((FloatObject(0), FloatObject(0), FloatObject(PAGE_W), FloatObject(PAGE_H)))
+            p_right.cropbox = p_right.mediabox
+            writer.add_page(p_right)
+            next_page_num += 1
         
     out_buf = BytesIO()
     writer.write(out_buf)
