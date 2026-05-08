@@ -699,7 +699,7 @@ class CandidateViewSet(viewsets.ModelViewSet):
             total_amount = total_amount * surcharge_multiplier
         
         elif reg_category == 'modular':
-            # Modular: calculate fee based on modules, with retake discount
+            # Modular: calculate fee based on modules, with retake discount.
             # First, check which modules are retakes (candidate failed them before)
             retake_module_ids = set()
             new_module_ids = set()
@@ -719,15 +719,26 @@ class CandidateViewSet(viewsets.ModelViewSet):
                 else:
                     new_module_ids.add(module_id)
             
-            # Calculate fees: retakes = 50% of single module fee, new = full fee
+            # Billing tiers:
+            #   - 1 new module  → modular_fee_single_module (e.g. 70,000)
+            #   - 2 new modules → modular_fee_double_module  (e.g. 90,000) — flat rate, NOT 2×single
+            #   - retake module → 50% of single_module_fee each
             single_module_fee = occupation_level.modular_fee_single_module
+            double_module_fee = occupation_level.modular_fee_double_module
             retake_fee = single_module_fee / 2
             
-            # Calculate total based on retakes and new modules
             retake_count = len(retake_module_ids)
             new_count = len(new_module_ids)
             
-            total_amount = (retake_fee * retake_count) + (single_module_fee * new_count)
+            # Determine new-module portion using the correct fee tier
+            if new_count == 2:
+                new_modules_amount = double_module_fee
+            elif new_count == 1:
+                new_modules_amount = single_module_fee
+            else:
+                new_modules_amount = Decimal('0.00')
+            
+            total_amount = new_modules_amount + (retake_fee * retake_count)
             
             # Track retake status for logging
             is_retaker = retake_count > 0
@@ -1033,11 +1044,17 @@ class CandidateViewSet(viewsets.ModelViewSet):
                     elif reg_category == 'formal':
                         total_amount = occupation_level.formal_fee * surcharge_multiplier
                     elif reg_category == 'modular':
-                        # Calculate fee with retake discount for failed modules
+                        # Calculate fee with retake discount for failed modules.
+                        # Billing tiers:
+                        #   - 1 new module  → modular_fee_single_module (e.g. 70,000)
+                        #   - 2 new modules → modular_fee_double_module  (e.g. 90,000) — flat rate, NOT 2×single
+                        #   - retake module → 50% of single_module_fee each
                         single_module_fee = occupation_level.modular_fee_single_module
+                        double_module_fee = occupation_level.modular_fee_double_module
                         retake_fee = single_module_fee / 2
                         
-                        module_total = Decimal('0.00')
+                        retake_module_count = 0
+                        new_module_count = 0
                         for module in modules:
                             # Check if this candidate has failed this module
                             failed_results = ModularResult.objects.filter(
@@ -1048,10 +1065,19 @@ class CandidateViewSet(viewsets.ModelViewSet):
                             has_failed = any(not r.is_passing for r in failed_results)
                             
                             if has_failed and not has_passed:
-                                module_total += retake_fee
+                                retake_module_count += 1
                             else:
-                                module_total += single_module_fee
+                                new_module_count += 1
                         
+                        # Determine new-module portion using the correct fee tier
+                        if new_module_count == 2:
+                            new_modules_amount = double_module_fee
+                        elif new_module_count == 1:
+                            new_modules_amount = single_module_fee
+                        else:
+                            new_modules_amount = Decimal('0.00')
+                        
+                        module_total = new_modules_amount + (retake_fee * retake_module_count)
                         total_amount = module_total * surcharge_multiplier
                     elif reg_category == 'workers_pas':
                         any_level = candidate.occupation.levels.first()
