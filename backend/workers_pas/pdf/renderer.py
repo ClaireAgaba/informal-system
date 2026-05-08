@@ -1043,10 +1043,10 @@ class AchievementStampFlowable(Flowable):
         for line1, line2 in rows:
             _draw_paragraph(c, line1, s['body'], 0, y, W, 12)
             c.setLineWidth(0.4)
-            c.line(35 * mm, y - 1, W - 20 * mm, y - 1)
+            c.line(W - 20 * mm, y - 1, W, y - 1)
             y -= 5 * mm
             _draw_paragraph(c, line2, s['body'], 0, y, W, 12)
-            c.line(20 * mm, y - 1, W - 20 * mm, y - 1)
+            c.line(W - 20 * mm, y - 1, W, y - 1)
             y -= 7 * mm
 
         c.setLineWidth(0.6)
@@ -1076,7 +1076,7 @@ def _section_index_flowables(level_idx, lvl):
     return items
 
 
-def _module_block_flowables(area_no, module):
+def _module_left_flowables(area_no, module):
     s = _styles()
     items = [
         Paragraph(
@@ -1097,31 +1097,40 @@ def _module_block_flowables(area_no, module):
     ]:
         items.append(Paragraph(f"&bull;&nbsp;{item_text}", s['body']))
 
-    items.append(Spacer(1, 4 * mm))
-    items.append(AchievementStampFlowable())
     items.append(Spacer(1, 8 * mm))
     return items
+
+
+def _module_right_flowables():
+    return [Spacer(1, 10 * mm), AchievementStampFlowable(), Spacer(1, 8 * mm)]
 
 
 def _build_sections_story(book_data):
     levels = book_data['levels']
     story = []
+    
+    col_w = PAGE_W - 2 * MARGIN_X
+    gap_w = 2 * MARGIN_X
+    
     for level_idx, lvl in enumerate(levels, start=1):
-        if level_idx > 1:
-            # Blank separator page between levels, then a fresh content page
-            # for the next section index. Two PageBreaks: first ends the
-            # current content page (last module) and starts a Blank page;
-            # second ends the Blank page and starts a fresh Content page.
-            story += [
-                NextPageTemplate('Blank'), PageBreak(),
-                NextPageTemplate('Content'), PageBreak(),
-            ]
-        # Section index always gets its own page
-        story += _section_index_flowables(level_idx, lvl)
+        # Section index always gets its own page (Left side of double-wide)
+        idx_flowables = _section_index_flowables(level_idx, lvl)
+        story.append(Table(
+            [[idx_flowables, '', '']], 
+            colWidths=[col_w, gap_w, col_w],
+            style=[('VALIGN', (0,0), (-1,-1), 'TOP')]
+        ))
         story.append(PageBreak())
-        # Modules: as many as fit per page, overflow to next automatically
+        
+        # Modules: Table rows wrap them to the Left and Right cells
         for area_no, module in enumerate(lvl.get('modules', []), start=1):
-            story.append(KeepTogether(_module_block_flowables(area_no, module)))
+            left_f = _module_left_flowables(area_no, module)
+            right_f = _module_right_flowables()
+            story.append(KeepTogether(Table(
+                [[left_f, '', right_f]],
+                colWidths=[col_w, gap_w, col_w],
+                style=[('VALIGN', (0,0), (-1,-1), 'TOP')]
+            )))
     return story
 
 
@@ -1145,36 +1154,72 @@ def _build_front_matter_pdf(book_data):
 
 
 def _build_sections_pdf(book_data):
-    """Dynamic section content via Platypus — modules flow until page fills."""
+    """Dynamic section content via Platypus — modules flow down a double-wide spread."""
     buf = BytesIO()
     occ_name = book_data['occupation_name']
+    
+    DOUBLE_PAGE_W = PAGE_W * 2
 
     content_frame = Frame(
         MARGIN_X, MARGIN_Y,
-        PAGE_W - 2 * MARGIN_X, HEADER_BOTTOM_Y - MARGIN_Y,
+        DOUBLE_PAGE_W - 2 * MARGIN_X, HEADER_BOTTOM_Y - MARGIN_Y,
         leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
         id='content',
     )
     blank_frame = Frame(
-        0, 0, PAGE_W, PAGE_H,
+        0, 0, DOUBLE_PAGE_W, PAGE_H,
         leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
         id='blank',
     )
 
     def on_content(canvas_obj, doc):
+        left_pg = (doc.page - 1) * 2 + 1 + 6
+        right_pg = (doc.page - 1) * 2 + 2 + 6
+        
+        # Left half header
         _draw_page_header(canvas_obj, occ_name)
-        _draw_page_number(canvas_obj, doc.page + 6)  # 6 front-matter pages
+        _draw_page_number(canvas_obj, left_pg)
+        
+        # Right half header (shift origin)
+        canvas_obj.saveState()
+        canvas_obj.translate(PAGE_W, 0)
+        _draw_page_header(canvas_obj, occ_name)
+        _draw_page_number(canvas_obj, right_pg)
+        canvas_obj.restoreState()
 
     templates = [
         PageTemplate(id='Content', frames=[content_frame], onPage=on_content),
         PageTemplate(id='Blank',   frames=[blank_frame],   onPage=lambda c, d: None),
     ]
     doc = BaseDocTemplate(
-        buf, pagesize=(PAGE_W, PAGE_H), pageTemplates=templates,
+        buf, pagesize=(DOUBLE_PAGE_W, PAGE_H), pageTemplates=templates,
         leftMargin=0, rightMargin=0, topMargin=0, bottomMargin=0,
     )
     doc.build(_build_sections_story(book_data))
-    return buf.getvalue()
+    
+    # Split the double-wide pages into sequential Left and Right pages
+    from pypdf import PdfReader, PdfWriter, PageObject, Transformation
+    from pypdf.generic import RectangleObject, FloatObject
+    
+    reader1 = PdfReader(BytesIO(buf.getvalue()))
+    reader2 = PdfReader(BytesIO(buf.getvalue()))
+    writer = PdfWriter()
+    
+    for p_left, p_right in zip(reader1.pages, reader2.pages):
+        # Left page: crop the left half
+        p_left.mediabox = RectangleObject((FloatObject(0), FloatObject(0), FloatObject(PAGE_W), FloatObject(PAGE_H)))
+        p_left.cropbox = p_left.mediabox
+        writer.add_page(p_left)
+        
+        # Right page: translate left by PAGE_W, then crop to same window
+        p_right.add_transformation(Transformation().translate(float(-PAGE_W), 0))
+        p_right.mediabox = RectangleObject((FloatObject(0), FloatObject(0), FloatObject(PAGE_W), FloatObject(PAGE_H)))
+        p_right.cropbox = p_right.mediabox
+        writer.add_page(p_right)
+        
+    out_buf = BytesIO()
+    writer.write(out_buf)
+    return out_buf.getvalue()
 
 
 def _build_back_matter_pdf(book_data, start_page):

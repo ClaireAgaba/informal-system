@@ -123,9 +123,7 @@ const WorkersPasVerify = () => {
           </div>
         )}
 
-        <p className="text-center text-xs text-gray-400 mt-6">
-          Directorate of Industrial Training (DIT) · Ministry of Education & Sports
-        </p>
+
       </div>
     </div>
   );
