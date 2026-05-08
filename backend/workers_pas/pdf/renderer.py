@@ -17,8 +17,7 @@ from reportlab.lib.utils import ImageReader
 from PIL import Image
 from reportlab.pdfgen import canvas
 from reportlab.platypus import (
-    BaseDocTemplate, Frame, Flowable, PageTemplate,
-    Paragraph, Spacer, PageBreak, NextPageTemplate, KeepTogether, Table
+    Flowable, Frame, Paragraph, Spacer,
 )
 from reportlab.platypus.flowables import HRFlowable
 from pypdf import PdfReader, PdfWriter
@@ -1013,267 +1012,241 @@ def _draw_outer_back_cover(c, book_data):
 
 
 # -----------------------------------------------------------------------------
-# Platypus: achievement stamp flowable
+# Pure-canvas section renderer (no cropbox tricks — zero bleed)
 # -----------------------------------------------------------------------------
 
-class AchievementStampFlowable(Flowable):
-    """Fixed-height flowable that draws the achievement level / stamp block.
+# Printable content area constants (Y coords in ReportLab bottom-up units)
+_CONTENT_TOP    = HEADER_BOTTOM_Y          # just below the header rule
+_CONTENT_BOTTOM = MARGIN_Y                 # above the bottom margin
+_CONTENT_H      = _CONTENT_TOP - _CONTENT_BOTTOM
+_CONTENT_W      = PAGE_W - 2 * MARGIN_X   # text column width
 
-    Coordinate origin (0, 0) is the bottom-left of this flowable — the
-    horizontal divider line.  Labels sit at y_top=33mm; two rows descend in
-    5mm + 7mm steps so the divider lands exactly at y=0 (HEIGHT=37mm).
-    """
-    HEIGHT = 37 * mm
-
-    def __init__(self):
-        Flowable.__init__(self)
-        self.width = PAGE_W - 2 * MARGIN_X
-        self.height = self.HEIGHT
-
-    def wrap(self, availWidth, availHeight):
-        self.width = availWidth
-        return self.width, self.height
-
-    def draw(self):
-        c = self.canv
-        s = _styles()
-        W = self.width
-        y_top = 33 * mm
-
-        _draw_paragraph(c, "<i>ACHIEVEMENT LEVEL</i>", s['h2'],
-                        0, y_top, 70 * mm, 14)
-        _draw_paragraph(c, "<i>STAMP</i>", s['h2'],
-                        W - 20 * mm, y_top, 20 * mm, 14)
-
-        rows = [
-            ('Qualified to work independently',  'Assessment Period'),
-            ('Qualified to work with assistance', 'Assessment Period'),
-        ]
-        y = y_top - 9 * mm
-        for line1, line2 in rows:
-            _draw_paragraph(c, line1, s['body'], 0, y, W, 12)
-            c.setLineWidth(0.4)
-            c.line(W - 20 * mm, y - 1, W, y - 1)
-            y -= 5 * mm
-            _draw_paragraph(c, line2, s['body'], 0, y, W, 12)
-            c.line(W - 20 * mm, y - 1, W, y - 1)
-            y -= 7 * mm
-
-        c.setLineWidth(0.6)
-        c.line(0, 0, W, 0)
+# Fixed height for one Achievement Stamp block
+_STAMP_H   = 37 * mm
+_STAMP_GAP = 3 * mm   # vertical gap between consecutive stamps on the same page
 
 
-# -----------------------------------------------------------------------------
-# Platypus: story builder helpers
-# -----------------------------------------------------------------------------
+def _para_height(html, style, width):
+    """Return the rendered height of a Paragraph in points."""
+    p = Paragraph(html, style)
+    _, h = p.wrap(width, 9999)
+    return h
 
-def _section_index_flowables(level_idx, lvl):
+
+def _draw_para_canvas(c, html, style, x, y_top, width):
+    """Draw a Paragraph with its top-left at (x, y_top). Returns height used."""
+    p = Paragraph(html, style)
+    _, h = p.wrap(width, 9999)
+    p.drawOn(c, x, y_top - h)
+    return h
+
+
+def _measure_module_height(module, area_no, width):
+    """Return the total canvas height consumed by a Test Area block (points)."""
     s = _styles()
-    level_num = _extract_level_number(lvl.get('level_name', '')) or level_idx
-    items = [
-        Spacer(1, 4 * mm),
-        Paragraph(f"<b>Section {_ordinal(level_idx)}</b>", s['h1_center']),
-        Spacer(1, 2 * mm),
-        Paragraph(f"<b>COMPETENCE LEVEL {level_num}</b>", s['h2_center']),
-        Spacer(1, 6 * mm),
-        Paragraph("<b><i>TEST AREAS</i></b>", s['h2']),
-        Spacer(1, 2 * mm),
-    ]
-    for i, m in enumerate(lvl.get('modules', []), start=1):
-        items.append(Paragraph(
-            f"&nbsp;&nbsp;{i}.&nbsp;&nbsp;{m['module_name']}", s['body']))
-        items.append(Spacer(1, 1 * mm))
-    return items
-
-
-def _module_left_flowables(area_no, module):
-    s = _styles()
-    items = [
-        Paragraph(
-            f"<b>Test area {area_no}: {module['module_name']}</b>",
-            s['h1_center']),
-        Spacer(1, 5 * mm),
-    ]
     desc = module.get('wp_description') or (
         f"The Worker has acquired adequate knowledge and skills to perform "
         f"{module['module_name']}.")
-    items.append(Paragraph(desc, s['body_justify']))
-    items.append(Spacer(1, 2 * mm))
-
-    for item_text in [
+    items_text = [
         i.strip()
         for i in (module.get('wp_competence_items') or '').splitlines()
         if i.strip()
-    ]:
-        items.append(Paragraph(f"&bull;&nbsp;{item_text}", s['body']))
+    ]
+    h  = _para_height(f"<b>Test area {area_no}: {module['module_name']}</b>",
+                      s['h1_center'], width)
+    h += 5 * mm
+    h += _para_height(desc, s['body_justify'], width)
+    h += 2 * mm
+    for it in items_text:
+        h += _para_height(f"&bull;&nbsp;{it}", s['body'], width)
+    h += 2 * mm
+    return h
 
-    items.append(Spacer(1, 2 * mm))
-    return items
+
+def _draw_test_area(c, x, y_top, width, area_no, module):
+    """Draw the Test Area block anchored at (x, y_top). Returns height used."""
+    s = _styles()
+    desc = module.get('wp_description') or (
+        f"The Worker has acquired adequate knowledge and skills to perform "
+        f"{module['module_name']}.")
+    items_text = [
+        i.strip()
+        for i in (module.get('wp_competence_items') or '').splitlines()
+        if i.strip()
+    ]
+    y = y_top
+    h = _draw_para_canvas(
+        c, f"<b>Test area {area_no}: {module['module_name']}</b>",
+        s['h1_center'], x, y, width)
+    y -= h + 5 * mm
+    h = _draw_para_canvas(c, desc, s['body_justify'], x, y, width)
+    y -= h + 2 * mm
+    for it in items_text:
+        h = _draw_para_canvas(c, f"&bull;&nbsp;{it}", s['body'], x, y, width)
+        y -= h
+    y -= 2 * mm
+    return y_top - y
 
 
-def _module_right_flowables():
-    return [Spacer(1, 2 * mm), AchievementStampFlowable(), Spacer(1, 2 * mm)]
+def _draw_achievement_stamp(c, x, y_top, width):
+    """Draw one Achievement Level / Stamp block anchored at (x, y_top). Returns height used."""
+    s = _styles()
+    y = y_top
+
+    # Header row
+    _draw_para_canvas(c, "<i>ACHIEVEMENT LEVEL</i>", s['h2'], x, y, width - 20 * mm)
+    _draw_para_canvas(c, "<i>STAMP</i>", s['h2'], x + width - 20 * mm, y, 20 * mm)
+    y -= 10 * mm
+
+    rows = [
+        ('Qualified to work independently',  'Assessment Period'),
+        ('Qualified to work with assistance', 'Assessment Period'),
+    ]
+    for line1, line2 in rows:
+        _draw_para_canvas(c, line1, s['body'], x, y, width)
+        c.setLineWidth(0.4)
+        c.line(x + width - 20 * mm, y - 10, x + width, y - 10)
+        y -= 5 * mm
+        _draw_para_canvas(c, line2, s['body'], x, y, width)
+        c.line(x + width - 20 * mm, y - 10, x + width, y - 10)
+        y -= 7 * mm
+
+    c.setLineWidth(0.6)
+    c.line(x, y, x + width, y)
+    y -= 2 * mm
+    return y_top - y
 
 
-def _build_sections_story(book_data):
-    levels = book_data['levels']
-    story = []
-    
-    col_w = PAGE_W - 2 * MARGIN_X
-    gap_w = 2 * MARGIN_X
-    
-    for level_idx, lvl in enumerate(levels, start=1):
-        if level_idx > 1:
-            # We are finishing the previous section's modules.
-            # Start a new page for the next Section Index layout.
-            story.append(NextPageTemplate('Index'))
-            story.append(PageBreak())
+def _draw_section_index_page(c, pg, occ_name, level_idx, lvl):
+    """Draw the section index (list of all test areas) on the current canvas page."""
+    s = _styles()
+    _draw_page_header(c, occ_name)
+    _draw_page_number(c, pg)
 
-        # We are on an 'Index' layout page
-        idx_flowables = _section_index_flowables(level_idx, lvl)
-        story.append(Table(
-            [[idx_flowables, '', '']], 
-            colWidths=[col_w, gap_w, col_w],
-            style=[('VALIGN', (0,0), (-1,-1), 'TOP')]
-        ))
-        
-        # We want all subsequent pages for the modules to use the 'Modules' layout
-        story.append(NextPageTemplate('Modules'))
-        story.append(PageBreak())
-        
-        for area_no, module in enumerate(lvl.get('modules', []), start=1):
-            left_f = _module_left_flowables(area_no, module)
-            right_f = _module_right_flowables()
-            # We remove KeepTogether so that two modules can cleanly share the same page
-            # Platypus will move the whole table row to next page if it doesn't fit
-            story.append(Table(
-                [[left_f, '', right_f]],
-                colWidths=[col_w, gap_w, col_w],
-                style=[('VALIGN', (0,0), (-1,-1), 'TOP')]
-            ))
-    return story
+    level_num = _extract_level_number(lvl.get('level_name', '')) or level_idx
+    x = MARGIN_X
+    y = _CONTENT_TOP
+
+    y -= _draw_para_canvas(c, f"<b>Section {_ordinal(level_idx)}</b>",
+                           s['h1_center'], x, y, _CONTENT_W) + 2 * mm
+    y -= _draw_para_canvas(c, f"<b>COMPETENCE LEVEL {level_num}</b>",
+                           s['h2_center'], x, y, _CONTENT_W) + 6 * mm
+    y -= _draw_para_canvas(c, "<b><i>TEST AREAS</i></b>",
+                           s['h2'], x, y, _CONTENT_W) + 2 * mm
+
+    for i, m in enumerate(lvl.get('modules', []), start=1):
+        h = _draw_para_canvas(
+            c, f"&nbsp;&nbsp;{i}.&nbsp;&nbsp;{m['module_name']}",
+            s['body'], x, y, _CONTENT_W)
+        y -= h + 1 * mm
 
 
 # -----------------------------------------------------------------------------
-# Platypus: per-part PDF builders
+# Canvas-based per-part PDF builders
 # -----------------------------------------------------------------------------
 
 def _build_front_matter_pdf(book_data):
-    """Pages 1–6 via canvas (all existing functions, zero change)."""
+    """Pages 1-6 via canvas (all existing functions, zero change)."""
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=(PAGE_W, PAGE_H))
     c.setTitle(f"Worker's PAS - {book_data.get('candidate_name', '')}")
-    _draw_cover(c, book_data);          c.showPage()
-    _draw_page2_intro(c, book_data);    c.showPage()
-    _draw_page3_biodata(c, book_data);  c.showPage()
-    _draw_page4_levels(c, book_data);   c.showPage()
+    _draw_cover(c, book_data);           c.showPage()
+    _draw_page2_intro(c, book_data);     c.showPage()
+    _draw_page3_biodata(c, book_data);   c.showPage()
+    _draw_page4_levels(c, book_data);    c.showPage()
     _draw_page5_certified(c, book_data); c.showPage()
-    _draw_page6_sections(c, book_data); c.showPage()
+    _draw_page6_sections(c, book_data);  c.showPage()
     c.save()
     return buf.getvalue()
 
 
 def _build_sections_pdf(book_data):
-    """Dynamic section content via Platypus — modules flow down a double-wide spread."""
+    """Pure-canvas section renderer - no double-wide pages, no cropbox tricks.
+
+    Layout rules
+    ------------
+    * Section Index  -> single ODD page (right-hand page when booklet is open).
+    * Module spreads -> Left page (EVEN) = Test Area content;
+                        Right page (ODD) = Achievement Stamp.
+    * Multiple modules share one spread when they fit within _CONTENT_H.
+    * Each stamp is drawn at the SAME y_top as its corresponding test area so
+      the two columns are perfectly vertically aligned.
+    """
     buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=(PAGE_W, PAGE_H))
     occ_name = book_data['occupation_name']
-    
-    DOUBLE_PAGE_W = PAGE_W * 2
 
-    content_frame = Frame(
-        MARGIN_X, MARGIN_Y,
-        DOUBLE_PAGE_W - 2 * MARGIN_X, HEADER_BOTTOM_Y - MARGIN_Y,
-        leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
-        id='content',
-    )
-    blank_frame = Frame(
-        0, 0, DOUBLE_PAGE_W, PAGE_H,
-        leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
-        id='blank',
-    )
+    # Physical page counter: front matter occupies pages 1-6.
+    pg = 7
 
-    page_types = []
-    physical_page = [7]  # front matter uses pages 1-6
+    for level_idx, lvl in enumerate(book_data['levels'], start=1):
+        # --- Section Index page must land on an ODD page (right-hand side) ---
+        if pg % 2 == 0:
+            # Currently on even page; emit a blank to reach odd.
+            c.showPage()
+            pg += 1
 
-    def on_index(canvas_obj, doc):
-        page_types.append('index')
-        left_pg = physical_page[0]
-        
-        _draw_page_header(canvas_obj, occ_name)
-        _draw_page_number(canvas_obj, left_pg)
-        
-        physical_page[0] += 1
-        # If the next physical page is odd, we will keep the blank right half to pad it to Even
-        if physical_page[0] % 2 != 0:
-            physical_page[0] += 1
+        _draw_section_index_page(c, pg, occ_name, level_idx, lvl)
+        c.showPage()
+        pg += 1
 
-    def on_modules(canvas_obj, doc):
-        page_types.append('modules')
-        left_pg = physical_page[0]
-        right_pg = physical_page[0] + 1
-        
-        # Left half header
-        _draw_page_header(canvas_obj, occ_name)
-        _draw_page_number(canvas_obj, left_pg)
-        
-        # Right half header (shift origin)
-        canvas_obj.saveState()
-        canvas_obj.translate(PAGE_W, 0)
-        _draw_page_header(canvas_obj, occ_name)
-        _draw_page_number(canvas_obj, right_pg)
-        canvas_obj.restoreState()
-        
-        physical_page[0] += 2
+        # After the index we must be on an EVEN page for modules (left-hand side).
+        if pg % 2 != 0:
+            c.showPage()   # blank padding page
+            pg += 1
 
-    templates = [
-        PageTemplate(id='Index', frames=[content_frame], onPage=on_index),
-        PageTemplate(id='Modules', frames=[content_frame], onPage=on_modules),
-        PageTemplate(id='Blank',   frames=[blank_frame],   onPage=lambda c, d: None),
-    ]
-    doc = BaseDocTemplate(
-        buf, pagesize=(DOUBLE_PAGE_W, PAGE_H), pageTemplates=templates,
-        leftMargin=0, rightMargin=0, topMargin=0, bottomMargin=0,
-    )
-    doc.build(_build_sections_story(book_data))
-    
-    # Split the double-wide pages into sequential Left and Right pages
-    from pypdf import PdfReader, PdfWriter, PageObject, Transformation
-    from pypdf.generic import RectangleObject, FloatObject
-    
-    reader1 = PdfReader(BytesIO(buf.getvalue()))
-    reader2 = PdfReader(BytesIO(buf.getvalue()))
-    writer = PdfWriter()
-    
-    next_page_num = 7
-    for i, (p_left, p_right) in enumerate(zip(reader1.pages, reader2.pages)):
-        ptype = page_types[i]
-        
-        # Left page: crop the left half
-        p_left.mediabox = RectangleObject((FloatObject(0), FloatObject(0), FloatObject(PAGE_W), FloatObject(PAGE_H)))
-        p_left.cropbox = p_left.mediabox
-        writer.add_page(p_left)
-        next_page_num += 1
-        
-        if ptype == 'index':
-            # Index pages only use the left half. We drop the right half unless
-            # we need to pad the page count so the next Test Area lands on an Even page.
-            if next_page_num % 2 != 0:
-                p_right.add_transformation(Transformation().translate(float(-PAGE_W), 0))
-                p_right.mediabox = RectangleObject((FloatObject(0), FloatObject(0), FloatObject(PAGE_W), FloatObject(PAGE_H)))
-                p_right.cropbox = p_right.mediabox
-                writer.add_page(p_right)
-                next_page_num += 1
-        else:
-            # Modules use both sides
-            p_right.add_transformation(Transformation().translate(float(-PAGE_W), 0))
-            p_right.mediabox = RectangleObject((FloatObject(0), FloatObject(0), FloatObject(PAGE_W), FloatObject(PAGE_H)))
-            p_right.cropbox = p_right.mediabox
-            writer.add_page(p_right)
-            next_page_num += 1
-        
-    out_buf = BytesIO()
-    writer.write(out_buf)
-    return out_buf.getvalue()
+        # --- Module spreads ---------------------------------------------------
+        modules = lvl.get('modules', [])
+        if not modules:
+            continue
+
+        # Group modules into spreads. Each spread = one Left page + one Right page.
+        # We greedily pack as many modules as fit within _CONTENT_H.
+        spread_groups = []   # list of lists of (area_no, module, measured_h)
+        current_group = []
+        used_h = 0.0
+
+        for area_no, module in enumerate(modules, start=1):
+            mh = _measure_module_height(module, area_no, _CONTENT_W)
+            gap = _STAMP_GAP if current_group else 0.0
+            if current_group and (used_h + gap + mh > _CONTENT_H):
+                spread_groups.append(current_group)
+                current_group = []
+                used_h = 0.0
+                gap = 0.0
+            current_group.append((area_no, module, mh))
+            used_h += gap + mh
+
+        if current_group:
+            spread_groups.append(current_group)
+
+        for group in spread_groups:
+            # ---- LEFT page: Test Areas ----
+            _draw_page_header(c, occ_name)
+            _draw_page_number(c, pg)
+
+            positions = []   # (area_no, module, y_top) for stamp sync
+            y = _CONTENT_TOP
+            for area_no, module, _ in group:
+                positions.append((area_no, module, y))
+                drawn_h = _draw_test_area(c, MARGIN_X, y, _CONTENT_W, area_no, module)
+                y -= drawn_h + _STAMP_GAP
+
+            c.showPage()
+            pg += 1
+
+            # ---- RIGHT page: Achievement Stamps (aligned to left y_tops) ----
+            _draw_page_header(c, occ_name)
+            _draw_page_number(c, pg)
+
+            for area_no, module, y_top in positions:
+                _draw_achievement_stamp(c, MARGIN_X, y_top, _CONTENT_W)
+
+            c.showPage()
+            pg += 1
+
+    c.save()
+    return buf.getvalue()
 
 
 def _build_back_matter_pdf(book_data, start_page):
