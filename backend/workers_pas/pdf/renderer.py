@@ -414,17 +414,30 @@ def _draw_page3_biodata(c, ctx):
     )
     y -= 7 * mm
 
+    # Photo placeholder (top right, 25x30mm)
+    photo_w, photo_h = 25 * mm, 30 * mm
+    photo_x = PAGE_W - MARGIN_X - photo_w
+    
+    # Text column width (leaving a 3mm gap before the photo)
+    text_w = photo_x - MARGIN_X - 3 * mm
+
+    # Save the current y so the photo can be perfectly aligned with the "Full names:" row
+    # The photo will hang down from this point. We subtract photo_h to get the bottom-left coordinate.
+    # Paragraphs are drawn such that `y` is the bottom of the text block. To align the top of the photo 
+    # with the top of the text block, we adjust slightly. The text block is 10pt high.
+    photo_y = y - photo_h + 10
+
     _draw_paragraph(
-        c, f"<b>Mr. / Mrs. / Ms.:</b> &nbsp;{ctx['candidate_name']}", s['body'],
-        MARGIN_X, y, 65 * mm, 10,
+        c, f"<b>Full names:</b> &nbsp;{ctx['candidate_name']}", s['body'],
+        MARGIN_X, y, text_w, 10,
     )
     c.setLineWidth(0.5)
-    c.line(MARGIN_X, y - 1, MARGIN_X + 65 * mm, y - 1)
+    c.line(MARGIN_X, y - 1, MARGIN_X + text_w, y - 1)
     y -= 8 * mm
 
     _draw_paragraph(
         c, f"<b>Date of birth:</b> &nbsp;<u>{ctx['date_of_birth']}</u>", s['body'],
-        MARGIN_X, y, 55 * mm, 10,
+        MARGIN_X, y, text_w, 10,
     )
     y -= 8 * mm
 
@@ -436,14 +449,11 @@ def _draw_page3_biodata(c, ctx):
     for label, value in fields:
         _draw_paragraph(
             c, f"<b>{label}:</b> {value}", s['body'],
-            MARGIN_X, y, 60 * mm, 10,
+            MARGIN_X, y, text_w, 10,
         )
         y -= 6 * mm
 
-    # Photo placeholder (top right)
-    photo_w = photo_h = 20 * mm
-    photo_x = PAGE_W - MARGIN_X - photo_w
-    photo_y = HEADER_BOTTOM_Y - 38 * mm
+    # Draw the photo
     c.setStrokeColor(BLACK)
     c.setLineWidth(0.6)
     c.rect(photo_x, photo_y, photo_w, photo_h, fill=0, stroke=1)
