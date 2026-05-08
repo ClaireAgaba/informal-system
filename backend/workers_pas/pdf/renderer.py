@@ -1208,14 +1208,17 @@ def _build_sections_pdf(book_data):
 
         for area_no, module in enumerate(modules, start=1):
             mh = _measure_module_height(module, area_no, _CONTENT_W)
+            # A module's vertical slot must be tall enough for BOTH its test area
+            # AND its stamp (whichever is taller) so columns never overlap.
+            slot_h = max(mh, _STAMP_H)
             gap = _STAMP_GAP if current_group else 0.0
-            if current_group and (used_h + gap + mh > _CONTENT_H):
+            if current_group and (used_h + gap + slot_h > _CONTENT_H):
                 spread_groups.append(current_group)
                 current_group = []
                 used_h = 0.0
                 gap = 0.0
-            current_group.append((area_no, module, mh))
-            used_h += gap + mh
+            current_group.append((area_no, module, mh, slot_h))
+            used_h += gap + slot_h
 
         if current_group:
             spread_groups.append(current_group)
@@ -1225,12 +1228,14 @@ def _build_sections_pdf(book_data):
             _draw_page_header(c, occ_name)
             _draw_page_number(c, pg)
 
-            positions = []   # (area_no, module, y_top) for stamp sync
+            positions = []   # (area_no, module, y_top, slot_h) for stamp sync
             y = _CONTENT_TOP
-            for area_no, module, _ in group:
-                positions.append((area_no, module, y))
+            for area_no, module, _, slot_h in group:
+                positions.append((area_no, module, y, slot_h))
                 drawn_h = _draw_test_area(c, MARGIN_X, y, _CONTENT_W, area_no, module)
-                y -= drawn_h + _STAMP_GAP
+                # Advance by the SLOT height (max of test area or stamp) so the
+                # next test area never overlaps the adjacent stamp on the right page.
+                y -= slot_h + _STAMP_GAP
 
             c.showPage()
             pg += 1
@@ -1239,7 +1244,7 @@ def _build_sections_pdf(book_data):
             _draw_page_header(c, occ_name)
             _draw_page_number(c, pg)
 
-            for area_no, module, y_top in positions:
+            for area_no, module, y_top, slot_h in positions:
                 _draw_achievement_stamp(c, MARGIN_X, y_top, _CONTENT_W)
 
             c.showPage()
