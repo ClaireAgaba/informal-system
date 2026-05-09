@@ -117,7 +117,7 @@ const WorkersPasVerify = () => {
             <div className="bg-green-50 border-t border-green-100 px-5 py-3 flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-green-600 flex-shrink-0" />
               <span className="text-sm font-medium text-green-700">
-                Verified by Uganda Vocational Training and Apprenticeship Board (UVTAB)
+                Verified by Uganda Vocational Training and Assessment Board (UVTAB)
               </span>
             </div>
           </div>

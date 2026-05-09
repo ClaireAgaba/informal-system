@@ -1141,6 +1141,18 @@ def _draw_section_index_page(c, pg, occ_name, level_idx, lvl):
         y -= h + 1 * mm
 
 
+
+def _draw_blank_page(c, pg, occ_name):
+    """Emit a structurally blank page that still carries the header and page number.
+
+    Used for alignment padding (odd/even) and saddle-stitch tail padding so
+    the page sequence never has visible gaps (e.g. 22 → 24).
+    """
+    _draw_page_header(c, occ_name)
+    _draw_page_number(c, pg)
+    c.showPage()
+
+
 # -----------------------------------------------------------------------------
 # Canvas-based per-part PDF builders
 # -----------------------------------------------------------------------------
@@ -1182,8 +1194,8 @@ def _build_sections_pdf(book_data):
     for level_idx, lvl in enumerate(book_data['levels'], start=1):
         # --- Section Index page must land on an ODD page (right-hand side) ---
         if pg % 2 == 0:
-            # Currently on even page; emit a blank to reach odd.
-            c.showPage()
+            # Currently on even page; emit a numbered blank to reach odd.
+            _draw_blank_page(c, pg, occ_name)
             pg += 1
 
         _draw_section_index_page(c, pg, occ_name, level_idx, lvl)
@@ -1192,7 +1204,7 @@ def _build_sections_pdf(book_data):
 
         # After the index we must be on an EVEN page for modules (left-hand side).
         if pg % 2 != 0:
-            c.showPage()   # blank padding page
+            _draw_blank_page(c, pg, occ_name)   # numbered blank padding page
             pg += 1
 
         # --- Module spreads ---------------------------------------------------
@@ -1290,9 +1302,26 @@ def _count_pages(pdf_bytes):
     return len(PdfReader(BytesIO(pdf_bytes)).pages)
 
 
-def _merge_all(front_pdf, sections_pdf, back_matter_pdf, covers_pdf):
-    """Merge all parts, inserting blank padding pages before covers so that
-    the total page count is a multiple of 4 (saddle-stitch requirement)."""
+def _build_padding_pages_pdf(occ_name, start_page, count):
+    """Build a small PDF of *count* pages that carry a header and page number
+    but are otherwise blank.  Used for saddle-stitch tail padding so the
+    printed page sequence has no gaps.
+    """
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=(PAGE_W, PAGE_H))
+    for i in range(count):
+        _draw_page_header(c, occ_name)
+        _draw_page_number(c, start_page + i)
+        c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def _merge_all(front_pdf, sections_pdf, back_matter_pdf, covers_pdf, occ_name):
+    """Merge all parts, inserting numbered padding pages before covers so that
+    the total page count is a multiple of 4 (saddle-stitch requirement).
+    Padding pages carry a page number so the sequence is never broken.
+    """
     n_content = (_count_pages(front_pdf)
                  + _count_pages(sections_pdf)
                  + _count_pages(back_matter_pdf))
@@ -1302,8 +1331,10 @@ def _merge_all(front_pdf, sections_pdf, back_matter_pdf, covers_pdf):
     for pdf in (front_pdf, sections_pdf, back_matter_pdf):
         for page in PdfReader(BytesIO(pdf)).pages:
             writer.add_page(page)
-    for _ in range(padding):
-        writer.add_blank_page(width=PAGE_W, height=PAGE_H)
+    if padding:
+        pad_pdf = _build_padding_pages_pdf(occ_name, n_content + 1, padding)
+        for page in PdfReader(BytesIO(pad_pdf)).pages:
+            writer.add_page(page)
     for page in PdfReader(BytesIO(covers_pdf)).pages:
         writer.add_page(page)
 
@@ -1351,4 +1382,5 @@ def generate_book_pdf(book_data):
     covers_pdf = _build_back_covers_pdf(book_data)
 
     # Merge all parts with saddle-stitch padding before the covers
-    return _merge_all(front_pdf, sections_pdf, back_matter_pdf, covers_pdf)
+    return _merge_all(front_pdf, sections_pdf, back_matter_pdf, covers_pdf,
+                      book_data['occupation_name'])
