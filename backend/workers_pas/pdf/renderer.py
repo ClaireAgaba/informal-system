@@ -416,23 +416,22 @@ def _draw_page3_biodata(c, ctx):
     # Photo placeholder (top right, 25x30mm)
     photo_w, photo_h = 25 * mm, 30 * mm
     photo_x = PAGE_W - MARGIN_X - photo_w
-    
+
     # Text column width (leaving a 3mm gap before the photo)
     text_w = photo_x - MARGIN_X - 3 * mm
 
-    # Save the current y so the photo can be perfectly aligned with the "Full names:" row
-    # The photo will hang down from this point. We subtract photo_h to get the bottom-left coordinate.
-    # Paragraphs are drawn such that `y` is the bottom of the text block. To align the top of the photo 
-    # with the top of the text block, we adjust slightly. The text block is 10pt high.
-    photo_y = y - photo_h + 10
+    # Measure the candidate name paragraph so long names wrap correctly
+    name_p = Paragraph(f"<b>Full names:</b> &nbsp;{ctx['candidate_name']}", s['body'])
+    _, name_h = name_p.wrap(text_w, photo_h)   # cap at photo height
+    name_h = max(name_h, 10)                    # at least one line
 
-    _draw_paragraph(
-        c, f"<b>Full names:</b> &nbsp;{ctx['candidate_name']}", s['body'],
-        MARGIN_X, y, text_w, 10,
-    )
+    # Align the photo top with the name label top
+    photo_y = y - photo_h + name_h
+
+    name_p.drawOn(c, MARGIN_X, y - name_h)
     c.setLineWidth(0.5)
-    c.line(MARGIN_X, y - 1, MARGIN_X + text_w, y - 1)
-    y -= 8 * mm
+    c.line(MARGIN_X, y - name_h - 1, MARGIN_X + text_w, y - name_h - 1)
+    y -= name_h + 2 * mm
 
     _draw_paragraph(
         c, f"<b>Date of birth:</b> &nbsp;<u>{ctx['date_of_birth']}</u>", s['body'],
