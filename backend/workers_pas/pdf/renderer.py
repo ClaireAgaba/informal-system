@@ -420,18 +420,31 @@ def _draw_page3_biodata(c, ctx):
     # Text column width (leaving a 3mm gap before the photo)
     text_w = photo_x - MARGIN_X - 3 * mm
 
-    # Measure the candidate name paragraph so long names wrap correctly
-    name_p = Paragraph(f"<b>Full names:</b> &nbsp;{ctx['candidate_name']}", s['body'])
-    _, name_h = name_p.wrap(text_w, photo_h)   # cap at photo height
-    name_h = max(name_h, 10)                    # at least one line
+    # Measure the candidate name so long names can wrap across multiple lines.
+    # All fields use Frame-based rendering where y = frame bottom and the
+    # content fills from the top of the frame downward.  A normal single-line
+    # field uses height=10pt, so the frame top (= the visual baseline row) is
+    # at y + 10.  We anchor the name frame at the same top position and let it
+    # grow downward by name_h so wrapped lines push all subsequent rows down.
+    name_p_meas = Paragraph(f"<b>Full names:</b> &nbsp;{ctx['candidate_name']}", s['body'])
+    _, name_h = name_p_meas.wrap(text_w, photo_h)   # cap at photo height
+    name_h = max(name_h, 10)                         # at least one line
 
-    # Align the photo top with the name label top
-    photo_y = y - photo_h + name_h
+    # The top of the name row is y + 10 (consistent with other single-line fields).
+    # The name frame bottom is therefore y + 10 - name_h.
+    name_frame_bottom = y + 10 - name_h
 
-    name_p.drawOn(c, MARGIN_X, y - name_h)
+    # Photo top aligns with the name row top (= y + 10); photo bottom follows.
+    photo_y = (y + 10) - photo_h
+
+    _draw_paragraph(
+        c, f"<b>Full names:</b> &nbsp;{ctx['candidate_name']}", s['body'],
+        MARGIN_X, name_frame_bottom, text_w, name_h,
+    )
     c.setLineWidth(0.5)
-    c.line(MARGIN_X, y - name_h - 1, MARGIN_X + text_w, y - name_h - 1)
-    y -= name_h + 2 * mm
+    c.line(MARGIN_X, name_frame_bottom - 1, MARGIN_X + text_w, name_frame_bottom - 1)
+    # Advance y so next field starts 8 mm below the name frame bottom
+    y = name_frame_bottom - 8 * mm
 
     _draw_paragraph(
         c, f"<b>Date of birth:</b> &nbsp;<u>{ctx['date_of_birth']}</u>", s['body'],
