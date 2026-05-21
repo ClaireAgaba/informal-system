@@ -54,7 +54,7 @@ class ModularResultViewSet(viewsets.ViewSet):
     """
     ViewSet for managing modular assessment results
     """
-    permission_classes = [AllowAny]  # Temporarily allow all to test
+    permission_classes = [IsAuthenticated]
     
     @action(detail=False, methods=['post'], url_path='add')
     def add_results(self, request):
@@ -573,7 +573,10 @@ class ModularResultViewSet(viewsets.ViewSet):
         
         if is_formal:
             # Get formal results
-            all_formal_results = FormalResult.objects.filter(candidate=candidate).select_related(
+            all_formal_results = FormalResult.objects.filter(
+                candidate=candidate,
+                assessment_series__results_released=True
+            ).select_related(
                 'exam', 'exam__level', 'paper', 'paper__level', 'assessment_series'
             ).order_by('-assessment_series__start_date')  # Most recent first
             
@@ -656,7 +659,10 @@ class ModularResultViewSet(viewsets.ViewSet):
                 elements.append(Paragraph("No results available", styles['Normal']))
         else:
             # Modular/Workers PAS results
-            results = ModularResult.objects.filter(candidate=candidate).select_related('module', 'assessment_series')
+            results = ModularResult.objects.filter(
+                candidate=candidate,
+                assessment_series__results_released=True
+            ).select_related('module', 'assessment_series')
             
             if results.exists():
                 # Results table - cleaner design
@@ -1493,7 +1499,7 @@ class FormalResultViewSet(viewsets.ViewSet):
     ViewSet for managing formal assessment results
     Supports both module-based and paper-based structures
     """
-    permission_classes = [AllowAny]  # Temporarily allow all to test
+    permission_classes = [IsAuthenticated]
     
     @action(detail=False, methods=['get'], url_path='failed-papers')
     def failed_papers(self, request):
@@ -2599,7 +2605,7 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
     """
     ViewSet for managing Worker's PAS assessment results
     """
-    permission_classes = [AllowAny]  # Temporarily allow all to test
+    permission_classes = [IsAuthenticated]
     
     @action(detail=False, methods=['post'], url_path='add')
     def add_results(self, request):
@@ -2938,7 +2944,10 @@ class WorkersPasResultViewSet(viewsets.ViewSet):
         elements.append(Spacer(1, 0.1*inch))
         
         # Get Workers PAS results
-        results = WorkersPasResult.objects.filter(candidate=candidate).select_related(
+        results = WorkersPasResult.objects.filter(
+            candidate=candidate,
+            assessment_series__results_released=True
+        ).select_related(
             'level', 'module', 'paper', 'assessment_series'
         ).order_by('level', 'module', 'paper')
         

@@ -25,7 +25,7 @@ class ReportViewSet(viewsets.ViewSet):
     """
     ViewSet for generating various reports
     """
-    permission_classes = [permissions.AllowAny]  # Allow unauthenticated access
+    permission_classes = [permissions.IsAuthenticated]
 
     def _get_center_for_rep(self, request):
         """Helper method to get assessment center for center representative"""
@@ -524,6 +524,15 @@ class ReportViewSet(viewsets.ViewSet):
         
         try:
             assessment_series = AssessmentSeries.objects.get(id=assessment_series_id)
+            
+            # Check results_released flag for non-staff users
+            if getattr(request.user, 'user_type', None) not in ['staff', 'support_staff'] and not request.user.is_superuser:
+                if not assessment_series.results_released:
+                    return Response(
+                        {'error': f'Results for {assessment_series.name} have not been released yet.'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            
             occupation = Occupation.objects.get(id=occupation_id)
             
             # Get assessment center if specified

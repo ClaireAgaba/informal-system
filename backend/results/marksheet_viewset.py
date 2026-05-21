@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.http import HttpResponse
 from django.db import transaction
@@ -21,12 +21,22 @@ from occupations.models import OccupationModule, OccupationLevel, OccupationPape
 from assessment_series.models import AssessmentSeries
 from results.models import ModularResult
 
+class IsStaffOrSupportStaff(BasePermission):
+    """
+    Custom permission to only allow staff and support_staff to access marksheets.
+    """
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        return getattr(user, 'user_type', None) in ['staff', 'support_staff'] or user.is_superuser
+
 
 class MarksheetViewSet(viewsets.ViewSet):
     """
     ViewSet for generating marksheets
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, IsStaffOrSupportStaff]
     
     @action(detail=False, methods=['post'], url_path='generate-modular')
     def generate_modular_marksheet(self, request):
