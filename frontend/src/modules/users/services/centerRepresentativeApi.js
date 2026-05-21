@@ -49,7 +49,14 @@ export const centerRepresentativeApi = {
 
   linkUser: (data) => {
     return apiClient.post(`${BASE_URL}/link_user/`, data);
-  }
+  },
+
+  export: (params = {}) => {
+    return apiClient.get(`${BASE_URL}/export/`, {
+      params,
+      responseType: 'blob',
+    });
+  },
 };
 
 export default centerRepresentativeApi;

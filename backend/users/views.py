@@ -3,13 +3,18 @@ from rest_framework.decorators import action, api_view, permission_classes, auth
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
+from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.db.models import Q
 from .models import User, Staff, SupportStaff, CenterRepresentative
 from .serializers import (
     UserSerializer, StaffSerializer, StaffCreateSerializer,
     SupportStaffSerializer, SupportStaffCreateSerializer,
     CenterRepresentativeSerializer, CenterRepresentativeCreateSerializer
 )
+import openpyxl
+from openpyxl.styles import Font, PatternFill
+from datetime import date
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -359,6 +364,73 @@ class CenterRepresentativeViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(rep)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'])
+    def export(self, request):
+        """Export center representatives to Excel, respecting search and status filters."""
+        queryset = self.queryset
+
+        search = request.query_params.get('search', '').strip()
+        account_status = request.query_params.get('account_status', '').strip()
+
+        if search:
+            queryset = queryset.filter(
+                Q(fullname__icontains=search) |
+                Q(email__icontains=search) |
+                Q(contact__icontains=search) |
+                Q(assessment_center__center_name__icontains=search)
+            )
+        if account_status and account_status != 'all':
+            queryset = queryset.filter(account_status=account_status)
+
+        # Build workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Center Representatives"
+
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+
+        headers = [
+            ('Full Name', 25),
+            ('Center Number', 18),
+            ('Center Name', 35),
+            ('Branch', 25),
+            ('Email', 30),
+            ('Contact', 18),
+            ('Status', 12),
+        ]
+
+        for col, (header, width) in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            ws.column_dimensions[cell.column_letter].width = width
+
+        for row_num, rep in enumerate(
+            queryset.values(
+                'fullname', 'assessment_center__center_number',
+                'assessment_center__center_name',
+                'assessment_center_branch__branch_name',
+                'email', 'contact', 'account_status'
+            ),
+            start=2,
+        ):
+            ws.cell(row=row_num, column=1, value=rep['fullname'] or '')
+            ws.cell(row=row_num, column=2, value=rep['assessment_center__center_number'] or '')
+            ws.cell(row=row_num, column=3, value=rep['assessment_center__center_name'] or '')
+            ws.cell(row=row_num, column=4, value=rep['assessment_center_branch__branch_name'] or '')
+            ws.cell(row=row_num, column=5, value=rep['email'] or '')
+            ws.cell(row=row_num, column=6, value=rep['contact'] or '')
+            ws.cell(row=row_num, column=7, value=(rep['account_status'] or '').capitalize())
+
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        filename = f'center_representatives_{date.today().strftime("%Y%m%d")}.xlsx'
+        response['Content-Disposition'] = f'attachment; filename={filename}'
+        wb.save(response)
+        return response
 
 
 @api_view(['POST'])

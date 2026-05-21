@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Search, Eye, Edit, Trash2, RefreshCw, Power, PowerOff, AlertTriangle, Link } from 'lucide-react';
+import { Users, Plus, Search, Eye, Edit, Trash2, RefreshCw, Power, PowerOff, AlertTriangle, Link, Download } from 'lucide-react';
 import centerRepresentativeApi from '../../services/centerRepresentativeApi';
 
 const CenterRepresentativeList = () => {
@@ -16,13 +16,21 @@ const CenterRepresentativeList = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [showOrphaned, setShowOrphaned] = useState(false);
   const pageSize = 20;
+  const [exporting, setExporting] = useState(false);
 
+  // Debounce: wait 400ms after last keystroke, then update debounced term AND reset to page 1
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
-    }, 300);
+      setCurrentPage(1);
+    }, 400);
     return () => clearTimeout(timer);
   }, [searchTerm]);
+
+  // Also reset to page 1 when status filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter]);
 
   useEffect(() => {
     fetchRepresentatives();
@@ -107,6 +115,29 @@ const CenterRepresentativeList = () => {
 
   const filteredRepresentatives = representatives;
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params = {};
+      if (debouncedSearchTerm.trim()) params.search = debouncedSearchTerm.trim();
+      if (statusFilter !== 'all') params.account_status = statusFilter;
+      const response = await centerRepresentativeApi.export(params);
+      const url = URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `center_representatives_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -124,13 +155,23 @@ const CenterRepresentativeList = () => {
             <h1 className="text-2xl font-bold text-gray-900">Center Representatives</h1>
             <p className="text-gray-600 mt-1">Manage assessment center representatives</p>
           </div>
-          <button
-            onClick={() => navigate('/users/center-representatives/create')}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Add Representative
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Download className="w-5 h-5 mr-2" />
+              {exporting ? 'Exporting...' : 'Export'}
+            </button>
+            <button
+              onClick={() => navigate('/users/center-representatives/create')}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              Add Representative
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -143,7 +184,7 @@ const CenterRepresentativeList = () => {
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
-                setCurrentPage(1);
+                // page reset is handled inside the debounce effect
               }}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />

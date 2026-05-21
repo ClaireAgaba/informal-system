@@ -80,6 +80,9 @@ dist-ssr/
 # OS
 Thumbs.db
 
+# Internal / generated documents (local use only)
+generated documents/
+
 # Large SQL dumps
 *.sql
 dit old data.sql
