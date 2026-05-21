@@ -144,7 +144,7 @@ const ResultLists = () => {
       const contentDisposition = response.headers['content-disposition'];
       let filename = 'result_list.pdf';
       if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+        const filenameMatch = contentDisposition.match(/filename="?([^";]+)"?/);
         if (filenameMatch) {
           filename = filenameMatch[1];
         }

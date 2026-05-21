@@ -96,7 +96,7 @@ export default function ExtractMarks() {
       const contentDisposition = response.headers['content-disposition'];
       let filename = 'ExtractedMarks.xlsx';
       if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        const filenameMatch = contentDisposition.match(/filename="?([^";]+)"?/);
         if (filenameMatch) {
           filename = filenameMatch[1];
         }
