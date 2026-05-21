@@ -366,19 +366,47 @@ const CandidateView = () => {
 
   const handleTranscript = async () => {
     try {
-      const url = candidateApi.getTranscriptPDF(id, candidate?.registration_category);
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        const data = await response.json();
-        toast.error(data.error || 'Candidate does not qualify for transcript');
-        return;
-      }
-
-      // If successful, open the PDF
-      window.open(url, '_blank');
+      const response = await candidateApi.downloadTranscriptPDF(id, candidate?.registration_category);
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Transcript_${candidate?.registration_number || id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
     } catch (error) {
-      toast.error('Failed to generate transcript');
+      if (error.response?.data) {
+        // Blob might contain JSON error
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const data = JSON.parse(reader.result);
+            toast.error(data.error || 'Candidate does not qualify for transcript');
+          } catch (e) {
+            toast.error('Failed to generate transcript');
+          }
+        };
+        reader.readAsText(error.response.data);
+      } else {
+        toast.error('Failed to generate transcript');
+      }
+    }
+  };
+
+  const handleVerifiedResults = async () => {
+    try {
+      const response = await candidateApi.downloadVerifiedResultsPDF(id, candidate?.registration_category);
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `VerifiedResults_${candidate?.registration_number || id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error('Failed to download verified results');
     }
   };
 
@@ -487,7 +515,7 @@ const CandidateView = () => {
           <Button
             variant="outline"
             size="md"
-            onClick={() => window.open(candidateApi.getVerifiedResultsPDF(id, candidate?.registration_category), '_blank')}
+            onClick={handleVerifiedResults}
           >
             <Download className="w-4 h-4 mr-2" />
             Verified Results

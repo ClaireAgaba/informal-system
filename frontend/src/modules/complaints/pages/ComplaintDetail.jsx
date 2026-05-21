@@ -21,10 +21,25 @@ const ComplaintDetail = () => {
   const [complaint, setComplaint] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [staffUsers, setStaffUsers] = useState([]);
+  const [selectedAssignee, setSelectedAssignee] = useState('');
+  const [assigning, setAssigning] = useState(false);
 
   useEffect(() => {
     fetchComplaint();
+    if (!isCenterRep) {
+      fetchStaffUsers();
+    }
   }, [id]);
+
+  const fetchStaffUsers = async () => {
+    try {
+      const response = await complaintsApi.getStaffUsers();
+      setStaffUsers(response.data.results || response.data);
+    } catch (error) {
+      console.error('Error fetching staff users:', error);
+    }
+  };
 
   const fetchComplaint = async () => {
     try {
@@ -48,6 +63,20 @@ const ComplaintDetail = () => {
       alert('Failed to update status');
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleAssign = async () => {
+    if (!selectedAssignee) return;
+    try {
+      setAssigning(true);
+      await complaintsApi.assignComplaint(id, selectedAssignee);
+      await fetchComplaint();
+    } catch (error) {
+      console.error('Error assigning complaint:', error);
+      alert('Failed to assign complaint');
+    } finally {
+      setAssigning(false);
     }
   };
 
@@ -311,10 +340,38 @@ const ComplaintDetail = () => {
           {/* Quick Actions */}
           <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-            <div className="space-y-2">
-              <button
-                onClick={() => handleStatusUpdate('in_progress')}
-                disabled={complaint.status === 'in_progress' || updating}
+            <div className="space-y-4">
+              {!isCenterRep && (
+                <div className="border-b border-gray-200 pb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Assign Officer</label>
+                  <div className="flex space-x-2">
+                    <select
+                      value={selectedAssignee}
+                      onChange={(e) => setSelectedAssignee(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white"
+                    >
+                      <option value="">Select Officer...</option>
+                      {staffUsers.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.first_name} {user.last_name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={handleAssign}
+                      disabled={!selectedAssignee || assigning}
+                      className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
+                    >
+                      {assigning ? 'Assigning...' : 'Assign'}
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              <div className="space-y-2">
+                <button
+                  onClick={() => handleStatusUpdate('in_progress')}
+                  disabled={complaint.status === 'in_progress' || updating}
                 className="w-full px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 Mark In Progress

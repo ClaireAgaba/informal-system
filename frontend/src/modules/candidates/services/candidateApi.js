@@ -171,6 +171,11 @@ export const candidateApi = {
     return `/api/results/modular/verified-pdf/?candidate_id=${candidateId}`;
   },
 
+  downloadVerifiedResultsPDF: (candidateId, registrationCategory = 'modular') => {
+    const url = candidateApi.getVerifiedResultsPDF(candidateId, registrationCategory);
+    return apiClient.get(url, { responseType: 'blob' });
+  },
+
   getTranscriptPDF: (candidateId, registrationCategory = 'modular') => {
     if (registrationCategory === 'workers_pas') {
       return `/api/results/workers-pas/transcript-pdf/?candidate_id=${candidateId}`;
@@ -179,6 +184,11 @@ export const candidateApi = {
       return `/api/results/formal/transcript-pdf/?candidate_id=${candidateId}`;
     }
     return `/api/results/modular/transcript-pdf/?candidate_id=${candidateId}`;
+  },
+
+  downloadTranscriptPDF: (candidateId, registrationCategory = 'modular') => {
+    const url = candidateApi.getTranscriptPDF(candidateId, registrationCategory);
+    return apiClient.get(url, { responseType: 'blob' });
   },
 
   // Formal results endpoints
