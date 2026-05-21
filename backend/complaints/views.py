@@ -90,6 +90,36 @@ class ComplaintViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+    @action(detail=False, methods=['post'])
+    def bulk_assign(self, request):
+        """Bulk assign complaints to a helpdesk team member"""
+        complaint_ids = request.data.get('complaint_ids', [])
+        helpdesk_user_id = request.data.get('helpdesk_team')
+        
+        if not complaint_ids or not helpdesk_user_id:
+            return Response(
+                {'error': 'complaint_ids and helpdesk_team are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        try:
+            from users.models import User
+            helpdesk_user = User.objects.get(id=helpdesk_user_id, is_staff=True)
+            
+            # Use the filtered queryset so users can only assign what they can see
+            queryset = self.get_queryset().filter(id__in=complaint_ids)
+            updated_count = queryset.update(
+                helpdesk_team=helpdesk_user, 
+                status='in_progress'
+            )
+            
+            return Response({'status': f'Assigned {updated_count} complaints successfully'})
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'Invalid helpdesk team member'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):
         """Update complaint status"""

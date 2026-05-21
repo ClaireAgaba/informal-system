@@ -41,6 +41,14 @@ class ComplaintListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['ticket_number', 'created_at', 'updated_at']
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.user.user_type == 'center_representative':
+            data.pop('helpdesk_team', None)
+            data.pop('helpdesk_team_name', None)
+        return data
+
 
 class ComplaintDetailSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
@@ -64,6 +72,14 @@ class ComplaintDetailSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at', 'attachments'
         ]
         read_only_fields = ['ticket_number', 'created_by', 'created_at', 'updated_at']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        if request and request.user.user_type == 'center_representative':
+            data.pop('helpdesk_team', None)
+            data.pop('helpdesk_team_name', None)
+        return data
 
 
 class ComplaintCreateSerializer(serializers.ModelSerializer):

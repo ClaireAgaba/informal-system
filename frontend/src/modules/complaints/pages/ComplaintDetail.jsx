@@ -3,7 +3,19 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileText, Calendar, User, Phone, Building, BookOpen, Clock, CheckCircle, XCircle, Download } from 'lucide-react';
 import complaintsApi from '../services/complaintsApi';
 
+const getUserFromStorage = () => {
+  try {
+    const userStr = localStorage.getItem('user');
+    if (userStr) return JSON.parse(userStr);
+  } catch (error) {
+    console.error('Error parsing user data:', error);
+  }
+  return null;
+};
+
 const ComplaintDetail = () => {
+  const currentUser = getUserFromStorage();
+  const isCenterRep = currentUser?.user_type === 'center_representative';
   const { id } = useParams();
   const navigate = useNavigate();
   const [complaint, setComplaint] = useState(null);
@@ -124,7 +136,7 @@ const ComplaintDetail = () => {
                 <label className="block text-sm font-medium text-gray-500 mb-1">Status</label>
                 <div className="flex items-center space-x-2">
                   {getStatusBadge(complaint.status)}
-                  {!updating && (
+                  {!updating && !isCenterRep && (
                     <select
                       value={complaint.status}
                       onChange={(e) => handleStatusUpdate(e.target.value)}
@@ -138,10 +150,12 @@ const ComplaintDetail = () => {
                   )}
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">Helpdesk Team</label>
-                <p className="text-gray-900">{complaint.helpdesk_team_name || 'Not assigned'}</p>
-              </div>
+              {!isCenterRep && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Helpdesk Team</label>
+                  <p className="text-gray-900">{complaint.helpdesk_team_name || 'Not assigned'}</p>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-500 mb-1">Created By</label>
                 <p className="text-gray-900">{complaint.created_by_name}</p>

@@ -3,6 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { FileText, Plus, Search, Filter, Eye, Clock, CheckCircle, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import complaintsApi from '../services/complaintsApi';
 
+const getUserFromStorage = () => {
+  try {
+    const userStr = localStorage.getItem('user');
+    if (userStr) return JSON.parse(userStr);
+  } catch (error) {
+    console.error('Error parsing user data:', error);
+  }
+  return null;
+};
+
 const ComplaintsList = () => {
   const navigate = useNavigate();
   const [complaints, setComplaints] = useState([]);
@@ -10,9 +20,20 @@ const ComplaintsList = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [assignedToFilter, setAssignedToFilter] = useState('');
   const [categories, setCategories] = useState([]);
   const [statistics, setStatistics] = useState(null);
   
+  // Security / Role checks
+  const currentUser = getUserFromStorage();
+  const isCenterRep = currentUser?.user_type === 'center_representative';
+  
+  // Bulk Assign State
+  const [staffUsers, setStaffUsers] = useState([]);
+  const [selectedComplaints, setSelectedComplaints] = useState([]);
+  const [selectedAssignee, setSelectedAssignee] = useState('');
+  const [assigning, setAssigning] = useState(false);
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -21,11 +42,14 @@ const ComplaintsList = () => {
   useEffect(() => {
     fetchCategories();
     fetchStatistics();
+    if (!isCenterRep) {
+      fetchStaffUsers();
+    }
   }, []);
 
   useEffect(() => {
     fetchComplaints();
-  }, [statusFilter, categoryFilter, currentPage]);
+  }, [statusFilter, categoryFilter, assignedToFilter, currentPage]);
 
   const fetchComplaints = async () => {
     try {
@@ -34,6 +58,7 @@ const ComplaintsList = () => {
       if (statusFilter) params.status = statusFilter;
       if (categoryFilter) params.category = categoryFilter;
       if (searchQuery) params.search = searchQuery;
+      if (assignedToFilter) params.helpdesk_team = assignedToFilter;
       
       const response = await complaintsApi.getComplaints(params);
       if (response.data && response.data.results !== undefined) {
@@ -68,12 +93,54 @@ const ComplaintsList = () => {
     }
   };
 
+  const fetchStaffUsers = async () => {
+    try {
+      const response = await complaintsApi.getStaffUsers();
+      setStaffUsers(response.data.results || response.data);
+    } catch (error) {
+      console.error('Error fetching staff users:', error);
+    }
+  };
+
   const handleSearch = (e) => {
     e.preventDefault();
     if (currentPage === 1) {
       fetchComplaints();
     } else {
       setCurrentPage(1);
+    }
+  };
+
+  const handleBulkAssign = async () => {
+    if (!selectedAssignee || selectedComplaints.length === 0) return;
+    try {
+      setAssigning(true);
+      await complaintsApi.bulkAssignComplaints(selectedComplaints, selectedAssignee);
+      setSelectedComplaints([]);
+      setSelectedAssignee('');
+      fetchComplaints();
+      fetchStatistics();
+    } catch (error) {
+      console.error('Error bulk assigning complaints:', error);
+      alert('Failed to assign complaints');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedComplaints(displayedComplaints.map(c => c.id));
+    } else {
+      setSelectedComplaints([]);
+    }
+  };
+
+  const handleSelectOne = (id) => {
+    if (selectedComplaints.includes(id)) {
+      setSelectedComplaints(selectedComplaints.filter(cId => cId !== id));
+    } else {
+      setSelectedComplaints([...selectedComplaints, id]);
     }
   };
 
@@ -173,12 +240,12 @@ const ComplaintsList = () => {
         {/* Search and Filters */}
         <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-            <div className="md:col-span-4 lg:col-span-4">
+            <div className="md:col-span-3 lg:col-span-3">
               <form onSubmit={handleSearch} className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="text"
-                  placeholder="Search by ticket number, center, or program..."
+                  placeholder="Search ticket, center..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -201,7 +268,7 @@ const ComplaintsList = () => {
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
-            <div className="md:col-span-3 lg:col-span-3">
+            <div className="md:col-span-2 lg:col-span-2">
               <select
                 value={categoryFilter}
                 onChange={(e) => {
@@ -218,6 +285,30 @@ const ComplaintsList = () => {
                 ))}
               </select>
             </div>
+            
+            {!isCenterRep ? (
+              <div className="md:col-span-2 lg:col-span-2">
+                <select
+                  value={assignedToFilter}
+                  onChange={(e) => {
+                    setAssignedToFilter(e.target.value);
+                    if (currentPage !== 1) setCurrentPage(1);
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">All Assignees</option>
+                  <option value={currentUser?.id}>Assigned to Me</option>
+                  {staffUsers.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.first_name} {user.last_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="md:col-span-2 lg:col-span-2"></div>
+            )}
+
             <div className="md:col-span-3 lg:col-span-3 flex justify-end items-center space-x-3">
               <div className="text-sm text-gray-600 hidden xl:block">
                 <span>{totalItems} total</span>
@@ -251,8 +342,36 @@ const ComplaintsList = () => {
         </div>
       </div>
 
+      {/* Bulk Action Bar */}
+      {!isCenterRep && selectedComplaints.length > 0 && (
+        <div className="bg-blue-50 p-4 rounded-lg shadow border border-blue-200 mb-6 flex items-center justify-between">
+           <span className="text-blue-800 font-medium">{selectedComplaints.length} selected</span>
+           <div className="flex items-center space-x-3">
+             <select 
+               value={selectedAssignee}
+               onChange={(e) => setSelectedAssignee(e.target.value)}
+               className="px-4 py-2 border border-blue-300 rounded-lg bg-white"
+             >
+                <option value="">Select Officer...</option>
+                {staffUsers.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.first_name} {user.last_name}
+                  </option>
+                ))}
+             </select>
+             <button
+               onClick={handleBulkAssign}
+               disabled={!selectedAssignee || assigning}
+               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300"
+             >
+               {assigning ? 'Assigning...' : 'Assign Selected'}
+             </button>
+           </div>
+        </div>
+      )}
+
       {/* Complaints Table */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-x-auto">
         {loading ? (
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -267,6 +386,15 @@ const ComplaintsList = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                {!isCenterRep && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-10">
+                    <input type="checkbox" 
+                      onChange={handleSelectAll} 
+                      checked={displayedComplaints.length > 0 && selectedComplaints.length === displayedComplaints.length}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" 
+                    />
+                  </th>
+                )}
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Ticket
                 </th>
@@ -285,6 +413,11 @@ const ComplaintsList = () => {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Category
                 </th>
+                {!isCenterRep && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Assigned Officer
+                  </th>
+                )}
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Status
                 </th>
@@ -294,34 +427,47 @@ const ComplaintsList = () => {
               {displayedComplaints.map((complaint) => (
                 <tr 
                   key={complaint.id} 
-                  onClick={() => navigate(`/complaints/${complaint.id}`)}
-                  className="hover:bg-blue-50 cursor-pointer transition-colors"
+                  className="hover:bg-blue-50 transition-colors"
                 >
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  {!isCenterRep && (
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <input type="checkbox"
+                        checked={selectedComplaints.includes(complaint.id)}
+                        onChange={() => handleSelectOne(complaint.id)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
+                  )}
+                  <td className="px-4 py-3 whitespace-nowrap cursor-pointer" onClick={() => navigate(`/complaints/${complaint.id}`)}>
                     <div className="text-sm font-medium text-blue-600">{complaint.ticket_number}</div>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap cursor-pointer" onClick={() => navigate(`/complaints/${complaint.id}`)}>
                     <div className="text-sm text-gray-900">
                       {new Date(complaint.created_at).toLocaleDateString()}
                     </div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 cursor-pointer" onClick={() => navigate(`/complaints/${complaint.id}`)}>
                     <div className="text-sm text-gray-900 truncate max-w-[200px]" title={complaint.exam_center_name}>
                       {complaint.exam_center_name}
                     </div>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap cursor-pointer" onClick={() => navigate(`/complaints/${complaint.id}`)}>
                     <div className="text-sm text-gray-900">{complaint.exam_series_name}</div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 cursor-pointer" onClick={() => navigate(`/complaints/${complaint.id}`)}>
                     <div className="text-sm text-gray-900 truncate max-w-[150px]" title={complaint.program_name}>
                       {complaint.program_name}
                     </div>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap cursor-pointer" onClick={() => navigate(`/complaints/${complaint.id}`)}>
                     <div className="text-sm text-gray-900">{complaint.category_name}</div>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  {!isCenterRep && (
+                    <td className="px-4 py-3 whitespace-nowrap cursor-pointer" onClick={() => navigate(`/complaints/${complaint.id}`)}>
+                      <div className="text-sm text-gray-900">{complaint.helpdesk_team_name || 'Unassigned'}</div>
+                    </td>
+                  )}
+                  <td className="px-4 py-3 whitespace-nowrap cursor-pointer" onClick={() => navigate(`/complaints/${complaint.id}`)}>
                     {getStatusBadge(complaint.status)}
                   </td>
                 </tr>

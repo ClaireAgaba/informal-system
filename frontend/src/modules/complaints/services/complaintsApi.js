@@ -43,6 +43,19 @@ export const complaintsApi = {
     });
   },
 
+  // Bulk assign complaints
+  bulkAssignComplaints: (complaintIds, helpdeskTeamId) => {
+    return apiClient.post(`${BASE_URL}/complaints/bulk_assign/`, {
+      complaint_ids: complaintIds,
+      helpdesk_team: helpdeskTeamId,
+    });
+  },
+
+  // Get staff users for assignment
+  getStaffUsers: () => {
+    return apiClient.get('/users/users/', { params: { is_staff: true } });
+  },
+
   // Update complaint status
   updateStatus: (id, status) => {
     return apiClient.post(`${BASE_URL}/complaints/${id}/update_status/`, {
