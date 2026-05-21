@@ -391,6 +391,7 @@ const ComplaintDetail = () => {
                 Cancel Complaint
               </button>
             </div>
+            </div>
           </div>
         </div>
       </div>
