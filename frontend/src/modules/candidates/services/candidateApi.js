@@ -165,10 +165,10 @@ export const candidateApi = {
   // Get verified results PDF (moved to results app)
   getVerifiedResultsPDF: (candidateId, registrationCategory = 'modular') => {
     if (registrationCategory === 'workers_pas') {
-      return `/api/results/workers-pas/verified-pdf/?candidate_id=${candidateId}`;
+      return `/results/workers-pas/verified-pdf/?candidate_id=${candidateId}`;
     }
     // Both modular and formal use the same endpoint
-    return `/api/results/modular/verified-pdf/?candidate_id=${candidateId}`;
+    return `/results/modular/verified-pdf/?candidate_id=${candidateId}`;
   },
 
   downloadVerifiedResultsPDF: (candidateId, registrationCategory = 'modular') => {
@@ -178,12 +178,12 @@ export const candidateApi = {
 
   getTranscriptPDF: (candidateId, registrationCategory = 'modular') => {
     if (registrationCategory === 'workers_pas') {
-      return `/api/results/workers-pas/transcript-pdf/?candidate_id=${candidateId}`;
+      return `/results/workers-pas/transcript-pdf/?candidate_id=${candidateId}`;
     }
     if (registrationCategory === 'formal') {
-      return `/api/results/formal/transcript-pdf/?candidate_id=${candidateId}`;
+      return `/results/formal/transcript-pdf/?candidate_id=${candidateId}`;
     }
-    return `/api/results/modular/transcript-pdf/?candidate_id=${candidateId}`;
+    return `/results/modular/transcript-pdf/?candidate_id=${candidateId}`;
   },
 
   downloadTranscriptPDF: (candidateId, registrationCategory = 'modular') => {
