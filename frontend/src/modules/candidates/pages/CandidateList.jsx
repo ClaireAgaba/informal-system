@@ -901,6 +901,7 @@ const CandidateList = () => {
                     <option value="pending_verification">Pending</option>
                     <option value="verified">Verified</option>
                     <option value="declined">Declined</option>
+                    <option value="editable">Editable</option>
                   </select>
                 </th>
                 <th className="px-2 py-2">
