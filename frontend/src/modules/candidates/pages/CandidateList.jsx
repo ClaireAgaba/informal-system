@@ -1117,10 +1117,13 @@ const CandidateList = () => {
                         ? 'bg-green-100 text-green-800'
                         : candidate.verification_status === 'declined'
                           ? 'bg-red-100 text-red-800'
-                          : 'bg-gray-100 text-gray-800'
+                          : candidate.verification_status === 'editable'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-gray-100 text-gray-800'
                         }`}>
                         {candidate.verification_status === 'verified' ? 'Verified' :
-                          candidate.verification_status === 'declined' ? 'Declined' : 'Pending'}
+                          candidate.verification_status === 'declined' ? 'Declined' :
+                          candidate.verification_status === 'editable' ? 'Editable' : 'Pending'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">

@@ -138,6 +138,20 @@ const CandidateView = () => {
     }
   };
 
+  // Helper to parse malformed reasons like `{'reason': '...'}` that were saved previously
+  const formatDeclineReason = (reason) => {
+    if (!reason) return '';
+    try {
+      if (reason.startsWith("{'reason':") || reason.startsWith('{"reason":')) {
+        const match = reason.match(/['"]reason['"]:\s*['"](.*)['"]\s*}/s);
+        if (match && match[1]) {
+          return match[1].replace(/\\n/g, '\n');
+        }
+      }
+    } catch (e) {}
+    return reason;
+  };
+
   // Verify mutation
   const verifyMutation = useMutation({
     mutationFn: () => candidateApi.verify(id),
@@ -154,7 +168,7 @@ const CandidateView = () => {
 
   // Decline mutation
   const declineMutation = useMutation({
-    mutationFn: (reason) => candidateApi.decline(id, { reason }),
+    mutationFn: (reason) => candidateApi.decline(id, reason),
     onSuccess: () => {
       queryClient.invalidateQueries(['candidate', id]);
       queryClient.invalidateQueries(['candidates']);
@@ -1049,7 +1063,7 @@ const CandidateView = () => {
                       Application Declined
                     </h4>
                     <p className="text-sm text-red-700 mt-1">
-                      {candidate.decline_reason}
+                      {formatDeclineReason(candidate.decline_reason)}
                     </p>
                     {candidate.declined_at && (
                       <p className="text-xs text-red-600 mt-2">
@@ -1080,7 +1094,7 @@ const CandidateView = () => {
                     {candidate.decline_reason && (
                       <div className="mt-2 p-2 bg-white rounded border border-blue-200">
                         <p className="text-xs text-gray-500">Original decline reason:</p>
-                        <p className="text-sm text-gray-700">{candidate.decline_reason}</p>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{formatDeclineReason(candidate.decline_reason)}</p>
                       </div>
                     )}
                   </div>
@@ -1761,7 +1775,7 @@ const CandidateView = () => {
             {(candidate.verification_status === 'declined' || candidate.verification_status === 'editable') && candidate.decline_reason && (
               <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <p className="text-xs text-gray-500 mb-1">Previous reason:</p>
-                <p className="text-sm text-gray-700">{candidate.decline_reason}</p>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{formatDeclineReason(candidate.decline_reason)}</p>
               </div>
             )}
 
