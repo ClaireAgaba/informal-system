@@ -659,6 +659,7 @@ const CandidateList = () => {
                     <option value="pending_verification">Pending</option>
                     <option value="verified">Verified</option>
                     <option value="declined">Declined</option>
+                    <option value="editable">Editable</option>
                   </select>
                 </div>
 
