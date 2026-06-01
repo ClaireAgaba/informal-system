@@ -7,15 +7,15 @@ from .models import CandidateFee, CenterFee
 
 @receiver(post_save, sender=CandidateEnrollment)
 def create_or_update_candidate_fee(sender, instance, created, **kwargs):
-    """Automatically create or update candidate fee when enrollment is saved"""
+    """Automatically create or update candidate fee when enrollment is saved.
+    Always creates a CandidateFee row — even when total_amount is 0
+    (e.g. dont_charge series) — so the candidate is visible in the fees view.
+    """
     if not instance.is_active:
         return
     
     candidate = instance.candidate
     total_amount = instance.total_amount or 0
-    
-    if total_amount == 0:
-        return
     
     # Generate payment code
     payment_code = f"{candidate.registration_number}-{instance.assessment_series.id}"
@@ -26,7 +26,12 @@ def create_or_update_candidate_fee(sender, instance, created, **kwargs):
     attempt_status = 'no_attempt'
     payment_date = None
     
-    if candidate.payment_cleared_date:
+    if total_amount == 0:
+        # Zero-charge series: mark as fully paid automatically
+        payment_status = 'successful'
+        attempt_status = 'successful'
+        amount_paid = 0
+    elif candidate.payment_cleared_date:
         payment_date = candidate.payment_cleared_date
         if amount_paid >= total_amount:
             payment_status = 'successful'
@@ -43,7 +48,7 @@ def create_or_update_candidate_fee(sender, instance, created, **kwargs):
             'payment_code': payment_code,
             'total_amount': total_amount,
             'amount_paid': amount_paid,
-            'amount_due': total_amount - amount_paid,
+            'amount_due': max(total_amount - amount_paid, 0),
             'payment_date': payment_date,
             'payment_status': payment_status,
             'attempt_status': attempt_status,
@@ -94,15 +99,22 @@ def update_candidate_fee_on_payment(sender, instance, created, **kwargs):
 
 @receiver(post_delete, sender=CandidateEnrollment)
 def delete_candidate_fee(sender, instance, **kwargs):
-    """Delete candidate fee when enrollment is deleted"""
-    CandidateFee.objects.filter(
-        candidate=instance.candidate,
-        assessment_series=instance.assessment_series
-    ).delete()
-    
-    # Update center fee
-    if instance.candidate.assessment_center:
-        update_center_fee(instance.assessment_series, instance.candidate.assessment_center)
+    """Delete candidate fee when enrollment is deleted.
+    Acts as a safety net — the views should also delete fees explicitly.
+    """
+    try:
+        candidate = instance.candidate
+        series = instance.assessment_series
+        if candidate and series:
+            CandidateFee.objects.filter(
+                candidate=candidate,
+                assessment_series=series
+            ).delete()
+            if candidate.assessment_center:
+                update_center_fee(series, candidate.assessment_center)
+    except Exception:
+        # Cascade deletes may have already cleared related objects
+        pass
 
 
 def update_center_fee(assessment_series, assessment_center):

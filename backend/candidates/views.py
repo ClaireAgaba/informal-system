@@ -1953,7 +1953,21 @@ def bulk_de_enroll_view(request):
             continue
         
         try:
+            # Explicitly delete fees for this candidate+series before deleting enrollment
+            from fees.models import CandidateFee
+            from fees.signals import update_center_fee
+            assessment_center = candidate.assessment_center
+            CandidateFee.objects.filter(
+                candidate=candidate,
+                assessment_series=series
+            ).delete()
+            
             enrollment.delete()
+
+            # Recalculate center fee
+            if assessment_center:
+                update_center_fee(series, assessment_center)
+
             actor = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
             CandidateActivity.objects.create(
                 candidate=candidate,
@@ -2029,7 +2043,21 @@ def delete_enrollment_view(request, enrollment_id):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Explicitly delete fees for this candidate+series before deleting enrollment
+        from fees.models import CandidateFee
+        from fees.signals import update_center_fee
+        assessment_center = candidate.assessment_center
+        CandidateFee.objects.filter(
+            candidate=candidate,
+            assessment_series=series
+        ).delete()
+        
         enrollment.delete()
+
+        # Recalculate center fee
+        if assessment_center:
+            update_center_fee(series, assessment_center)
+        
         actor = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
         CandidateActivity.objects.create(
             candidate=candidate,
