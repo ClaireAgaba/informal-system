@@ -495,7 +495,29 @@ def person_results(request, person_id: str):
 
     # Include extracted exam-level results (paper, mark, grade)
     extracted = _load_extracted_results()
-    exam_results = extracted.get(str(person_id), [])
+    csv_results = extracted.get(str(person_id), [])
+    # Mark CSV results as non-editable
+    for r in csv_results:
+        r['source'] = 'csv'
+
+    # Merge with DB-stored exam results
+    from .models import DitLegacyExamResult
+    db_results = DitLegacyExamResult.objects.filter(person_id=person_id).values(
+        'id', 'paper', 'exam_date', 'exam_mark', 'exam_grade', 'exam_comment',
+    )
+    db_list = []
+    for r in db_results:
+        db_list.append({
+            'id': r['id'],
+            'paper': r['paper'],
+            'exam_date': r['exam_date'],
+            'exam_mark': r['exam_mark'],
+            'exam_grade': r['exam_grade'],
+            'exam_comment': r['exam_comment'],
+            'source': 'db',
+        })
+
+    exam_results = db_list + csv_results
 
     return Response({
         'person_id': person_id,
@@ -702,6 +724,341 @@ def person_audit_logs(request, person_id: str):
         'logs': list(logs),
         'count': len(logs),
     })
+
+
+# ── Registration History CRUD ──
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def add_registration(request, person_id: str):
+    """
+    Add a new registration history entry for a legacy DIT candidate.
+    Inserts into the legacy MySQL registrations + students_registration tables.
+    """
+    from .models import DitLegacyAuditLog
+
+    data = request.data
+    institution_id = data.get('institution_id')
+    course_id = data.get('course_id')
+    level_id = data.get('level_id')
+    year_proposed = data.get('year_proposed')
+    modules_assessed = data.get('modules_assessed', '')
+    completed = 1 if data.get('completed') else 0
+
+    if not all([institution_id, course_id, level_id, year_proposed]):
+        return Response(
+            {'detail': 'institution_id, course_id, level_id, and year_proposed are required.'},
+            status=400,
+        )
+
+    # Verify the student exists
+    try:
+        with connections['dit_legacy'].cursor() as cursor:
+            cursor.execute('SELECT student_id FROM students WHERE student_id = %s', [person_id])
+            if not cursor.fetchone():
+                return Response({'detail': 'Student not found'}, status=404)
+    except (ProgrammingError, OperationalError) as e:
+        return Response({'detail': str(e)}, status=500)
+
+    try:
+        with connections['dit_legacy'].cursor() as cursor:
+            # Insert into registrations
+            cursor.execute(
+                """
+                INSERT INTO registrations
+                    (institution_id, course_id, level_id, year_proposed, completed)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                [institution_id, course_id, level_id, year_proposed, completed],
+            )
+            registration_id = cursor.lastrowid
+
+            # Link student to registration
+            cursor.execute(
+                """
+                INSERT INTO students_registration
+                    (student_id, registration_id, cand_course_code_reg)
+                VALUES (%s, %s, %s)
+                """,
+                [person_id, registration_id, modules_assessed],
+            )
+    except (ProgrammingError, OperationalError) as e:
+        return Response({'detail': str(e)}, status=500)
+
+    # Fetch display names for the audit log
+    provider_name = course_name = level_name = ''
+    try:
+        with connections['dit_legacy'].cursor() as cursor:
+            cursor.execute('SELECT institution_name FROM institutions WHERE institution_id = %s', [institution_id])
+            row = cursor.fetchone()
+            provider_name = row[0] if row else str(institution_id)
+
+            cursor.execute('SELECT course_name FROM courses WHERE course_id = %s', [course_id])
+            row = cursor.fetchone()
+            course_name = row[0] if row else str(course_id)
+
+            cursor.execute('SELECT level_name FROM levels WHERE level_id = %s', [level_id])
+            row = cursor.fetchone()
+            level_name = row[0] if row else str(level_id)
+    except (ProgrammingError, OperationalError):
+        pass
+
+    changed_by = request.user if request.user.is_authenticated else None
+    changed_by_name = ''
+    if changed_by:
+        changed_by_name = changed_by.get_full_name() or changed_by.username
+
+    DitLegacyAuditLog.objects.create(
+        person_id=person_id,
+        field_name='Registration History (Added)',
+        old_value='',
+        new_value=f'{provider_name} | {course_name} | {level_name} | {year_proposed} | Modules: {modules_assessed}',
+        changed_by=changed_by,
+        changed_by_name=changed_by_name,
+    )
+
+    return Response({'detail': 'Registration added successfully', 'registration_id': registration_id})
+
+
+@api_view(['PATCH'])
+@permission_classes([AllowAny])
+def update_registration(request, person_id: str, registration_id: int):
+    """
+    Update an existing registration history entry for a legacy DIT candidate.
+    """
+    from .models import DitLegacyAuditLog
+
+    data = request.data
+    if not data:
+        return Response({'detail': 'No data provided'}, status=400)
+
+    # Fetch current values
+    try:
+        with connections['dit_legacy'].cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    r.institution_id, r.course_id, r.level_id,
+                    r.year_proposed, r.completed,
+                    sr.cand_course_code_reg AS modules_assessed,
+                    i.institution_name, c.course_name, l.level_name
+                FROM students_registration sr
+                JOIN registrations r ON r.registration_id = sr.registration_id
+                LEFT JOIN institutions i ON i.institution_id = r.institution_id
+                LEFT JOIN courses c ON c.course_id = r.course_id
+                LEFT JOIN levels l ON l.level_id = r.level_id
+                WHERE sr.student_id = %s AND sr.registration_id = %s
+                LIMIT 1
+                """,
+                [person_id, registration_id],
+            )
+            row = cursor.fetchone()
+            if not row:
+                return Response({'detail': 'Registration not found'}, status=404)
+            col_names = [col[0] for col in cursor.description]
+            current = dict(zip(col_names, row))
+    except (ProgrammingError, OperationalError) as e:
+        return Response({'detail': str(e)}, status=500)
+
+    changed_by = request.user if request.user.is_authenticated else None
+    changed_by_name = ''
+    if changed_by:
+        changed_by_name = changed_by.get_full_name() or changed_by.username
+
+    audit_entries = []
+
+    # Build updates for registrations table
+    reg_set = []
+    reg_params = []
+    field_map = {
+        'institution_id': ('institution_id', 'Training Provider'),
+        'course_id': ('course_id', 'Occupation'),
+        'level_id': ('level_id', 'Level'),
+        'year_proposed': ('year_proposed', 'Year'),
+        'completed': ('completed', 'Status'),
+    }
+    for field, (db_col, label) in field_map.items():
+        if field not in data:
+            continue
+        new_val = data[field]
+        if field == 'completed':
+            new_val = 1 if new_val else 0
+        old_val = current.get(db_col)
+        if str(new_val) != str(old_val or ''):
+            reg_set.append(f'{db_col} = %s')
+            reg_params.append(new_val)
+            # Resolve display names for audit
+            old_display = str(old_val or '')
+            new_display = str(new_val)
+            if field in ('institution_id', 'course_id', 'level_id'):
+                old_display = current.get({'institution_id': 'institution_name', 'course_id': 'course_name', 'level_id': 'level_name'}[field]) or old_display
+                try:
+                    with connections['dit_legacy'].cursor() as cursor:
+                        tbl = {'institution_id': ('institutions', 'institution_name', 'institution_id'),
+                               'course_id': ('courses', 'course_name', 'course_id'),
+                               'level_id': ('levels', 'level_name', 'level_id')}[field]
+                        cursor.execute(f'SELECT {tbl[1]} FROM {tbl[0]} WHERE {tbl[2]} = %s', [new_val])
+                        r = cursor.fetchone()
+                        new_display = r[0] if r else new_display
+                except (ProgrammingError, OperationalError):
+                    pass
+            elif field == 'completed':
+                old_display = 'Completed' if old_val else 'Pending'
+                new_display = 'Completed' if new_val else 'Pending'
+            audit_entries.append(DitLegacyAuditLog(
+                person_id=person_id,
+                field_name=f'Registration {label}',
+                old_value=old_display,
+                new_value=new_display,
+                changed_by=changed_by,
+                changed_by_name=changed_by_name,
+            ))
+
+    # Update modules_assessed on students_registration
+    sr_set = []
+    sr_params = []
+    if 'modules_assessed' in data:
+        new_mods = str(data['modules_assessed']).strip()
+        old_mods = str(current.get('modules_assessed') or '')
+        if new_mods != old_mods:
+            sr_set.append('cand_course_code_reg = %s')
+            sr_params.append(new_mods)
+            audit_entries.append(DitLegacyAuditLog(
+                person_id=person_id,
+                field_name='Registration Modules',
+                old_value=old_mods,
+                new_value=new_mods,
+                changed_by=changed_by,
+                changed_by_name=changed_by_name,
+            ))
+
+    if not reg_set and not sr_set:
+        return Response({'detail': 'No changes detected'}, status=200)
+
+    try:
+        with connections['dit_legacy'].cursor() as cursor:
+            if reg_set:
+                cursor.execute(
+                    f"UPDATE registrations SET {', '.join(reg_set)} WHERE registration_id = %s",
+                    reg_params + [registration_id],
+                )
+            if sr_set:
+                cursor.execute(
+                    f"UPDATE students_registration SET {', '.join(sr_set)} WHERE student_id = %s AND registration_id = %s",
+                    sr_params + [person_id, registration_id],
+                )
+    except (ProgrammingError, OperationalError) as e:
+        return Response({'detail': str(e)}, status=500)
+
+    if audit_entries:
+        DitLegacyAuditLog.objects.bulk_create(audit_entries)
+
+    return Response({'detail': 'Registration updated successfully', 'changes': len(audit_entries)})
+
+
+# ── Exam Results CRUD ──
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def add_exam_result(request, person_id: str):
+    """
+    Add a new exam result for a legacy DIT candidate.
+    Stored in the default DB (DitLegacyExamResult model).
+    """
+    from .models import DitLegacyAuditLog, DitLegacyExamResult
+
+    data = request.data
+    paper = str(data.get('paper', '')).strip()
+    exam_date = str(data.get('exam_date', '')).strip()
+    exam_mark = str(data.get('exam_mark', '')).strip()
+    exam_grade = str(data.get('exam_grade', '')).strip()
+    exam_comment = str(data.get('exam_comment', '')).strip()
+
+    if not paper:
+        return Response({'detail': 'Paper name is required.'}, status=400)
+
+    changed_by = request.user if request.user.is_authenticated else None
+    changed_by_name = ''
+    if changed_by:
+        changed_by_name = changed_by.get_full_name() or changed_by.username
+
+    result = DitLegacyExamResult.objects.create(
+        person_id=person_id,
+        paper=paper,
+        exam_date=exam_date,
+        exam_mark=exam_mark,
+        exam_grade=exam_grade,
+        exam_comment=exam_comment,
+        created_by=changed_by,
+        created_by_name=changed_by_name,
+    )
+
+    DitLegacyAuditLog.objects.create(
+        person_id=person_id,
+        field_name='Exam Result (Added)',
+        old_value='',
+        new_value=f'{paper} | {exam_date} | Mark: {exam_mark} | Grade: {exam_grade} | {exam_comment}',
+        changed_by=changed_by,
+        changed_by_name=changed_by_name,
+    )
+
+    return Response({'detail': 'Exam result added successfully', 'id': result.id})
+
+
+@api_view(['PATCH'])
+@permission_classes([AllowAny])
+def update_exam_result(request, person_id: str, result_id: int):
+    """
+    Update an existing DB-stored exam result for a legacy DIT candidate.
+    """
+    from .models import DitLegacyAuditLog, DitLegacyExamResult
+
+    try:
+        result = DitLegacyExamResult.objects.get(id=result_id, person_id=person_id)
+    except DitLegacyExamResult.DoesNotExist:
+        return Response({'detail': 'Exam result not found'}, status=404)
+
+    data = request.data
+    if not data:
+        return Response({'detail': 'No data provided'}, status=400)
+
+    changed_by = request.user if request.user.is_authenticated else None
+    changed_by_name = ''
+    if changed_by:
+        changed_by_name = changed_by.get_full_name() or changed_by.username
+
+    audit_entries = []
+    field_labels = {
+        'paper': 'Exam Paper',
+        'exam_date': 'Exam Date',
+        'exam_mark': 'Exam Mark',
+        'exam_grade': 'Exam Grade',
+        'exam_comment': 'Exam Comment',
+    }
+
+    for field, label in field_labels.items():
+        if field not in data:
+            continue
+        new_val = str(data[field]).strip()
+        old_val = str(getattr(result, field) or '')
+        if new_val != old_val:
+            setattr(result, field, new_val)
+            audit_entries.append(DitLegacyAuditLog(
+                person_id=person_id,
+                field_name=label,
+                old_value=old_val,
+                new_value=new_val,
+                changed_by=changed_by,
+                changed_by_name=changed_by_name,
+            ))
+
+    if not audit_entries:
+        return Response({'detail': 'No changes detected'}, status=200)
+
+    result.save()
+    DitLegacyAuditLog.objects.bulk_create(audit_entries)
+
+    return Response({'detail': 'Exam result updated successfully', 'changes': len(audit_entries)})
 
 
 @api_view(['GET'])
