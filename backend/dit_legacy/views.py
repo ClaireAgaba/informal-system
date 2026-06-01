@@ -572,7 +572,7 @@ def person_transcript(request, person_id: str):
             s.disability_name,
             s.academic_level,
             s.school AS academic_school,
-            i.centre_no AS centre_number
+            i.short_name AS centre_number
         FROM students s
         LEFT JOIN districts d ON d.district_id = s.district_id
         LEFT JOIN students_registration sr ON sr.student_id = s.student_id
