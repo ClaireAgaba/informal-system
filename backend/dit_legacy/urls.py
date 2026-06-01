@@ -8,6 +8,7 @@ urlpatterns = [
     path('person/<str:person_id>/update/', views.update_person, name='dit_legacy_update_person'),
     path('person/<str:person_id>/photo/', views.person_photo, name='dit_legacy_person_photo'),
     path('person/<str:person_id>/results/', views.person_results, name='dit_legacy_person_results'),
+    path('person/<str:person_id>/transcript/', views.person_transcript, name='dit_legacy_person_transcript'),
     path('person/<str:person_id>/audit-logs/', views.person_audit_logs, name='dit_legacy_person_audit_logs'),
     # Registration History CRUD
     path('person/<str:person_id>/registration/add/', views.add_registration, name='dit_legacy_add_registration'),

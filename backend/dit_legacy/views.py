@@ -527,6 +527,433 @@ def person_results(request, person_id: str):
     })
 
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def person_transcript(request, person_id: str):
+    """
+    Generate a PDF transcript for a legacy DIT candidate.
+    Layout matches the official DIT transcript form (without top logos).
+    """
+    from io import BytesIO
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import inch, mm
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.platypus import (
+        SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image,
+    )
+
+    # ── Fetch person data ──
+    sql = """
+        SELECT
+            s.student_id AS person_id,
+            s.firstname AS first_name,
+            s.othername AS other_name,
+            s.surname AS surname,
+            s.gender,
+            s.dob AS birth_date,
+            COALESCE(s.nsin, s.exam_no) AS registration_number,
+            s.certificate_no AS certificate_number,
+            s.nin AS national_id,
+            s.telephone,
+            s.email,
+            c.course_name AS occupation,
+            c.course_code AS occupation_code,
+            l.level_name AS level,
+            d.district_name AS district,
+            i.institution_name AS training_provider,
+            i.short_name AS training_provider_short,
+            id.district_name AS training_provider_district,
+            r.year_proposed AS assessment_year,
+            r.month_proposed AS assessment_month,
+            r.actual_assessment_date,
+            s.disadility_option AS disability_option,
+            s.disability_name,
+            s.academic_level,
+            s.school AS academic_school,
+            i.centre_no AS centre_number
+        FROM students s
+        LEFT JOIN districts d ON d.district_id = s.district_id
+        LEFT JOIN students_registration sr ON sr.student_id = s.student_id
+        LEFT JOIN registrations r ON r.registration_id = sr.registration_id
+        LEFT JOIN institutions i ON i.institution_id = r.institution_id
+        LEFT JOIN districts id ON id.district_id = i.district_id
+        LEFT JOIN courses c ON c.course_id = r.course_id
+        LEFT JOIN levels l ON l.level_id = r.level_id
+        WHERE s.student_id = %s
+        ORDER BY r.year_proposed DESC, r.registration_id DESC
+        LIMIT 1
+    """
+    try:
+        with connections['dit_legacy'].cursor() as cursor:
+            cursor.execute(sql, [person_id])
+            rows = _dictfetchall(cursor)
+    except (ProgrammingError, OperationalError) as e:
+        return Response({'detail': str(e)}, status=500)
+
+    if not rows:
+        return Response({'detail': 'Candidate not found'}, status=404)
+
+    person = rows[0]
+
+    # ── Fetch exam results ──
+    extracted = _load_extracted_results()
+    csv_results = extracted.get(str(person_id), [])
+
+    from .models import DitLegacyExamResult
+    db_results = list(
+        DitLegacyExamResult.objects.filter(person_id=person_id)
+        .values('paper', 'exam_date', 'exam_mark', 'exam_grade', 'exam_comment')
+    )
+    all_results = db_results + csv_results
+
+    # Separate theory and practical papers
+    theory_papers = []
+    practical_papers = []
+    for r in all_results:
+        paper_name = (r.get('paper') or '').strip()
+        if not paper_name:
+            continue
+        if 'practical' in paper_name.lower() or 'project' in paper_name.lower():
+            practical_papers.append(r)
+        else:
+            theory_papers.append(r)
+
+    # ── Photo ──
+    photo_map = _load_photo_mapping()
+    old_pid = photo_map.get(str(person_id))
+    photo_path = None
+    if old_pid:
+        p = _PHOTOS_DIR / f'{old_pid}.jpg'
+        if p.is_file():
+            photo_path = p
+    if not photo_path:
+        p = _PHOTOS_DIR / f'{person_id}.jpg'
+        if p.is_file():
+            photo_path = p
+
+    # ── Format assessment date ──
+    assessment_date_str = ''
+    if person.get('actual_assessment_date'):
+        try:
+            from datetime import datetime
+            d = person['actual_assessment_date']
+            if hasattr(d, 'strftime'):
+                assessment_date_str = d.strftime('%d %B %Y')
+            else:
+                assessment_date_str = str(d)
+        except Exception:
+            assessment_date_str = str(person.get('actual_assessment_date', ''))
+    elif person.get('assessment_month') and person.get('assessment_year'):
+        assessment_date_str = f"{person['assessment_month']} {person['assessment_year']}"
+    elif person.get('assessment_year'):
+        assessment_date_str = str(person['assessment_year'])
+
+    # ── Format birth date ──
+    birth_date_str = ''
+    if person.get('birth_date'):
+        try:
+            d = person['birth_date']
+            if hasattr(d, 'strftime'):
+                birth_date_str = d.strftime('%d %B %Y')
+            else:
+                birth_date_str = str(d)
+        except Exception:
+            birth_date_str = str(person.get('birth_date', ''))
+
+    # ── Determine level display ──
+    level_raw = (person.get('level') or '').strip()
+    if 'modular' in level_raw.lower():
+        level_title = 'MODULAR TRANSCRIPT'
+    elif level_raw:
+        level_title = f'{level_raw.upper()} TRANSCRIPT'
+    else:
+        level_title = 'TRANSCRIPT'
+
+    full_name = ' '.join(
+        filter(None, [person.get('first_name'), person.get('other_name'), person.get('surname')])
+    )
+
+    # ── Determine overall performance ──
+    overall = ''
+    has_fail = False
+    has_pass = False
+    for r in all_results:
+        c = (r.get('exam_comment') or '').lower()
+        if 'fail' in c or 'unsuccess' in c:
+            has_fail = True
+        if 'pass' in c or 'success' in c:
+            has_pass = True
+    if has_fail:
+        overall = 'Unsuccessful'
+    elif has_pass:
+        overall = 'Successful'
+
+    # ══════════════════════════════════════════════════════
+    # BUILD PDF
+    # ══════════════════════════════════════════════════════
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=20 * mm,
+        rightMargin=20 * mm,
+        topMargin=15 * mm,
+        bottomMargin=15 * mm,
+    )
+
+    styles = getSampleStyleSheet()
+    s_title = ParagraphStyle('TransTitle', parent=styles['Heading1'],
+                             fontSize=13, alignment=TA_CENTER, fontName='Helvetica-Bold',
+                             spaceAfter=6, spaceBefore=0)
+    s_label = ParagraphStyle('TransLabel', parent=styles['Normal'],
+                             fontSize=9, fontName='Helvetica-Bold', leading=12)
+    s_value = ParagraphStyle('TransValue', parent=styles['Normal'],
+                             fontSize=9, fontName='Helvetica', leading=12)
+    s_small = ParagraphStyle('TransSmall', parent=styles['Normal'],
+                             fontSize=7.5, fontName='Helvetica', leading=10)
+    s_small_bold = ParagraphStyle('TransSmallBold', parent=styles['Normal'],
+                                  fontSize=7.5, fontName='Helvetica-Bold', leading=10)
+    s_footer = ParagraphStyle('TransFooter', parent=styles['Normal'],
+                              fontSize=8, fontName='Helvetica-Oblique', leading=10,
+                              spaceBefore=4)
+    s_sig_title = ParagraphStyle('SigTitle', parent=styles['Normal'],
+                                 fontSize=9, fontName='Helvetica-Bold', leading=12,
+                                 alignment=TA_CENTER)
+    s_sig_sub = ParagraphStyle('SigSub', parent=styles['Normal'],
+                               fontSize=8, fontName='Helvetica', leading=10,
+                               alignment=TA_CENTER)
+
+    elements = []
+
+    # ── 1. Level / Type heading ──
+    elements.append(Paragraph(level_title, s_title))
+    elements.append(Spacer(1, 4 * mm))
+
+    # ── 2. Occupation block + Photo on right ──
+    # Build the occupation info rows
+    occ_data = [
+        [Paragraph('<b>Occupation:</b>', s_label),
+         Paragraph(person.get('occupation') or '—', s_value)],
+        [Paragraph('<b>Assessment Period:</b>', s_label),
+         Paragraph(assessment_date_str or '—', s_value)],
+        [Paragraph('<b>Assessment Centre:</b>', s_label),
+         Paragraph(person.get('training_provider') or '—', s_value)],
+        [Paragraph('<b>Centre Number:</b>', s_label),
+         Paragraph(person.get('centre_number') or '—', s_value)],
+    ]
+    occ_table = Table(occ_data, colWidths=[95, 260])
+    occ_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+    ]))
+
+    # Photo cell
+    photo_cell = ''
+    if photo_path:
+        try:
+            from PIL import Image as PILImage, ImageOps
+            pil_img = PILImage.open(str(photo_path))
+            try:
+                pil_img = ImageOps.exif_transpose(pil_img)
+            except Exception:
+                pass
+            img_buf = BytesIO()
+            pil_img.save(img_buf, format='JPEG')
+            img_buf.seek(0)
+            photo_cell = Image(img_buf, width=1.0 * inch, height=1.25 * inch)
+        except Exception:
+            photo_cell = Paragraph('NO PHOTO', s_small)
+    else:
+        photo_cell = Paragraph('NO PHOTO', s_small)
+
+    # Combine occ info + photo in a top-level table
+    top_table = Table(
+        [[occ_table, photo_cell]],
+        colWidths=[380, 100],
+    )
+    top_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(top_table)
+    elements.append(Spacer(1, 4 * mm))
+
+    # ── 3. Candidate biodata table ──
+    bio_data = [
+        [Paragraph('<b>Name:</b>', s_label),
+         Paragraph(full_name, s_value),
+         Paragraph('<b>District of Birth:</b>', s_label),
+         Paragraph(person.get('district') or '—', s_value)],
+        [Paragraph('<b>Date of Birth:</b>', s_label),
+         Paragraph(birth_date_str or '—', s_value),
+         Paragraph('<b>Nationality:</b>', s_label),
+         Paragraph('Ugandan', s_value)],
+        [Paragraph('<b>Sex:</b>', s_label),
+         Paragraph(person.get('gender') or '—', s_value),
+         Paragraph('<b>Registration No:</b>', s_label),
+         Paragraph(person.get('registration_number') or '—', s_value)],
+    ]
+    bio_table = Table(bio_data, colWidths=[90, 155, 100, 135])
+    bio_table.setStyle(TableStyle([
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+    elements.append(bio_table)
+    elements.append(Spacer(1, 4 * mm))
+
+    # ── 4. Assessment Results heading ──
+    elements.append(Paragraph('<b>ASSESSMENT RESULTS</b>', ParagraphStyle(
+        'ARTitle', parent=s_label, fontSize=10, spaceBefore=2, spaceAfter=2)))
+    elements.append(Spacer(1, 2 * mm))
+
+    # ── 5. Results table — theory left, practical right ──
+    max_rows = max(len(theory_papers), len(practical_papers), 1)
+
+    results_header = [
+        Paragraph('<b>Paper (Theory)</b>', s_small_bold),
+        Paragraph('<b>Grade</b>', s_small_bold),
+        Paragraph('<b>Paper (Practical)</b>', s_small_bold),
+        Paragraph('<b>Grade</b>', s_small_bold),
+    ]
+    results_data = [results_header]
+    for i in range(max_rows):
+        t_paper = theory_papers[i].get('paper', '') if i < len(theory_papers) else ''
+        t_grade = theory_papers[i].get('exam_grade', '') if i < len(theory_papers) else ''
+        p_paper = practical_papers[i].get('paper', '') if i < len(practical_papers) else ''
+        p_grade = practical_papers[i].get('exam_grade', '') if i < len(practical_papers) else ''
+        results_data.append([
+            Paragraph(t_paper, s_small),
+            Paragraph(t_grade, s_small),
+            Paragraph(p_paper, s_small),
+            Paragraph(p_grade, s_small),
+        ])
+
+    results_table = Table(results_data, colWidths=[190, 45, 190, 45])
+    results_table.setStyle(TableStyle([
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E8E8E8')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+        ('ALIGN', (3, 0), (3, -1), 'CENTER'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    elements.append(results_table)
+    elements.append(Spacer(1, 4 * mm))
+
+    # ── 6. Overall Performance ──
+    if overall:
+        elements.append(Paragraph(f'<b>Overall Performance :</b> {overall}', s_label))
+    elements.append(Spacer(1, 5 * mm))
+
+    # ── 7. Grading Key — theory left, practical right ──
+    elements.append(Paragraph('<b>KEY: GRADING</b>', s_small_bold))
+    elements.append(Spacer(1, 2 * mm))
+
+    theory_grades = [
+        ['Score %', 'Grade'],
+        ['85-100', 'A+'],
+        ['80-84', 'A'],
+        ['70-79', 'B'],
+        ['60-69', 'B-'],
+        ['50-59', 'C'],
+        ['40-49', 'C-'],
+        ['30-39', 'D'],
+        ['0-29', 'E'],
+    ]
+    practical_grades = [
+        ['Score %', 'Grade'],
+        ['90-100', 'A+'],
+        ['85-89', 'A'],
+        ['75-84', 'B+'],
+        ['65-74', 'B'],
+        ['60-64', 'B-'],
+        ['55-59', 'C'],
+        ['50-54', 'C-'],
+        ['40-49', 'D'],
+        ['30-39', 'D-'],
+        ['0-29', 'E'],
+    ]
+
+    def _grade_table(title, rows):
+        data = [[Paragraph(f'<b>{title}</b>', s_small_bold), '']]
+        for r in rows:
+            data.append([Paragraph(r[0], s_small), Paragraph(r[1], s_small)])
+        t = Table(data, colWidths=[55, 35])
+        t.setStyle(TableStyle([
+            ('SPAN', (0, 0), (1, 0)),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('GRID', (0, 0), (-1, -1), 0.3, colors.grey),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E8E8E8')),
+            ('FONTSIZE', (0, 0), (-1, -1), 7),
+            ('TOPPADDING', (0, 0), (-1, -1), 1),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+        ]))
+        return t
+
+    theory_key = _grade_table('THEORY SCORES', theory_grades)
+    practical_key = _grade_table('PRACTICAL SCORES', practical_grades)
+
+    # Signature block (right side)
+    sig_data = [
+        [''],
+        [''],
+        [''],
+        [Paragraph('<b>DIRECTOR</b>', s_sig_title)],
+        [Paragraph('DIRECTORATE OF INDUSTRIAL TRAINING', s_sig_sub)],
+    ]
+    sig_table = Table(sig_data, colWidths=[200])
+    sig_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]))
+
+    # Combine grading keys + signature area
+    bottom_table = Table(
+        [[theory_key, practical_key, sig_table]],
+        colWidths=[100, 100, 260],
+    )
+    bottom_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    elements.append(bottom_table)
+    elements.append(Spacer(1, 4 * mm))
+
+    # ── 8. Footer note ──
+    elements.append(Paragraph(
+        'Pass mark is 50% in theory and 65% in practical assessment',
+        s_footer,
+    ))
+
+    # ── Build PDF ──
+    doc.build(elements)
+    pdf = buf.getvalue()
+    buf.close()
+
+    clean_name = full_name.replace(' ', '_') or person_id
+    filename = f'transcript_{clean_name}.pdf'
+
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
+    return response
+
+
 # ── Editable field → legacy DB column mapping ──
 _EDITABLE_FIELDS = {
     # Biodata

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Database, Award, BookOpen, User, MapPin, Shield,
-  Pencil, Save, X, Upload, Clock, CheckCircle, Plus,
+  Pencil, Save, X, Upload, Clock, CheckCircle, Plus, FileText,
 } from 'lucide-react';
 import ditLegacyApi from '../api/ditLegacyApi';
 
@@ -635,13 +635,22 @@ export default function DitLegacyPersonDetail() {
           <h1 className="mt-1 text-2xl font-bold text-gray-900">{fullName || 'Candidate'}</h1>
           <div className="mt-1 text-sm text-gray-500">Person ID: {personId}</div>
         </div>
-        <Link
-          to="/dit-legacy-data"
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to search
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => window.open(`/api/dit-legacy/person/${encodeURIComponent(personId)}/transcript/`, '_blank')}
+            className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors"
+          >
+            <FileText className="h-4 w-4" />
+            Print Transcript
+          </button>
+          <Link
+            to="/dit-legacy-data"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to search
+          </Link>
+        </div>
       </div>
 
       {/* Save notification */}
