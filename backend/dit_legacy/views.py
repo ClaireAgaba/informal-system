@@ -699,7 +699,7 @@ def person_transcript(request, person_id: str):
         pagesize=A4,
         leftMargin=20 * mm,
         rightMargin=20 * mm,
-        topMargin=15 * mm,
+        topMargin=55 * mm,
         bottomMargin=15 * mm,
     )
 
@@ -907,18 +907,23 @@ def person_transcript(request, person_id: str):
     theory_key = _grade_table('THEORY SCORES', theory_grades)
     practical_key = _grade_table('PRACTICAL SCORES', practical_grades)
 
-    # Signature block (right side)
-    sig_data = [
-        [''],
-        [''],
-        [''],
-        [Paragraph('<b>DIRECTOR</b>', s_sig_title)],
-        [Paragraph('DIRECTORATE OF INDUSTRIAL TRAINING', s_sig_sub)],
-    ]
-    sig_table = Table(sig_data, colWidths=[200])
+    # Signature block (right side) with ES signature image
+    es_sig_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'es_signature.jpg')
+    sig_elements = []
+    if os.path.exists(es_sig_path):
+        try:
+            es_sig_img = Image(es_sig_path, width=1.4 * inch, height=0.7 * inch)
+            sig_elements.append([es_sig_img])
+        except Exception:
+            sig_elements.append([''])
+    else:
+        sig_elements.append([''])
+    sig_elements.append([Paragraph('<b>EXECUTIVE SECRETARY</b>', s_sig_title)])
+
+    sig_table = Table(sig_elements, colWidths=[200])
     sig_table.setStyle(TableStyle([
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
     ]))
 
