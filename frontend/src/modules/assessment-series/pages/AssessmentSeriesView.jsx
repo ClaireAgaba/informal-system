@@ -24,6 +24,7 @@ const AssessmentSeriesView = () => {
   const queryClient = useQueryClient();
   const [exporting, setExporting] = useState(false);
   const [exportingSummary, setExportingSummary] = useState(false);
+  const [exportingRoster, setExportingRoster] = useState(false);
 
   // Redirect if ID is invalid
   if (!id || id === 'undefined' || id === 'new') {
@@ -131,6 +132,41 @@ const AssessmentSeriesView = () => {
       toast.error('Failed to download summary export');
     } finally {
       setExportingSummary(false);
+    }
+  };
+
+  const handleExportRoster = async () => {
+    setExportingRoster(true);
+    try {
+      const response = await assessmentSeriesApi.exportAssessmentRoster(id);
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `assessment_roster_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (filenameMatch && filenameMatch.length > 1) {
+          filename = filenameMatch[1];
+        } else {
+          const fallbackMatch = contentDisposition.match(/filename=([^;]+)/);
+          if (fallbackMatch && fallbackMatch.length > 1) {
+            filename = fallbackMatch[1].trim();
+          }
+        }
+      }
+
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Assessment Roster export downloaded successfully!');
+    } catch (error) {
+      toast.error('Failed to download assessment roster');
+    } finally {
+      setExportingRoster(false);
     }
   };
 
@@ -380,6 +416,17 @@ const AssessmentSeriesView = () => {
               >
                 <Download className="w-4 h-4 mr-2" />
                 Export Registration Summary
+              </Button>
+
+              <Button
+                variant="outline"
+                size="md"
+                className="w-full mt-2"
+                onClick={handleExportRoster}
+                loading={exportingRoster}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export Assessment Roster
               </Button>
 
               <div className="pt-4 border-t border-gray-200">

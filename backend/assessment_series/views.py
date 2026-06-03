@@ -448,3 +448,136 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
         wb.save(response)
         
         return response
+
+    @action(detail=True, methods=['get'])
+    def export_assessment_roster(self, request, pk=None):
+        """
+        Export a comprehensive Assessment Roster to serve as a template 
+        for uploading results later. PII and computed results are excluded.
+        Every cell is strictly filled.
+        """
+        from django.http import HttpResponse
+        from datetime import date
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill
+        from candidates.models import CandidateEnrollment
+        
+        series = self.get_object()
+        
+        # Query active enrollments with all related fields
+        enrollments = CandidateEnrollment.objects.filter(
+            assessment_series=series,
+            is_active=True
+        ).select_related(
+            'candidate',
+            'candidate__assessment_center',
+            'candidate__assessment_center__district',
+            'candidate__occupation',
+            'candidate__occupation__sector',
+            'candidate__nature_of_disability',
+            'occupation_level'
+        ).prefetch_related(
+            'modules__module',
+            'papers__paper__module__level'
+        ).iterator(chunk_size=2000)
+        
+        wb = openpyxl.Workbook()
+        wb.remove(wb.active) # Remove default sheet
+        
+        headers = [
+            ('Reg No', 20),
+            ('Full Name', 25),
+            ('Gender', 10),
+            ('Reg Category', 15),
+            ('Disability', 20),
+            ('Center No', 12),
+            ('Center Name', 35),
+            ('Center District', 20),
+            ('Occ Code', 12),
+            ('Occ Name', 30),
+            ('Sector', 20),
+            ('Level', 15),
+            ('Module/Paper Code', 18),
+            ('Module/Paper Name', 35)
+        ]
+        
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+        
+        def setup_sheet(title):
+            ws = wb.create_sheet(title=title)
+            for col, (header, width) in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+                ws.column_dimensions[cell.column_letter].width = width
+            return ws
+            
+        ws_roster = setup_sheet("Assessment Roster")
+        
+        row_idx = 2
+        
+        def fill_row(ws, r_idx, c, center, occ, level, mod_pap_code, mod_pap_name):
+            ws.cell(row=r_idx, column=1, value=c.registration_number or 'N/A')
+            ws.cell(row=r_idx, column=2, value=c.full_name or 'N/A')
+            ws.cell(row=r_idx, column=3, value=c.get_gender_display() or 'N/A')
+            ws.cell(row=r_idx, column=4, value=c.get_registration_category_display() or 'N/A')
+            
+            disability = c.nature_of_disability.name if c.has_disability and c.nature_of_disability else 'None'
+            ws.cell(row=r_idx, column=5, value=disability)
+            
+            ws.cell(row=r_idx, column=6, value=center.center_number if center else 'N/A')
+            ws.cell(row=r_idx, column=7, value=center.center_name if center else 'N/A')
+            ws.cell(row=r_idx, column=8, value=center.district.name if center and center.district else 'N/A')
+            
+            ws.cell(row=r_idx, column=9, value=occ.occ_code if occ else 'N/A')
+            ws.cell(row=r_idx, column=10, value=occ.occ_name if occ else 'N/A')
+            ws.cell(row=r_idx, column=11, value=occ.sector.name if occ and occ.sector else 'N/A')
+            
+            ws.cell(row=r_idx, column=12, value=level)
+            ws.cell(row=r_idx, column=13, value=mod_pap_code)
+            ws.cell(row=r_idx, column=14, value=mod_pap_name)
+        
+        for enrollment in enrollments:
+            c = enrollment.candidate
+            center = c.assessment_center
+            occ = c.occupation
+            
+            if c.is_modular():
+                modules = enrollment.modules.all()
+                if modules:
+                    for m in modules:
+                        mod = m.module
+                        fill_row(ws_roster, row_idx, c, center, occ, 'Modular', mod.module_code, mod.module_name)
+                        row_idx += 1
+                else:
+                    fill_row(ws_roster, row_idx, c, center, occ, 'Modular', 'N/A', 'No Modules Selected')
+                    row_idx += 1
+            elif c.is_formal():
+                level_name = enrollment.occupation_level.level_name if enrollment.occupation_level else 'N/A'
+                fill_row(ws_roster, row_idx, c, center, occ, level_name, 'N/A', 'Formal Assessment')
+                row_idx += 1
+            elif c.is_workers_pas():
+                papers = enrollment.papers.all()
+                if papers:
+                    for p in papers:
+                        pap = p.paper
+                        level_name = pap.module.level.level_name if pap and pap.module and pap.module.level else 'N/A'
+                        fill_row(ws_roster, row_idx, c, center, occ, level_name, pap.paper_code, pap.paper_name)
+                        row_idx += 1
+                else:
+                    fill_row(ws_roster, row_idx, c, center, occ, 'N/A', 'N/A', 'No Papers Selected')
+                    row_idx += 1
+        
+        if not wb.sheetnames:
+            ws = wb.create_sheet(title="No Data")
+            ws.cell(row=1, column=1, value="No enrollment data found for this series")
+            
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        safe_series_name = str(series.name).replace(" ", "_").lower()
+        response['Content-Disposition'] = f'attachment; filename=assessment_roster_{safe_series_name}_{date.today().strftime("%Y%m%d")}.xlsx'
+        wb.save(response)
+        
+        return response

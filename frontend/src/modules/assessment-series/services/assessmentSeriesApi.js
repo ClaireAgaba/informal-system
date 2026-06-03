@@ -14,6 +14,7 @@ export const assessmentSeriesApi = {
   getByYear: (year) => apiClient.get(`${SERIES_BASE}/`, { params: { year } }),
   exportSpecialNeeds: (id) => apiClient.get(`${SERIES_BASE}/${id}/export_special_needs/`, { responseType: 'blob' }),
   exportRegistrationSummary: (id) => apiClient.get(`${SERIES_BASE}/${id}/export_registration_summary/`, { responseType: 'blob' }),
+  exportAssessmentRoster: (id) => apiClient.get(`${SERIES_BASE}/${id}/export_assessment_roster/`, { responseType: 'blob' }),
 };
 
 export default assessmentSeriesApi;
