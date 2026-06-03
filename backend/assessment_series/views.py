@@ -472,6 +472,8 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
             'candidate',
             'candidate__assessment_center',
             'candidate__assessment_center__district',
+            'candidate__assessment_center_branch',
+            'candidate__assessment_center_branch__district',
             'candidate__occupation',
             'candidate__occupation__sector',
             'candidate__nature_of_disability',
@@ -490,9 +492,9 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
             ('Gender', 10),
             ('Reg Category', 15),
             ('Disability', 20),
-            ('Center No', 12),
+            ('Center/Branch No', 16),
             ('Center Name', 35),
-            ('Center District', 20),
+            ('Center/Branch District', 25),
             ('Occ Code', 12),
             ('Occ Name', 30),
             ('Sector', 20),
@@ -517,7 +519,7 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
         
         row_idx = 2
         
-        def fill_row(ws, r_idx, c, center, occ, level, mod_pap_code, mod_pap_name):
+        def fill_row(ws, r_idx, c, c_no, c_name, c_dist, occ, level, mod_pap_code, mod_pap_name):
             ws.cell(row=r_idx, column=1, value=c.registration_number or 'N/A')
             ws.cell(row=r_idx, column=2, value=c.full_name or 'N/A')
             ws.cell(row=r_idx, column=3, value=c.get_gender_display() or 'N/A')
@@ -526,9 +528,9 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
             disability = c.nature_of_disability.name if c.has_disability and c.nature_of_disability else 'None'
             ws.cell(row=r_idx, column=5, value=disability)
             
-            ws.cell(row=r_idx, column=6, value=center.center_number if center else 'N/A')
-            ws.cell(row=r_idx, column=7, value=center.center_name if center else 'N/A')
-            ws.cell(row=r_idx, column=8, value=center.district.name if center and center.district else 'N/A')
+            ws.cell(row=r_idx, column=6, value=c_no)
+            ws.cell(row=r_idx, column=7, value=c_name)
+            ws.cell(row=r_idx, column=8, value=c_dist)
             
             ws.cell(row=r_idx, column=9, value=occ.occ_code if occ else 'N/A')
             ws.cell(row=r_idx, column=10, value=occ.occ_name if occ else 'N/A')
@@ -541,21 +543,31 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
         for enrollment in enrollments:
             c = enrollment.candidate
             center = c.assessment_center
+            branch = c.assessment_center_branch
             occ = c.occupation
+            
+            if branch:
+                c_no = branch.branch_code
+                c_name = center.center_name if center else 'N/A'
+                c_dist = branch.district.name if branch.district else 'N/A'
+            else:
+                c_no = center.center_number if center else 'N/A'
+                c_name = center.center_name if center else 'N/A'
+                c_dist = center.district.name if center and center.district else 'N/A'
             
             if c.is_modular():
                 modules = enrollment.modules.all()
                 if modules:
                     for m in modules:
                         mod = m.module
-                        fill_row(ws_roster, row_idx, c, center, occ, 'Modular', mod.module_code, mod.module_name)
+                        fill_row(ws_roster, row_idx, c, c_no, c_name, c_dist, occ, 'Modular', mod.module_code, mod.module_name)
                         row_idx += 1
                 else:
-                    fill_row(ws_roster, row_idx, c, center, occ, 'Modular', 'N/A', 'No Modules Selected')
+                    fill_row(ws_roster, row_idx, c, c_no, c_name, c_dist, occ, 'Modular', 'N/A', 'No Modules Selected')
                     row_idx += 1
             elif c.is_formal():
                 level_name = enrollment.occupation_level.level_name if enrollment.occupation_level else 'N/A'
-                fill_row(ws_roster, row_idx, c, center, occ, level_name, 'N/A', 'Formal Assessment')
+                fill_row(ws_roster, row_idx, c, c_no, c_name, c_dist, occ, level_name, 'N/A', 'Formal Assessment')
                 row_idx += 1
             elif c.is_workers_pas():
                 papers = enrollment.papers.all()
@@ -563,10 +575,10 @@ class AssessmentSeriesViewSet(viewsets.ModelViewSet):
                     for p in papers:
                         pap = p.paper
                         level_name = pap.module.level.level_name if pap and pap.module and pap.module.level else 'N/A'
-                        fill_row(ws_roster, row_idx, c, center, occ, level_name, pap.paper_code, pap.paper_name)
+                        fill_row(ws_roster, row_idx, c, c_no, c_name, c_dist, occ, level_name, pap.paper_code, pap.paper_name)
                         row_idx += 1
                 else:
-                    fill_row(ws_roster, row_idx, c, center, occ, 'N/A', 'N/A', 'No Papers Selected')
+                    fill_row(ws_roster, row_idx, c, c_no, c_name, c_dist, occ, 'N/A', 'N/A', 'No Papers Selected')
                     row_idx += 1
         
         if not wb.sheetnames:
